@@ -1,22 +1,55 @@
-import { Controller } from '@nestjs/common'
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common'
 import { TransactionsService } from './transactions.service'
+import { CreateTransactionDto } from './dto/create-transaction.dto'
+import { UpdateTransactionDto } from './dto/update-transaction.dto'
+import { QueryTransactionsDto } from './dto/query-transactions.dto'
 
 @Controller('transactions')
 export class TransactionsController {
-  constructor(private svc: TransactionsService) {}
+  constructor(private readonly transactionsService: TransactionsService) {}
 
-  //   @Get()
-  //   list(@Query('includeDeleted') includeDeleted?: 'true' | 'false') {
-  //     return this.svc.listAll(includeDeleted === 'true');
-  //   }
+  @Post()
+  create(@Body() createTransactionDto: CreateTransactionDto) {
+    return this.transactionsService.create(createTransactionDto)
+  }
 
-  //   @Delete(':id') // 軟刪
-  //   softDelete(@Param('id') id: string) {
-  //     return this.svc.softDelete(id);
-  //   }
+  @Get()
+  findAll(@Query() query: QueryTransactionsDto) {
+    return this.transactionsService.findAll(query)
+  }
 
-  //   @Patch(':id/restore')
-  //   restore(@Param('id') id: string) {
-  //     return this.svc.restore(id);
-  //   }
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.transactionsService.findOne(id)
+  }
+
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body() updateTransactionDto: UpdateTransactionDto,
+  ) {
+    return this.transactionsService.update(id, updateTransactionDto)
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@Param('id') id: string) {
+    return this.transactionsService.remove(id)
+  }
+
+  @Patch(':id/restore')
+  restore(@Param('id') id: string) {
+    return this.transactionsService.restore(id)
+  }
 }
