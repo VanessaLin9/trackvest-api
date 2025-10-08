@@ -1,55 +1,55 @@
+// src/main.ts
 import { NestFactory } from '@nestjs/core'
 import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify'
 import fastifyCors from '@fastify/cors'
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
-import { AppModule } from './app.module'
 import { ValidationPipe } from '@nestjs/common'
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'
+import { AppModule } from './app.module'
 
 async function bootstrap() {
+  const isProd = process.env.NODE_ENV === 'production'
+  const port = Number(process.env.PORT || 3000)
+
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({ logger: true }),
   )
-  app.useGlobalPipes(new ValidationPipe({
-    transform: true,
-    whitelist: true,
-    forbidNonWhitelisted: false,
-  }))
 
+  // 全域驗證（DTO）
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: false,
+    }),
+  )
+
+  // CORS（dev 寬鬆；prod 嚴格白名單）
   const origins = (process.env.CORS_ORIGINS || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
+
   await app.register(fastifyCors, {
-    origin: (
-      origin: string | undefined,
-      cb: (error: Error | null, allow: boolean) => void,
-    ) => {
-      if (!origin) return cb(null, true)
-      if (origins.includes(origin)) return cb(null, true)
-      return cb(new Error('CORS blocked'), false)
-    },
+    origin: origins.length > 0 ? origins : true, // dev 沒設就允許全部
     credentials: true,
   })
 
-  // Swagger configuration
-  const config = new DocumentBuilder()
-    .setTitle('TrackVest API')
-    .setDescription('Investment tracking and portfolio management API')
-    .setVersion('1.0')
-    .addTag('transactions', 'Transaction management endpoints')
-    .addTag('health', 'Health check endpoints')
+  // Swagger（/docs）
+  const swaggerCfg = new DocumentBuilder()
+    .setTitle('Trackvest API')
+    .setDescription('API for investment bookkeeping')
+    .setVersion('0.1.0')
+    .addBearerAuth()
     .build()
+  const swaggerDoc = SwaggerModule.createDocument(app, swaggerCfg)
+  SwaggerModule.setup('docs', app, swaggerDoc, {
+    jsonDocumentUrl: 'docs/json',
+  })
 
-  const document = SwaggerModule.createDocument(app, config)
-  SwaggerModule.setup('api', app, document)
-
-  await app.listen(Number(process.env.PORT || 3000), '0.0.0.0')
+  await app.listen(port, '0.0.0.0')
 }
-bootstrap().catch((error) => {
-  console.error('Error starting the application:', error)
-  process.exit(1)
-})
+bootstrap()
