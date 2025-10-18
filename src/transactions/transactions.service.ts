@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma.service'
 import { FindTransactionsDto } from './dto/find-transaction.dto'
+import { Prisma, Transaction } from '@prisma/client'
+import { CreateTransactionDto } from './dto/create-transaction.dto'
 
 @Injectable()
 export class TransactionsService {
@@ -8,7 +10,7 @@ export class TransactionsService {
 
 
   async findAll(q: FindTransactionsDto) {
-    const where: any = {}
+    const where: Prisma.TransactionWhereInput = {}
     // 軟刪過濾
     const includeDeleted = q.includeDeleted === 'true'
     if (!includeDeleted) where.isDeleted = false
@@ -42,5 +44,25 @@ export class TransactionsService {
       take: q.take ?? 50,
       items,
     }
+  }
+
+  async create(dto: CreateTransactionDto): Promise<Transaction> {
+    return this.prisma.transaction.create({
+      data: {
+        accountId: dto.accountId,
+        assetId: dto.assetId,
+        type: dto.type,
+        amount: dto.amount,
+        quantity: dto.quantity,
+        price: dto.price,
+        fee: dto.fee?? 0,
+        tradeTime: dto.tradeTime? new Date(dto.tradeTime) : new Date(),
+        note: dto.note,
+      },
+      include: {
+        account: { select: { id: true, name: true, currency: true, userId: true } },
+        asset: { select: { id: true, symbol: true, name: true, baseCurrency: true } },
+      },
+    })
   }
 }

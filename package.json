@@ -9,7 +9,7 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "scripts": {
-    "dev": "ts-node-dev --transpile-only --respawn --exit-child src/main.ts",
+    "dev": "ts-node-dev --transpile-only --respawn --kill-signal SIGTERM src/main.ts",
     "start": "node dist/main.js",
     "build": "tsc -p tsconfig.build.json",
     "db:up": "docker compose up -d",
