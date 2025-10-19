@@ -1,4 +1,4 @@
-import { AccountType } from '@prisma/client'
+import { AccountType, Currency } from '@prisma/client'
 import { IsEnum, IsString, IsUUID, Length } from 'class-validator'
 
 export class CreateAccountDto {
@@ -12,7 +12,7 @@ export class CreateAccountDto {
     @IsEnum(AccountType)
     type: AccountType
 
-    @IsString()
+    @IsEnum(Currency)
     @Length(3, 10)
-    currency: string
+    currency: Currency
 }

@@ -27,13 +27,20 @@ model Account {
   userId    String
   name      String
   type      AccountType
-  currency  String
+  currency  Currency
   createdAt DateTime      @default(now())
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   positions Position[]
   txs       Transaction[]
 
   @@index([userId])
+}
+
+enum Currency {
+  TWD
+  USD
+  JPY
+  EUR
 }
 
 enum AccountType {

@@ -8,7 +8,9 @@ export class AccountsService {
   constructor(private prisma: PrismaService) {}
 
   create(dto: CreateAccountDto) {
-    return this.prisma.account.create({ data: dto })
+    return this.prisma.account.create({ data: {
+      ...dto,
+    } })
   }
 
   findAll() {
