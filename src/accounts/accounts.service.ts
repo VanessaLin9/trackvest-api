@@ -1,24 +1,21 @@
+// src/accounts/accounts.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma.service'
-import { CreateAccountDto } from './dto/create-account.dto'
-import { UpdateAccountDto } from './dto/update-account.dto'
+import { CreateAccountDto } from './dto/account.create.dto'
+import { UpdateAccountDto } from './dto/account.update.dto'
 
 @Injectable()
 export class AccountsService {
   constructor(private prisma: PrismaService) {}
 
   create(dto: CreateAccountDto) {
-    return this.prisma.account.create({ data: {
-      ...dto,
-    } })
+    return this.prisma.account.create({ data: dto })
   }
 
-  findAll() {
+  findAll(userId?: string) {
     return this.prisma.account.findMany({
+      where: userId ? { userId } : undefined,
       orderBy: { createdAt: 'desc' },
-      include: {
-        user: { select: { id: true, email: true } },
-      },
     })
   }
 
@@ -35,8 +32,6 @@ export class AccountsService {
 
   async remove(id: string) {
     await this.findOne(id)
-    // 真刪；若你想軟刪，可以改加 isDeleted/ deletedAt 欄位
     return this.prisma.account.delete({ where: { id } })
   }
 }
-

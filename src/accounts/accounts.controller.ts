@@ -1,35 +1,49 @@
+// src/accounts/accounts.controller.ts
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common'
+import { ApiOkResponse, ApiCreatedResponse, ApiTags } from '@nestjs/swagger'
 import { AccountsService } from './accounts.service'
-import { CreateAccountDto } from './dto/create-account.dto'
-import { UpdateAccountDto } from './dto/update-account.dto'
+import { CreateAccountDto } from './dto/account.create.dto'
+import { UpdateAccountDto } from './dto/account.update.dto'
+import { AccountResponseDto } from './dto/account.response.dto'
+import { plainToInstance } from 'class-transformer'
 
+@ApiTags('accounts')
 @Controller('accounts')
 export class AccountsController {
   constructor(private readonly svc: AccountsService) {}
 
   @Post()
-  create(@Body() dto: CreateAccountDto) {
-    return this.svc.create(dto)
+  @ApiCreatedResponse({ type: AccountResponseDto })
+  async create(@Body() dto: CreateAccountDto): Promise<AccountResponseDto> {
+    const created = await this.svc.create(dto)
+    return plainToInstance(AccountResponseDto, created, { excludeExtraneousValues: true })
   }
 
   @Get()
-  findAll(@Query() q: UpdateAccountDto ) {
-    return this.svc.findAll()
+  @ApiOkResponse({ type: AccountResponseDto, isArray: true })
+  async findAll(@Query('userId') userId?: string): Promise<AccountResponseDto[]> {
+    const list = await this.svc.findAll(userId)
+    return list.map(e => plainToInstance(AccountResponseDto, e, { excludeExtraneousValues: true }))
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.svc.findOne(id)
+  @ApiOkResponse({ type: AccountResponseDto })
+  async findOne(@Param('id') id: string): Promise<AccountResponseDto> {
+    const e = await this.svc.findOne(id)
+    return plainToInstance(AccountResponseDto, e, { excludeExtraneousValues: true })
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateAccountDto) {
-    return this.svc.update(id, dto)
+  @ApiOkResponse({ type: AccountResponseDto })
+  async update(@Param('id') id: string, @Body() dto: UpdateAccountDto): Promise<AccountResponseDto> {
+    const e = await this.svc.update(id, dto)
+    return plainToInstance(AccountResponseDto, e, { excludeExtraneousValues: true })
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.svc.remove(id)
+  @ApiOkResponse({ type: AccountResponseDto })
+  async remove(@Param('id') id: string): Promise<AccountResponseDto> {
+    const e = await this.svc.remove(id)
+    return plainToInstance(AccountResponseDto, e, { excludeExtraneousValues: true })
   }
 }
-
