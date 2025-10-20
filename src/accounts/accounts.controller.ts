@@ -1,5 +1,5 @@
 // src/accounts/accounts.controller.ts
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common'
 import { ApiOkResponse, ApiCreatedResponse, ApiTags } from '@nestjs/swagger'
 import { AccountsService } from './accounts.service'
 import { CreateAccountDto } from './dto/account.create.dto'
@@ -14,7 +14,10 @@ export class AccountsController {
 
   @Post()
   @ApiCreatedResponse({ type: AccountResponseDto })
-  async create(@Body() dto: CreateAccountDto): Promise<AccountResponseDto> {
+  async create(@Body() dto: CreateAccountDto, @Req() req: Request): Promise<AccountResponseDto> {
+    console.log('RAW BODY =', req.body)
+    console.log('DTO KEYS =', Object.keys(dto))
+    console.log('DTO INSTANCE =', dto)
     const created = await this.svc.create(dto)
     return plainToInstance(AccountResponseDto, created, { excludeExtraneousValues: true })
   }
