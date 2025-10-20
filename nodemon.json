@@ -1,9 +1,11 @@
 {
-    "watch": ["src"],
-    "ext": "ts",
-    "exec": "ts-node --transpile-only",
-    "delay": 500,
-    "env": {
-      "NODE_ENV": "development"
-    }
-  }
+  "watch": ["src"],
+  "ext": "ts",
+  "exec": "ts-node --transpile-only",
+  "delay": 500,
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "signal": "SIGTERM",
+  "legacyWatch": true
+}

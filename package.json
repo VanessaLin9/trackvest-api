@@ -9,9 +9,9 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "scripts": {
-    "dev": "nodemon --exec ts-node --transpile-only src/main.ts",
-    "start": "node dist/main.js",
-    "build": "tsc -p tsconfig.build.json",
+    "dev": "nest start --watch --preserveWatchOutput",
+    "start": "nest start",
+    "build": "nest build",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "prisma:migrate": "prisma migrate dev",
