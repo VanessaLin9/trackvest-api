@@ -8,8 +8,10 @@ import { UpdateAccountDto } from './dto/account.update.dto'
 export class AccountsService {
   constructor(private prisma: PrismaService) {}
 
-  create(dto: CreateAccountDto) {
-    return this.prisma.account.create({ data: dto })
+  async create(dto: CreateAccountDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: dto.userId } })
+    if (!user) throw new NotFoundException('User not found')
+    return this.prisma.account.create({ data: { ...dto, userId: user.id } })
   }
 
   findAll(userId?: string) {

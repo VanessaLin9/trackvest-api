@@ -14,10 +14,8 @@ export class AccountsController {
 
   @Post()
   @ApiCreatedResponse({ type: AccountResponseDto })
-  async create(@Body() dto: CreateAccountDto, @Req() req: Request): Promise<AccountResponseDto> {
-    console.log('RAW BODY =', req.body)
-    console.log('DTO KEYS =', Object.keys(dto))
-    console.log('DTO INSTANCE =', dto)
+  async create(@Body() dto: CreateAccountDto ): Promise<AccountResponseDto> {
+
     const created = await this.svc.create(dto)
     return plainToInstance(AccountResponseDto, created, { excludeExtraneousValues: true })
   }

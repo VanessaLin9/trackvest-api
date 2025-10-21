@@ -3,7 +3,7 @@ import { IsUUID } from 'class-validator'
 import { AccountBaseDto } from './account.base.dto'
 
 class UserIdOnlyDto {
-    @ApiProperty({ example: '3f8b6bfa-...' })
+    @ApiProperty({ example: 'c2610e4e-1cca-401e-afa7-1ebf541d0000' })
     @IsUUID()
     userId!: string
   }

@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { AccountType, Currency } from '@prisma/client'
-import { IsEnum, Length } from 'class-validator'
+import { IsEnum, IsString, Length } from 'class-validator'
 
 export class AccountBaseDto {
 
@@ -8,6 +8,8 @@ export class AccountBaseDto {
         description: '帳戶名稱',
         example: 'My Broker Account',
     })
+    @IsString()
+    @Length(1, 100)
     name!: string
 
     @ApiProperty({
