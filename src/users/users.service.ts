@@ -1,7 +1,7 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common'
+import { Injectable, ConflictException } from '@nestjs/common'
 import { PrismaService } from '../prisma.service'
 import { CreateUserDto } from './dto/user.create.dto'
-import { UserRole } from '@prisma/client'
+import { Prisma, UserRole } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 
 @Injectable()
@@ -18,19 +18,13 @@ export class UsersService {
           role: UserRole.user,
         },
       })
-    } catch (e: any) {
-        if (e.code === 'P2002') throw new ConflictException('Email already exists')
+    } catch (e: unknown) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+            throw new ConflictException('Email already exists')
+        }
         throw e
+    }
     }
 }
 
-  findAll() {
-    return this.prisma.user.findMany({ orderBy: { createdAt: 'desc' } })
-  }
 
-  async findOne(id: string) {
-    const u = await this.prisma.user.findUnique({ where: { id } })
-    if (!u) throw new NotFoundException('User not found')
-    return u
-  }
-}

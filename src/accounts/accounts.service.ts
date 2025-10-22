@@ -1,14 +1,13 @@
 // src/accounts/accounts.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma.service'
-import { CreateAccountDto } from './dto/account.create.dto'
-import { UpdateAccountDto } from './dto/account.update.dto'
+import { CreateAndUpdateAccountDto } from './dto/account.createAndUpdate.dto'
 
 @Injectable()
 export class AccountsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(dto: CreateAccountDto) {
+  async create(dto: CreateAndUpdateAccountDto) {
     const user = await this.prisma.user.findUnique({ where: { id: dto.userId } })
     if (!user) throw new NotFoundException('User not found')
     return this.prisma.account.create({ data: { ...dto, userId: user.id } })
@@ -27,9 +26,11 @@ export class AccountsService {
     return acc
   }
 
-  async update(id: string, dto: UpdateAccountDto) {
+  async update(id: string, dto: CreateAndUpdateAccountDto) {
     await this.findOne(id)
-    return this.prisma.account.update({ where: { id }, data: dto })
+    const user = await this.prisma.user.findUnique({ where: { id: dto.userId } })
+    if (!user) throw new NotFoundException('User not found')
+    return this.prisma.account.update({ where: { id }, data: { ...dto, userId: user.id } })
   }
 
   async remove(id: string) {

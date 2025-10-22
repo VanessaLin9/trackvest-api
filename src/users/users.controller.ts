@@ -20,14 +20,6 @@ export class UsersController {
   @Get()
   @ApiOkResponse({ type: UserResponseDto, isArray: true })
   async findAll(): Promise<UserResponseDto[]> {
-    const list = await this.svc.findAll()
-    return list.map(u => plainToInstance(UserResponseDto, u, { excludeExtraneousValues: true }))
-  }
-
-  @Get(':id')
-  @ApiOkResponse({ type: UserResponseDto })
-  async findOne(@Param('id') id: string): Promise<UserResponseDto> {
-    const u = await this.svc.findOne(id)
-    return plainToInstance(UserResponseDto, u, { excludeExtraneousValues: true })
+    return []
   }
 }

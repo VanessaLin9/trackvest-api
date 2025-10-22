@@ -2,8 +2,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common'
 import { ApiOkResponse, ApiCreatedResponse, ApiTags } from '@nestjs/swagger'
 import { AccountsService } from './accounts.service'
-import { CreateAccountDto } from './dto/account.create.dto'
-import { UpdateAccountDto } from './dto/account.update.dto'
+import { CreateAndUpdateAccountDto } from './dto/account.createAndUpdate.dto'
 import { AccountResponseDto } from './dto/account.response.dto'
 import { plainToInstance } from 'class-transformer'
 
@@ -14,7 +13,7 @@ export class AccountsController {
 
   @Post()
   @ApiCreatedResponse({ type: AccountResponseDto })
-  async create(@Body() dto: CreateAccountDto ): Promise<AccountResponseDto> {
+  async create(@Body() dto: CreateAndUpdateAccountDto ): Promise<AccountResponseDto> {
 
     const created = await this.svc.create(dto)
     return plainToInstance(AccountResponseDto, created, { excludeExtraneousValues: true })
@@ -36,10 +35,11 @@ export class AccountsController {
 
   @Patch(':id')
   @ApiOkResponse({ type: AccountResponseDto })
-  async update(@Param('id') id: string, @Body() dto: UpdateAccountDto): Promise<AccountResponseDto> {
+  async update(@Param('id') id: string, @Body() dto: CreateAndUpdateAccountDto): Promise<AccountResponseDto>
+  {
     const e = await this.svc.update(id, dto)
     return plainToInstance(AccountResponseDto, e, { excludeExtraneousValues: true })
-  }
+  } 
 
   @Delete(':id')
   @ApiOkResponse({ type: AccountResponseDto })
