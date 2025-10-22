@@ -8,10 +8,12 @@ import { AccountsController } from './accounts/accounts.controller'
 import { AccountsService } from './accounts/accounts.service'
 import { UsersService } from './users/users.service'
 import { UsersController } from './users/users.controller'
+import { AssetsController } from './assets/assets.controller'
+import { AssetsService } from './assets/assets.service'
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
-  controllers: [HealthController, TransactionsController, AccountsController, UsersController],
-  providers: [PrismaService, TransactionsService, AccountsService, UsersService],
+  controllers: [HealthController, TransactionsController, AccountsController, UsersController, AssetsController],
+  providers: [PrismaService, TransactionsService, AccountsService, UsersService, AssetsService],
 })
 export class AppModule {}
