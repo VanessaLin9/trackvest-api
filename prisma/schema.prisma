@@ -20,6 +20,8 @@ model User {
   createdAt    DateTime  @default(now())
   accounts     Account[]
   tags         Tag[]
+  glAccounts   GlAccount[] @relation("UserToGlAccounts")
+  glEntries    GlEntry[]   @relation("UserToGlEntries")
 }
 
 model Account {
@@ -32,6 +34,7 @@ model Account {
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   positions Position[]
   txs       Transaction[]
+  glAccount GlAccount?    @relation("AccountToGlAccount")
 
   @@index([userId])
 }
@@ -154,4 +157,81 @@ model Position {
   asset     Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
   @@index([accountId, assetId])
+}
+
+// 科目表（Chart of Accounts）
+model GlAccount {
+  id              String         @id @default(uuid())
+  userId          String
+  code            String?        // 方便排序/匯出（可選）
+  name            String
+  type            GlAccountType  // asset | liability | equity | income | expense
+  currency        Currency?      // 若指定，該科目只允許此幣別
+  linkedAccountId String?        // 對應你現有的 Account（銀行/券商/現金等）
+  archivedAt      DateTime?
+
+  // 🔻 改：加 relation name，並對應上面 User/Account 的反向欄位
+  user    User     @relation("UserToGlAccounts", fields: [userId], references: [id], onDelete: Cascade)
+  linked  Account? @relation("AccountToGlAccount", fields: [linkedAccountId], references: [id])
+
+  // 🔻 新增：被 GlLine 指到的反向欄位
+  lines   GlLine[]
+
+  @@unique([userId, name])
+  @@index([userId, type])
+  @@unique([linkedAccountId])
+}
+
+enum GlAccountType { 
+  asset 
+  liability 
+  equity 
+  income 
+  expense 
+}
+
+// 分錄主表（每一張憑證）
+model GlEntry {
+  id        String   @id @default(uuid())
+  userId    String
+  date      DateTime
+  memo      String?
+  source    String?  // 'manual' | 'auto:transaction:<txId>' | 'auto:transfer:<id>'...
+  refTxId   String?  // 選配：對應投資 Transaction.id
+  isDeleted Boolean  @default(false)
+  deletedAt DateTime?
+
+  // 🔻 改：加 relation name，對應上面 User.glEntries
+  user   User     @relation("UserToGlEntries", fields: [userId], references: [id], onDelete: Cascade)
+  lines  GlLine[]
+
+  @@index([userId, date])
+  @@index([refTxId])
+
+  // （可選）若要保證 refTxId 在同一 user 下唯一（自動過帳冪等）
+  // @@unique([userId, refTxId])
+}
+
+// 分錄明細（必須借貸相等；第一版建議「同一分錄同一幣別」）
+model GlLine {
+  id          String    @id @default(uuid())
+  entryId     String
+  glAccountId String
+  amount      Decimal   // 正數金額
+  side        GlSide    // debit or credit
+  currency    Currency  // 第一版簡化：同一 entry 全部同一 currency
+  note        String?
+
+  entry    GlEntry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  glAccount GlAccount @relation(fields: [glAccountId], references: [id], onDelete: Cascade)
+
+  @@index([entryId])
+  @@index([glAccountId])
+   // （可選）查餘額常用：
+  @@index([glAccountId, currency])
+}
+
+enum GlSide { 
+  debit 
+  credit 
 }
