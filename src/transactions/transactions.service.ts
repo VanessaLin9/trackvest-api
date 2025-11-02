@@ -4,14 +4,15 @@ import { FindTransactionsDto } from './dto/find-transaction.dto'
 import { Prisma, Transaction } from '@prisma/client'
 import { CreateTransactionDto } from './dto/create-transaction.dto'
 import { CreateAndUpdateTransactionDto } from './dto/transaction.createAndUpdate.dto'
+import { PostingService } from 'src/gl/posting.service'
 
 @Injectable()
 export class TransactionsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private postingService: PostingService) {}
 
 
   async findAll(q: FindTransactionsDto) {
-    const where: Prisma.TransactionWhereInput = {}
+    const where: Prisma.TransactionWhereInput = {}  
     // 軟刪過濾
     const includeDeleted = q.includeDeleted === 'true'
     if (!includeDeleted) where.isDeleted = false
@@ -48,7 +49,7 @@ export class TransactionsService {
   }
 
   async create(dto: CreateTransactionDto): Promise<Transaction> {
-    return this.prisma.transaction.create({
+    const created = await this.prisma.transaction.create({
       data: {
         accountId: dto.accountId,
         assetId: dto.assetId,
@@ -65,6 +66,8 @@ export class TransactionsService {
         asset: { select: { id: true, symbol: true, name: true, baseCurrency: true } },
       },
     })
+    await this.postingService.postTransaction(created.accountId, created)
+    return created
   }
 
   async findOne(id: string) {
