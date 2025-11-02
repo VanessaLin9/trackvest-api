@@ -1,11 +1,12 @@
-// src/gl/gl.controller.ts
 import { Body, Controller, Post } from '@nestjs/common'
-import { ApiTags } from '@nestjs/swagger'
+import { ApiBadRequestResponse, ApiTags } from '@nestjs/swagger'
 import { PostingService } from './posting.service'
 import { Currency } from '@prisma/client'
+import { ErrorResponse } from 'src/common/dto'
 
 @ApiTags('gl')
 @Controller('gl')
+@ApiBadRequestResponse({ type: ErrorResponse })
 export class GlController {
   constructor(private readonly post: PostingService) {}
 

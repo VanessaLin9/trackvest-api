@@ -1,13 +1,14 @@
-// src/accounts/accounts.controller.ts
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common'
-import { ApiOkResponse, ApiCreatedResponse, ApiTags } from '@nestjs/swagger'
+import { ApiOkResponse, ApiCreatedResponse, ApiTags, ApiBadRequestResponse } from '@nestjs/swagger'
 import { AccountsService } from './accounts.service'
 import { CreateAndUpdateAccountDto } from './dto/account.createAndUpdate.dto'
 import { AccountResponseDto } from './dto/account.response.dto'
 import { plainToInstance } from 'class-transformer'
+import { ErrorResponse } from 'src/common/dto'
 
 @ApiTags('accounts')
 @Controller('accounts')
+@ApiBadRequestResponse({ type: ErrorResponse })
 export class AccountsController {
   constructor(private readonly svc: AccountsService) {}
 

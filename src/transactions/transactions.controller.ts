@@ -1,15 +1,16 @@
-// src/transactions/transactions.controller.ts
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common'
-import { ApiOkResponse, ApiCreatedResponse, ApiTags } from '@nestjs/swagger'
+import { ApiOkResponse, ApiCreatedResponse, ApiTags, ApiBadRequestResponse } from '@nestjs/swagger'
 import { TransactionsService } from './transactions.service'
 import { FindTransactionsDto } from './dto/find-transaction.dto'
 import { CreateTransactionDto } from './dto/create-transaction.dto'
 import { CreateAndUpdateTransactionDto } from './dto/transaction.createAndUpdate.dto'
 import { TransactionResponseDto } from './dto/transaction.response.dto'
 import { plainToInstance } from 'class-transformer'
+import { ErrorResponse } from 'src/common/dto'
 
 @ApiTags('transactions')
 @Controller('transactions')
+@ApiBadRequestResponse({ type: ErrorResponse })
 export class TransactionsController {
   constructor(private readonly svc: TransactionsService) {}
 

@@ -1,12 +1,14 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common'
-import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger'
+import { Body, Controller, Get, Post } from '@nestjs/common'
+import { ApiBadRequestResponse, ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger'
 import { plainToInstance } from 'class-transformer'
 import { UsersService } from './users.service'
 import { CreateUserDto } from './dto/user.create.dto'
 import { UserResponseDto } from './dto/users.response.dto'
+import { ErrorResponse } from 'src/common/dto'
 
 @ApiTags('users')
 @Controller('users')
+@ApiBadRequestResponse({ type: ErrorResponse })
 export class UsersController {
   constructor(private readonly svc: UsersService) {}
 

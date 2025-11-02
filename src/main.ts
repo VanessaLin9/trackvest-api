@@ -26,6 +26,12 @@ async function bootstrap() {
     .setDescription('API for investment bookkeeping')
     .setVersion('0.1.0')
     .addBearerAuth()
+    .addTag('health', 'Health check')
+    .addTag('users', 'User management')
+    .addTag('accounts', 'Cash/Broker/Bank accounts')
+    .addTag('assets', 'Tradable assets catalog')
+    .addTag('transactions', 'Transaction records')
+    .addTag('gl', 'Double-entry ledger(entries & postings)')
     .build()
   const swaggerDoc = SwaggerModule.createDocument(app, swaggerCfg)
   SwaggerModule.setup('docs', app, swaggerDoc, {
