@@ -10,6 +10,12 @@ async function bootstrap() {
   const port = process.env.PORT || 3000
   app.enableShutdownHooks()
 
+  // Enable CORS for frontend
+  app.enableCors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+    credentials: true,
+  })
+
   // 全域驗證（DTO）
   app.useGlobalPipes(
     new ValidationPipe({
