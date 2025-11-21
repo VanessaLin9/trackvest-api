@@ -95,7 +95,10 @@ export class TransactionsService {
       select: { userId: true },
     })
     
-    await this.postingService.postTransaction(account.userId, created)
+    await this.postingService.postTransaction({
+      userId: account.userId,
+      transaction: created,
+    })
     return created
   }
 

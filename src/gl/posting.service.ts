@@ -93,7 +93,8 @@ export class PostingService {
   }
 
   /** ---------- 1) Transfer ---------- */
-  async postTransfer(userId: string, params: {
+  async postTransfer(command: {
+    userId: string
     fromGlAccountId: string
     toGlAccountId: string
     amount: number
@@ -102,8 +103,7 @@ export class PostingService {
     memo?: string
     source?: string
   }) {
-    const { fromGlAccountId, toGlAccountId, amount, currency, date, memo, source } = params
-    if (amount <= 0) throw new BadRequestException('amount must be > 0')
+    const { userId, fromGlAccountId, toGlAccountId, amount, currency, date, memo, source } = command
 
     // Validate GL account ownership
     await this.ownershipService.validateGlAccountOwnership(fromGlAccountId, userId)
@@ -117,7 +117,8 @@ export class PostingService {
   }
 
   /** ---------- 2) Expense ---------- */
-  async postExpense(userId: string, params: {
+  async postExpense(command: {
+    userId: string
     payFromGlAccountId: string
     expenseGlAccountId: string
     amount: number
@@ -126,8 +127,7 @@ export class PostingService {
     memo?: string
     source?: string
   }) {
-    const { payFromGlAccountId, expenseGlAccountId, amount, currency, date, memo, source } = params
-    if (amount <= 0) throw new BadRequestException('amount must be > 0')
+    const { userId, payFromGlAccountId, expenseGlAccountId, amount, currency, date, memo, source } = command
 
     // Validate GL account ownership
     await this.ownershipService.validateGlAccountOwnership(payFromGlAccountId, userId)
@@ -141,7 +141,8 @@ export class PostingService {
   }
 
   /** ---------- 3) Income ---------- */
-  async postIncome(userId: string, params: {
+  async postIncome(command: {
+    userId: string
     receiveToGlAccountId: string
     incomeGlAccountId: string
     amount: number
@@ -150,8 +151,7 @@ export class PostingService {
     memo?: string
     source?: string
   }) {
-    const { receiveToGlAccountId, incomeGlAccountId, amount, currency, date, memo, source } = params
-    if (amount <= 0) throw new BadRequestException('amount must be > 0')
+    const { userId, receiveToGlAccountId, incomeGlAccountId, amount, currency, date, memo, source } = command
 
     // Validate GL account ownership
     await this.ownershipService.validateGlAccountOwnership(receiveToGlAccountId, userId)
@@ -165,7 +165,8 @@ export class PostingService {
   }
 
   /** ---------- 4) 自動過帳：依交易型別 ---------- */
-  async postTransaction(userId: string, tx: Transaction) {
+  async postTransaction(command: { userId: string; transaction: Transaction }) {
+    const { userId, transaction: tx } = command
     // 交易使用的幣別以帳戶幣別為準（v1 簡化）
     const account = await this.prisma.account.findUniqueOrThrow({ where: { id: tx.accountId } })
     const ccy = account.currency as Currency
