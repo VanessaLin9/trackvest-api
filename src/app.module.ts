@@ -12,10 +12,11 @@ import { AssetsController } from './assets/assets.controller'
 import { AssetsService } from './assets/assets.service'
 import { GlController } from './gl/gl.controller'
 import { PostingService } from './gl/posting.service'
+import { OwnershipService } from './common/services/ownership.service'
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
   controllers: [HealthController, TransactionsController, AccountsController, UsersController, AssetsController, GlController],
-  providers: [PrismaService, TransactionsService, AccountsService, UsersService, AssetsService, PostingService],
+  providers: [PrismaService, TransactionsService, AccountsService, UsersService, AssetsService, PostingService, OwnershipService],
 })
 export class AppModule {}

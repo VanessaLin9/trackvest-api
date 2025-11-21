@@ -2,6 +2,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma.service'
 import type { Currency, Transaction, TxType } from '@prisma/client'
+import { OwnershipService } from '../common/services/ownership.service'
 
 type GlSide = 'debit' | 'credit'
 
@@ -15,7 +16,10 @@ type LineInput = {
 
 @Injectable()
 export class PostingService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private ownershipService: OwnershipService,
+  ) {}
 
   /** ---------- 共用守則 ---------- */
   private ensureBalanced(lines: LineInput[]) {
@@ -101,6 +105,10 @@ export class PostingService {
     const { fromGlAccountId, toGlAccountId, amount, currency, date, memo, source } = params
     if (amount <= 0) throw new BadRequestException('amount must be > 0')
 
+    // Validate GL account ownership
+    await this.ownershipService.validateGlAccountOwnership(fromGlAccountId, userId)
+    await this.ownershipService.validateGlAccountOwnership(toGlAccountId, userId)
+
     const lines: LineInput[] = [
       { glAccountId: toGlAccountId, side: 'debit', amount, currency, note: 'transfer in' },
       { glAccountId: fromGlAccountId, side: 'credit', amount, currency, note: 'transfer out' },
@@ -121,6 +129,10 @@ export class PostingService {
     const { payFromGlAccountId, expenseGlAccountId, amount, currency, date, memo, source } = params
     if (amount <= 0) throw new BadRequestException('amount must be > 0')
 
+    // Validate GL account ownership
+    await this.ownershipService.validateGlAccountOwnership(payFromGlAccountId, userId)
+    await this.ownershipService.validateGlAccountOwnership(expenseGlAccountId, userId)
+
     const lines: LineInput[] = [
       { glAccountId: expenseGlAccountId, side: 'debit', amount, currency, note: 'expense' },
       { glAccountId: payFromGlAccountId, side: 'credit', amount, currency, note: 'cash/bank out' },
@@ -140,6 +152,10 @@ export class PostingService {
   }) {
     const { receiveToGlAccountId, incomeGlAccountId, amount, currency, date, memo, source } = params
     if (amount <= 0) throw new BadRequestException('amount must be > 0')
+
+    // Validate GL account ownership
+    await this.ownershipService.validateGlAccountOwnership(receiveToGlAccountId, userId)
+    await this.ownershipService.validateGlAccountOwnership(incomeGlAccountId, userId)
 
     const lines: LineInput[] = [
       { glAccountId: receiveToGlAccountId, side: 'debit', amount, currency, note: 'cash/bank in' },

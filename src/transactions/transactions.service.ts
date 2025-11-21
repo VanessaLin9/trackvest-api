@@ -5,19 +5,34 @@ import { Prisma, Transaction } from '@prisma/client'
 import { CreateTransactionDto } from './dto/create-transaction.dto'
 import { CreateAndUpdateTransactionDto } from './dto/transaction.createAndUpdate.dto'
 import { PostingService } from 'src/gl/posting.service'
+import { OwnershipService } from '../common/services/ownership.service'
 
 @Injectable()
 export class TransactionsService {
-  constructor(private prisma: PrismaService, private postingService: PostingService) {}
+  constructor(
+    private prisma: PrismaService,
+    private postingService: PostingService,
+    private ownershipService: OwnershipService,
+  ) {}
 
 
-  async findAll(q: FindTransactionsDto) {
-    const where: Prisma.TransactionWhereInput = {}  
+  async findAll(q: FindTransactionsDto, userId: string) {
+    const where: Prisma.TransactionWhereInput = {
+      // Always filter by user's accounts
+      account: {
+        userId,
+      },
+    }
+    
     // 軟刪過濾
     const includeDeleted = q.includeDeleted === 'true'
     if (!includeDeleted) where.isDeleted = false
 
-    if (q.accountId) where.accountId = q.accountId
+    if (q.accountId) {
+      // Validate account belongs to user
+      await this.ownershipService.validateAccountOwnership(q.accountId, userId)
+      where.accountId = q.accountId
+    }
     if (q.assetId) where.assetId = q.assetId
     if (q.from || q.to) {
       where.tradeTime = {}
@@ -48,7 +63,10 @@ export class TransactionsService {
     }
   }
 
-  async create(dto: CreateTransactionDto): Promise<Transaction> {
+  async create(dto: CreateTransactionDto, userId: string): Promise<Transaction> {
+    // Validate account belongs to user
+    await this.ownershipService.validateAccountOwnership(dto.accountId, userId)
+    
     const created = await this.prisma.transaction.create({
       data: {
         accountId: dto.accountId,
@@ -66,11 +84,21 @@ export class TransactionsService {
         asset: { select: { id: true, symbol: true, name: true, baseCurrency: true } },
       },
     })
-    await this.postingService.postTransaction(created.accountId, created)
+    
+    // Get account to pass userId to posting service
+    const account = await this.prisma.account.findUniqueOrThrow({
+      where: { id: created.accountId },
+      select: { userId: true },
+    })
+    
+    await this.postingService.postTransaction(account.userId, created)
     return created
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId: string) {
+    // Validate ownership
+    await this.ownershipService.validateTransactionOwnership(id, userId)
+    
     const transaction = await this.prisma.transaction.findUnique({ 
       where: { id },
       include: {
@@ -83,8 +111,15 @@ export class TransactionsService {
     return transaction
   }
 
-  async update(id: string, dto: CreateAndUpdateTransactionDto) {
-    await this.findOne(id)
+  async update(id: string, dto: CreateAndUpdateTransactionDto, userId: string) {
+    // Validate ownership
+    await this.ownershipService.validateTransactionOwnership(id, userId)
+    
+    // If accountId is being updated, validate new account ownership
+    if (dto.accountId) {
+      await this.ownershipService.validateAccountOwnership(dto.accountId, userId)
+    }
+    
     return this.prisma.transaction.update({
       where: { id },
       data: {
@@ -106,8 +141,10 @@ export class TransactionsService {
     })
   }
 
-  async remove(id: string) {
-    await this.findOne(id)
+  async remove(id: string, userId: string) {
+    // Validate ownership
+    await this.ownershipService.validateTransactionOwnership(id, userId)
+    
     return this.prisma.transaction.update({
       where: { id },
       data: {
@@ -117,8 +154,10 @@ export class TransactionsService {
     })
   }
 
-  async hardDelete(id: string) {
-    await this.findOne(id)
+  async hardDelete(id: string, userId: string) {
+    // Validate ownership
+    await this.ownershipService.validateTransactionOwnership(id, userId)
+    
     return this.prisma.transaction.delete({ where: { id } })
   }
 }
