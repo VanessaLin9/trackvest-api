@@ -5,6 +5,7 @@ import { Currency } from '@prisma/client'
 import { ErrorResponse } from 'src/common/dto'
 import { ExpenseBodyDto, IncomeBodyDto } from './dto/ledger.dto'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
+import { OwnershipService } from '../common/services/ownership.service'
 
 class TransferBody {
   @ApiProperty({ example: 'c2610e4e-1cca-401e-afa7-1ebf541d0000' }) userId: string
@@ -20,7 +21,10 @@ class TransferBody {
 @ApiBadRequestResponse({ type: ErrorResponse })
 @ApiHeader({ name: 'X-User-Id', description: 'User ID', required: true })
 export class GlController {
-  constructor(private readonly post: PostingService) {}
+  constructor(
+    private readonly post: PostingService,
+    private readonly ownershipService: OwnershipService,
+  ) {}
 
   @Post('transfer')
   @ApiBody({ type: TransferBody })
@@ -29,13 +33,14 @@ export class GlController {
     @Body() body: TransferBody,
     @CurrentUser() userId: string,
   ) {
-    // Validate userId matches authenticated user
-    if (body.userId !== userId) {
+    // Validate userId matches authenticated user (unless admin)
+    const isAdmin = await this.ownershipService.isAdmin(userId)
+    if (!isAdmin && body.userId !== userId) {
       throw new BadRequestException('User ID mismatch')
     }
     
     const date = body.date ? new Date(body.date) : new Date()
-    return this.post.postTransfer(userId, {
+    return this.post.postTransfer(body.userId, {
       fromGlAccountId: body.fromGlAccountId,
       toGlAccountId: body.toGlAccountId,
       amount: Number(body.amount),
@@ -54,13 +59,14 @@ export class GlController {
     @Body() body: ExpenseBodyDto,
     @CurrentUser() userId: string,
   ) {
-    // Validate userId matches authenticated user
-    if (body.userId !== userId) {
+    // Validate userId matches authenticated user (unless admin)
+    const isAdmin = await this.ownershipService.isAdmin(userId)
+    if (!isAdmin && body.userId !== userId) {
       throw new BadRequestException('User ID mismatch')
     }
     
     const date = body.date ? new Date(body.date) : new Date()
-    return this.post.postExpense(userId, {
+    return this.post.postExpense(body.userId, {
       payFromGlAccountId: body.payFromGlAccountId,
       expenseGlAccountId: body.expenseGlAccountId,
       amount: Number(body.amount),
@@ -79,13 +85,14 @@ export class GlController {
     @Body() body: IncomeBodyDto,
     @CurrentUser() userId: string,
   ) {
-    // Validate userId matches authenticated user
-    if (body.userId !== userId) {
+    // Validate userId matches authenticated user (unless admin)
+    const isAdmin = await this.ownershipService.isAdmin(userId)
+    if (!isAdmin && body.userId !== userId) {
       throw new BadRequestException('User ID mismatch')
     }
     
     const date = body.date ? new Date(body.date) : new Date()
-    return this.post.postIncome(userId, {
+    return this.post.postIncome(body.userId, {
       receiveToGlAccountId: body.receiveToGlAccountId,
       incomeGlAccountId: body.incomeGlAccountId,
       amount: Number(body.amount),

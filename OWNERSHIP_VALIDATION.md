@@ -142,12 +142,42 @@ When resource doesn't exist or user doesn't own it:
 }
 ```
 
+## Admin Access
+
+Administrators (users with `role: 'admin'`) have special privileges:
+
+- **Bypass Ownership Checks**: Admins can access any user's resources
+- **View All Data**: List endpoints return all resources for admins (not filtered by user)
+- **Create for Any User**: Admins can create resources for any user
+- **Update Any Resource**: Admins can update any resource regardless of ownership
+
+### Admin Behavior Examples
+
+```typescript
+// Regular user: Only sees their own accounts
+GET /accounts (with X-User-Id: regular-user-id)
+→ Returns only accounts where userId = regular-user-id
+
+// Admin: Sees all accounts
+GET /accounts (with X-User-Id: admin-user-id)
+→ Returns all accounts (no filtering)
+
+// Regular user: Can only access their own account
+GET /accounts/:id (with X-User-Id: regular-user-id)
+→ Validates account belongs to regular-user-id
+
+// Admin: Can access any account
+GET /accounts/:id (with X-User-Id: admin-user-id)
+→ Bypasses ownership check, only validates account exists
+```
+
 ## Security Notes
 
 1. **Current Implementation**: Uses header/query parameter for user ID (temporary solution)
 2. **Future Enhancement**: Should be replaced with JWT authentication
 3. **All Endpoints Protected**: Every endpoint that accesses user data now validates ownership
-4. **Automatic Filtering**: List endpoints automatically filter by user ID
+4. **Automatic Filtering**: List endpoints automatically filter by user ID (except for admins)
+5. **Admin Privileges**: Admins can bypass ownership checks but still need to provide valid user ID
 
 ## Migration Notes
 

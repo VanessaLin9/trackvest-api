@@ -18,5 +18,6 @@ import { OwnershipService } from './common/services/ownership.service'
   imports: [ConfigModule.forRoot({ isGlobal: true })],
   controllers: [HealthController, TransactionsController, AccountsController, UsersController, AssetsController, GlController],
   providers: [PrismaService, TransactionsService, AccountsService, UsersService, AssetsService, PostingService, OwnershipService],
+  exports: [OwnershipService], // Export so it can be used in other modules if needed
 })
 export class AppModule {}

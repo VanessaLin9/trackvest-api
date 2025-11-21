@@ -12,21 +12,23 @@ export class AccountsService {
   ) {}
 
   async create(dto: CreateAndUpdateAccountDto, userId: string) {
-    // Validate user exists and ensure userId matches
-    await this.ownershipService.validateUserExists(userId)
+    // Validate user exists
+    await this.ownershipService.validateUserExists(dto.userId)
     
-    // Ensure the DTO userId matches the authenticated user
-    if (dto.userId !== userId) {
+    // Ensure the DTO userId matches the authenticated user (unless admin)
+    const isAdmin = await this.ownershipService.isAdmin(userId)
+    if (!isAdmin && dto.userId !== userId) {
       throw new NotFoundException('User ID mismatch')
     }
     
-    return this.prisma.account.create({ data: { ...dto, userId } })
+    return this.prisma.account.create({ data: { ...dto, userId: dto.userId } })
   }
 
-  findAll(userId: string) {
-    // Always filter by userId for security
+  async findAll(userId: string) {
+    // Admins can see all accounts, regular users only their own
+    const isAdmin = await this.ownershipService.isAdmin(userId)
     return this.prisma.account.findMany({
-      where: { userId },
+      where: isAdmin ? undefined : { userId },
       orderBy: { createdAt: 'desc' },
     })
   }
@@ -41,15 +43,16 @@ export class AccountsService {
   }
 
   async update(id: string, dto: CreateAndUpdateAccountDto, userId: string) {
-    // Validate ownership
+    // Validate ownership (admins can update any account)
     await this.ownershipService.validateAccountOwnership(id, userId)
     
-    // Ensure the DTO userId matches the authenticated user
-    if (dto.userId !== userId) {
+    // Ensure the DTO userId matches the authenticated user (unless admin)
+    const isAdmin = await this.ownershipService.isAdmin(userId)
+    if (!isAdmin && dto.userId !== userId) {
       throw new NotFoundException('User ID mismatch')
     }
     
-    return this.prisma.account.update({ where: { id }, data: { ...dto, userId } })
+    return this.prisma.account.update({ where: { id }, data: { ...dto, userId: dto.userId } })
   }
 
   async remove(id: string, userId: string) {

@@ -17,11 +17,15 @@ export class TransactionsService {
 
 
   async findAll(q: FindTransactionsDto, userId: string) {
-    const where: Prisma.TransactionWhereInput = {
-      // Always filter by user's accounts
-      account: {
+    const isAdmin = await this.ownershipService.isAdmin(userId)
+    
+    const where: Prisma.TransactionWhereInput = {}
+    
+    // Admins can see all transactions, regular users only their own
+    if (!isAdmin) {
+      where.account = {
         userId,
-      },
+      }
     }
     
     // 軟刪過濾
@@ -29,7 +33,7 @@ export class TransactionsService {
     if (!includeDeleted) where.isDeleted = false
 
     if (q.accountId) {
-      // Validate account belongs to user
+      // Validate account belongs to user (or admin can access any)
       await this.ownershipService.validateAccountOwnership(q.accountId, userId)
       where.accountId = q.accountId
     }
