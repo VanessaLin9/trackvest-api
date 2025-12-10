@@ -1,5 +1,5 @@
-import { Body, Controller, Post, BadRequestException } from '@nestjs/common'
-import { ApiBadRequestResponse, ApiBody, ApiCreatedResponse, ApiTags, ApiHeader } from '@nestjs/swagger'
+import { Body, Controller, Post, BadRequestException, Get } from '@nestjs/common'
+import { ApiBadRequestResponse, ApiBody, ApiCreatedResponse, ApiTags, ApiHeader, ApiResponse } from '@nestjs/swagger'
 import { PostingService } from './posting.service'
 import { ErrorResponse } from 'src/common/dto'
 import { PostTransferCommand } from './dto/post-transfer.command'
@@ -7,6 +7,8 @@ import { PostExpenseCommand } from './dto/post-expense.command'
 import { PostIncomeCommand } from './dto/post-income.command'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
 import { OwnershipService } from '../common/services/ownership.service'
+import { GlAccountLookupService } from './services/gl-account-lookup.service'
+import { GlAccountType } from '@prisma/client'
 
 @ApiTags('gl')
 @Controller('gl')
@@ -16,7 +18,14 @@ export class GlController {
   constructor(
     private readonly post: PostingService,
     private readonly ownershipService: OwnershipService,
+    private readonly glAccountLookup: GlAccountLookupService,
   ) {}
+  
+  @Get('accounts')
+  @ApiResponse({ type: String })
+  async getAccounts(@CurrentUser() userId: string) {
+    return this.glAccountLookup.findByTypeAndName(userId, GlAccountType.asset)
+  }
 
   @Post('transfer')
   @ApiBody({ type: PostTransferCommand })
