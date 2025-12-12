@@ -112,20 +112,15 @@ export class GlAccountLookupService {
     userId: string,
     type: GlAccountType,
   ): Promise<GetAccountDto[]> {
-    const where = {
-      userId,
-      type,
-    }
+    const gl = await this.prisma.glAccount.findMany({
+      where: {
+        userId : { equals: userId },
+      },
+    })
 
-    const gl = await this.prisma.glAccount.findMany({ where })
-    return gl.map((gl) => ({
-      id: gl.id,
-      userId: gl.userId,
-      name: gl.name,
-      type: gl.type,
-      currency: gl.currency,
-      linkedAccountId: gl.linkedAccountId,
-    }))
+    console.log('type', type)
+    const accounts = gl.filter((gl) => gl.type === type)
+    return accounts.map(GetAccountDto.fromEntity)
   }
 }
 

@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger"
-import { GlAccountType } from "@prisma/client"
+import { GlAccount, GlAccountType } from "@prisma/client"
 import { IsEnum, IsOptional, IsString, IsUUID } from "class-validator"
 
 export class GetAccountDto {
@@ -27,4 +27,15 @@ export class GetAccountDto {
   @IsString()
   @IsOptional()
   linkedAccountId?: string
+
+  static fromEntity(entity: GlAccount): GetAccountDto {
+    return {
+      id: entity.id,
+      userId: entity.userId,
+      name: entity.name,
+      type: entity.type,
+      currency: entity.currency,
+      linkedAccountId: entity.linkedAccountId,
+    }
+  }
 }
