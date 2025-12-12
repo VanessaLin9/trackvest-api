@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../../prisma.service'
 import { Currency, GlAccountType } from '@prisma/client'
+import { GetAccountDto } from '../dto/get-account.dto'
 
 /**
  * Service for looking up GL accounts by various criteria
@@ -110,27 +111,21 @@ export class GlAccountLookupService {
   async findByTypeAndName(
     userId: string,
     type: GlAccountType,
-    nameContains?: string,
-    currency?: Currency,
-  ): Promise<string> {
-    const where: any = {
+  ): Promise<GetAccountDto[]> {
+    const where = {
       userId,
       type,
     }
-    if (nameContains) {
-      where.name = { contains: nameContains }
-    }
-    if (currency) {
-      where.currency = currency
-    }
 
-    const gl = await this.prisma.glAccount.findFirst({ where })
-    if (!gl) {
-      throw new BadRequestException(
-        `GL account not found: type=${type}, nameContains=${nameContains}, currency=${currency}`,
-      )
-    }
-    return gl.id
+    const gl = await this.prisma.glAccount.findMany({ where })
+    return gl.map((gl) => ({
+      id: gl.id,
+      userId: gl.userId,
+      name: gl.name,
+      type: gl.type,
+      currency: gl.currency,
+      linkedAccountId: gl.linkedAccountId,
+    }))
   }
 }
 

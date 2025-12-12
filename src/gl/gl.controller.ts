@@ -1,4 +1,4 @@
-import { Body, Controller, Post, BadRequestException, Get } from '@nestjs/common'
+import { Body, Controller, Post, BadRequestException, Get, Query } from '@nestjs/common'
 import { ApiBadRequestResponse, ApiBody, ApiCreatedResponse, ApiTags, ApiHeader, ApiResponse } from '@nestjs/swagger'
 import { PostingService } from './posting.service'
 import { ErrorResponse } from 'src/common/dto'
@@ -9,6 +9,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator'
 import { OwnershipService } from '../common/services/ownership.service'
 import { GlAccountLookupService } from './services/gl-account-lookup.service'
 import { GlAccountType } from '@prisma/client'
+import { GetAccountDto } from './dto/get-account.dto'
 
 @ApiTags('gl')
 @Controller('gl')
@@ -22,9 +23,15 @@ export class GlController {
   ) {}
   
   @Get('accounts')
-  @ApiResponse({ type: String })
-  async getAccounts(@CurrentUser() userId: string) {
-    return this.glAccountLookup.findByTypeAndName(userId, GlAccountType.asset)
+  @ApiResponse({ type: [GetAccountDto] })
+  async getAccounts(@CurrentUser() userId: string, @Query('type') type: GlAccountType) {
+    if (!userId) {
+      throw new BadRequestException('User ID is required')
+    }
+    if (!type) {
+      throw new BadRequestException('Type is required')
+    }
+    return this.glAccountLookup.findByTypeAndName(userId, type)
   }
 
   @Post('transfer')
