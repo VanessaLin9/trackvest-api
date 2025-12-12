@@ -7,9 +7,10 @@ import { PostExpenseCommand } from './dto/post-expense.command'
 import { PostIncomeCommand } from './dto/post-income.command'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
 import { OwnershipService } from '../common/services/ownership.service'
-import { GlAccountLookupService } from './services/gl-account-lookup.service'
+import { GlService } from './services/gl.service'
 import { GlAccountType } from '@prisma/client'
 import { GetAccountDto } from './dto/get-account.dto'
+import { GlEntryDto } from './dto/get-entry.dto'
 
 @ApiTags('gl')
 @Controller('gl')
@@ -19,7 +20,7 @@ export class GlController {
   constructor(
     private readonly post: PostingService,
     private readonly ownershipService: OwnershipService,
-    private readonly glAccountLookup: GlAccountLookupService,
+    private readonly glService: GlService,
   ) {}
   
   @Get('accounts')
@@ -31,7 +32,16 @@ export class GlController {
     if (!type) {
       throw new BadRequestException('Type is required')
     }
-    return this.glAccountLookup.findByTypeAndName(userId, type)
+    return this.glService.findByTypeAndName(userId, type)
+  }
+
+  @Get('entries')
+  @ApiResponse({ type: [GlEntryDto] })
+  async getEntries(@CurrentUser() userId: string, @Query('accountId') accountParam: string = 'All') {
+    if (!userId) {
+      throw new BadRequestException('User ID is required')
+    }
+    return this.glService.getEntriesByAccountId(userId, accountParam)
   }
 
   @Post('transfer')

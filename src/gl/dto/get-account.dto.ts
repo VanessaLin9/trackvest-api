@@ -1,6 +1,6 @@
-import { ApiProperty } from "@nestjs/swagger"
-import { GlAccount, GlAccountType } from "@prisma/client"
-import { IsEnum, IsOptional, IsString, IsUUID } from "class-validator"
+import { ApiProperty } from '@nestjs/swagger'
+import { GlAccount, GlAccountType } from '@prisma/client'
+import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator'
 
 export class GetAccountDto {
   @ApiProperty({ example: 'c2610e4e-1cca-401e-afa7-1ebf541d0000' })

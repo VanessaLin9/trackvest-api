@@ -3,7 +3,7 @@ import { BadRequestException, Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma.service'
 import type { Currency, Transaction, TxType } from '@prisma/client'
 import { OwnershipService } from '../common/services/ownership.service'
-import { GlAccountLookupService } from './services/gl-account-lookup.service'
+import { GlService } from './services/gl.service'
 import {
   GlLineInput,
   validateGlLines,
@@ -15,7 +15,7 @@ export class PostingService {
   constructor(
     private prisma: PrismaService,
     private ownershipService: OwnershipService,
-    private glAccountLookup: GlAccountLookupService,
+    private glService: GlService,
   ) {}
 
   /** ---------- 共用守則 ---------- */
@@ -135,14 +135,14 @@ export class PostingService {
     const date = tx.tradeTime
 
     // 取對應現金 GL（由 account 關聯）
-    const cashGlId = await this.glAccountLookup.getLinkedCashGlAccountId(account.id)
+    const cashGlId = await this.glService.getLinkedCashGlAccountId(account.id)
 
     switch (tx.type as TxType) {
       case 'deposit': {
         // 銀行 → 券商（或其他來源 → 此帳戶）
         // v1：用 transfer 模式，但來源你可能沒有指定；這裡先記成「未知來源收入」或你額外傳 fromGlAccountId
         // 建議：若此 Tx 代表「外部注入到本帳戶」，就 debit 現金、credit「權益-投入資本」或「收入-其他」；先簡化為權益。
-        const equityGlId = await this.glAccountLookup.getEquityGlAccountId(userId)
+        const equityGlId = await this.glService.getEquityGlAccountId(userId)
         const lines: GlLineInput[] = [
           { glAccountId: cashGlId, side: 'debit', amount: toNumber(tx.amount), currency: ccy, note: 'deposit in' },
           { glAccountId: equityGlId, side: 'credit', amount: toNumber(tx.amount), currency: ccy, note: 'owner contribution' },
@@ -150,7 +150,7 @@ export class PostingService {
         return this.createEntry(userId, date, tx.note ?? undefined, 'auto:transaction:deposit', lines, tx.id)
       }
       case 'withdraw': {
-        const equityGlId = await this.glAccountLookup.getEquityGlAccountId(userId)
+        const equityGlId = await this.glService.getEquityGlAccountId(userId)
         const lines: GlLineInput[] = [
           { glAccountId: equityGlId, side: 'debit', amount: toNumber(tx.amount), currency: ccy, note: 'owner draw' },
           { glAccountId: cashGlId, side: 'credit', amount: toNumber(tx.amount), currency: ccy, note: 'withdraw out' },
@@ -159,7 +159,7 @@ export class PostingService {
       }
       case 'buy': {
         // 成本處理：v1 將手續費併入成本（或改為單列費用）
-        const investGlId = await this.glAccountLookup.getInvestmentBucketGlAccountId(userId, ccy)
+        const investGlId = await this.glService.getInvestmentBucketGlAccountId(userId, ccy)
         const gross = toNumber(tx.quantity) * toNumber(tx.price)
         const fee = toNumber(tx.fee)
         const total = toNumber(tx.amount) || (gross + fee) // 以 tx.amount 優先，否則自行計
@@ -171,7 +171,7 @@ export class PostingService {
       }
       case 'sell': {
         // 需要可得「本次賣出成本」（由 Position/FIFO 算）；v1 先用 tx.price/quantity 推估，再以 avgCost 參數化
-        const investGlId = await this.glAccountLookup.getInvestmentBucketGlAccountId(userId, ccy)
+        const investGlId = await this.glService.getInvestmentBucketGlAccountId(userId, ccy)
         const proceedsGross = toNumber(tx.quantity) * toNumber(tx.price)
         const fee = toNumber(tx.fee)
         const proceeds = toNumber(tx.amount) || (proceedsGross - fee)
@@ -186,10 +186,10 @@ export class PostingService {
         const pnl = proceeds - cost
         if (Math.abs(pnl) > 1e-9) {
           if (pnl > 0) {
-            const gainGlId = await this.glAccountLookup.getRealizedGainIncomeGlAccountId(userId)
+            const gainGlId = await this.glService.getRealizedGainIncomeGlAccountId(userId)
             lines.push({ glAccountId: gainGlId, side: 'credit', amount: pnl, currency: ccy, note: 'realized gain' })
           } else {
-            const lossGlId = await this.glAccountLookup.getRealizedLossExpenseGlAccountId(userId)
+            const lossGlId = await this.glService.getRealizedLossExpenseGlAccountId(userId)
             lines.push({ glAccountId: lossGlId, side: 'debit', amount: -pnl, currency: ccy, note: 'realized loss' })
           }
         }
@@ -198,7 +198,7 @@ export class PostingService {
         return this.createEntry(userId, date, tx.note ?? undefined, 'auto:transaction:sell', lines, tx.id)
       }
       case 'dividend': {
-        const divGlId = await this.glAccountLookup.getDividendIncomeGlAccountId(userId)
+        const divGlId = await this.glService.getDividendIncomeGlAccountId(userId)
         const amt = toNumber(tx.amount)
         // 若有稅，v1 可直接把稅額寫在 note，或再開「稅費」科目
         const lines: GlLineInput[] = [
@@ -208,7 +208,7 @@ export class PostingService {
         return this.createEntry(userId, date, tx.note ?? undefined, 'auto:transaction:dividend', lines, tx.id)
       }
       case 'fee': {
-        const feeGlId = await this.glAccountLookup.getFeeExpenseGlAccountId(userId)
+        const feeGlId = await this.glService.getFeeExpenseGlAccountId(userId)
         const amt = toNumber(tx.amount) || toNumber(tx.fee)
         const lines: GlLineInput[] = [
           { glAccountId: feeGlId,  side: 'debit', amount: amt, currency: ccy, note: 'fee expense' },

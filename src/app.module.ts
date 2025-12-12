@@ -13,12 +13,12 @@ import { AssetsService } from './assets/assets.service'
 import { GlController } from './gl/gl.controller'
 import { PostingService } from './gl/posting.service'
 import { OwnershipService } from './common/services/ownership.service'
-import { GlAccountLookupService } from './gl/services/gl-account-lookup.service'
+import { GlService } from './gl/services/gl.service'
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
   controllers: [HealthController, TransactionsController, AccountsController, UsersController, AssetsController, GlController],
-  providers: [PrismaService, TransactionsService, AccountsService, UsersService, AssetsService, PostingService, OwnershipService, GlAccountLookupService],
+  providers: [PrismaService, TransactionsService, AccountsService, UsersService, AssetsService, PostingService, OwnershipService, GlService],
   exports: [OwnershipService], // Export so it can be used in other modules if needed
 })
 export class AppModule {}

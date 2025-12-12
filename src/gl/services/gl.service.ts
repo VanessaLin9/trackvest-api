@@ -1,14 +1,15 @@
 import { Injectable, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../../prisma.service'
-import { Currency, GlAccountType } from '@prisma/client'
+import { Currency, GlAccountType, GlEntry } from '@prisma/client'
 import { GetAccountDto } from '../dto/get-account.dto'
+import { GlEntryDto } from '../dto/get-entry.dto'
 
 /**
  * Service for looking up GL accounts by various criteria
  * Centralizes GL account discovery logic
  */
 @Injectable()
-export class GlAccountLookupService {
+export class GlService {
   constructor(private prisma: PrismaService) {}
 
   /**
@@ -118,9 +119,40 @@ export class GlAccountLookupService {
       },
     })
 
-    console.log('type', type)
     const accounts = gl.filter((gl) => gl.type === type)
     return accounts.map(GetAccountDto.fromEntity)
   }
-}
 
+  async getEntriesByAccountId(userId: string, accountId: string): Promise<GlEntryDto[]> {
+    let entries: GlEntry[] | undefined = undefined
+    if (accountId === 'All') {
+      entries = await this.prisma.glEntry.findMany({
+        where: {
+          userId: { equals: userId },
+        },
+        include: {
+          lines: true,
+        },
+      })
+    } else {
+    entries = await this.prisma.glEntry.findMany({
+      where: {
+        userId: { equals: userId },
+        lines: {
+          some: {
+            glAccountId: { equals: accountId },
+          },
+        },
+      },
+      include: {
+        lines: true,
+        },
+      })
+    }
+    if (entries) {
+      const filteredEntries = entries.filter((entry) => !entry.isDeleted)
+      return filteredEntries.map(GlEntryDto.fromEntity).sort((a, b) => b.date.localeCompare(a.date))
+    }
+    return []
+  }
+}
