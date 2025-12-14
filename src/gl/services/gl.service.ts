@@ -129,15 +129,35 @@ export class GlService {
       entries = await this.prisma.glEntry.findMany({
         where: {
           userId: { equals: userId },
+          isDeleted: false,
+          ...(accountId !== 'All' ? {
+            lines: {
+              some: {
+                glAccountId: { equals: accountId },
+              },
+            },
+          } : {}),
         },
         include: {
-          lines: true,
+          lines: {
+            include: {
+              glAccount: {
+                select: {
+                  id: true,
+                  name: true,
+                  type: true,
+                  currency: true,
+                },
+              },
+            },
+          },
         },
       })
     } else {
     entries = await this.prisma.glEntry.findMany({
       where: {
         userId: { equals: userId },
+        isDeleted: false,
         lines: {
           some: {
             glAccountId: { equals: accountId },
@@ -145,14 +165,21 @@ export class GlService {
         },
       },
       include: {
-        lines: true,
+        lines: {
+          include: {
+            glAccount: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+                currency: true,
+              },
+            },
+          },
+          },
         },
       })
     }
-    if (entries) {
-      const filteredEntries = entries.filter((entry) => !entry.isDeleted)
-      return filteredEntries.map(GlEntryDto.fromEntity).sort((a, b) => b.date.localeCompare(a.date))
-    }
-    return []
+    return entries?.map(GlEntryDto.fromEntity).sort((a, b) => b.date.localeCompare(a.date)) ?? []
   }
 }
