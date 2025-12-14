@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { GlEntry } from '@prisma/client'
+import { GlAccount, GlEntry, GlLine } from '@prisma/client'
 import { IsDateString, IsOptional, IsString, IsUUID } from 'class-validator'
+import { GlLineDto } from './get-line.dto'
 
 export class GlEntryDto {
   @ApiProperty({ example: 'c2610e4e-1cca-401e-afa7-1ebf541d0000' })
@@ -30,14 +31,18 @@ export class GlEntryDto {
   @IsOptional()
   refTxId?: string
 
-  static fromEntity(entity: GlEntry): GlEntryDto {
+  @ApiProperty({ type: [GlLineDto] })
+  lines!: GlLineDto[]
+
+  static fromEntity(entity: GlEntry & { lines: (GlLine & { glAccount?: GlAccount })[] }): GlEntryDto {
     return {
       id: entity.id,
       userId: entity.userId,
-      date: entity.date.toISOString(),
+      date: entity.date instanceof Date ? entity.date.toISOString() : entity.date,
       memo: entity.memo,
       source: entity.source,
       refTxId: entity.refTxId,
+      lines: (entity.lines ?? []).map((line) => GlLineDto.fromEntity(line)),
     }
   }
 }
