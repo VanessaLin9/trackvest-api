@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger'
 import { TxType } from '@prisma/client'
 import { IsEnum, IsString, IsOptional, IsNumber, IsDateString, IsUUID } from 'class-validator'
 import { Type } from 'class-transformer'
+import { Expose } from 'class-transformer'
 
 export class TransactionBaseDto {
 
@@ -9,6 +10,7 @@ export class TransactionBaseDto {
         description: '帳戶ID',
         example: 'c2610e4e-1cca-401e-afa7-1ebf541d0000',
     })
+    @Expose()
     @IsUUID()
     accountId!: string
 
@@ -17,6 +19,7 @@ export class TransactionBaseDto {
         example: 'e8e1d0a6-1234-5678-9abc-def012345678',
         required: false,
     })
+    @Expose()
     @IsOptional()
     @IsUUID()
     assetId?: string
@@ -26,6 +29,7 @@ export class TransactionBaseDto {
         example: 'buy',
         enum: TxType,
     })
+    @Expose()
     @IsEnum(TxType)
     type!: TxType
 
@@ -33,6 +37,7 @@ export class TransactionBaseDto {
         description: '交易金額',
         example: 1000.50,
     })
+    @Expose()
     @Type(() => Number)
     @IsNumber()
     amount!: number
@@ -42,6 +47,7 @@ export class TransactionBaseDto {
         example: 10,
         required: false,
     })
+    @Expose()
     @IsOptional()
     @Type(() => Number)
     @IsNumber()
@@ -52,6 +58,7 @@ export class TransactionBaseDto {
         example: 100.05,
         required: false,
     })
+    @Expose()
     @IsOptional()
     @Type(() => Number)
     @IsNumber()
@@ -62,16 +69,39 @@ export class TransactionBaseDto {
         example: 5.0,
         required: false,
     })
+    @Expose()
     @IsOptional()
     @Type(() => Number)
     @IsNumber()
     fee?: number
 
     @ApiProperty({
+        description: '交易稅額',
+        example: 3.0,
+        required: false,
+    })
+    @Expose()
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    tax?: number
+
+    @ApiProperty({
+        description: '券商委託書號',
+        example: 'k0C1i',
+        required: false,
+    })
+    @Expose()
+    @IsOptional()
+    @IsString()
+    brokerOrderNo?: string
+
+    @ApiProperty({
         description: '交易時間',
         example: '2025-01-20T10:30:00.000Z',
         required: false,
     })
+    @Expose()
     @IsOptional()
     @IsDateString()
     tradeTime?: string
@@ -81,6 +111,7 @@ export class TransactionBaseDto {
         example: 'Buy AAPL shares',
         required: false,
     })
+    @Expose()
     @IsOptional()
     @IsString()
     note?: string

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma.service'
 import { FindTransactionsDto } from './dto/find-transaction.dto'
 import { Prisma, Transaction } from '@prisma/client'
@@ -15,6 +15,73 @@ export class TransactionsService {
     private ownershipService: OwnershipService,
   ) {}
 
+  private validateTransactionBusinessRules(
+    dto: CreateTransactionDto | CreateAndUpdateTransactionDto,
+  ) {
+    const hasAsset = typeof dto.assetId === 'string' && dto.assetId.length > 0
+    const amount = Number(dto.amount)
+    const quantity = dto.quantity === undefined ? undefined : Number(dto.quantity)
+    const price = dto.price === undefined ? undefined : Number(dto.price)
+    const fee = dto.fee === undefined ? 0 : Number(dto.fee)
+    const tax = dto.tax === undefined ? 0 : Number(dto.tax)
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new BadRequestException('Amount must be a positive number')
+    }
+
+    if (!Number.isFinite(fee) || fee < 0) {
+      throw new BadRequestException('Fee must be zero or a positive number')
+    }
+
+    if (!Number.isFinite(tax) || tax < 0) {
+      throw new BadRequestException('Tax must be zero or a positive number')
+    }
+
+    switch (dto.type) {
+      case 'buy':
+      case 'sell':
+        if (!hasAsset) {
+          throw new BadRequestException(`Asset is required for ${dto.type} transactions`)
+        }
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+          throw new BadRequestException(`Quantity must be a positive number for ${dto.type} transactions`)
+        }
+        if (!Number.isFinite(price) || price <= 0) {
+          throw new BadRequestException(`Price must be a positive number for ${dto.type} transactions`)
+        }
+        return
+      case 'dividend':
+        if (!hasAsset) {
+          throw new BadRequestException('Asset is required for dividend transactions')
+        }
+        if (dto.quantity !== undefined) {
+          throw new BadRequestException('Quantity is not allowed for dividend transactions')
+        }
+        if (dto.price !== undefined) {
+          throw new BadRequestException('Price is not allowed for dividend transactions')
+        }
+        return
+      case 'deposit':
+        if (hasAsset) {
+          throw new BadRequestException('Asset is not allowed for deposit transactions')
+        }
+        if (dto.quantity !== undefined) {
+          throw new BadRequestException('Quantity is not allowed for deposit transactions')
+        }
+        if (dto.price !== undefined) {
+          throw new BadRequestException('Price is not allowed for deposit transactions')
+        }
+        if (fee !== 0) {
+          throw new BadRequestException('Fee must be zero for deposit transactions')
+        }
+        if (tax !== 0) {
+          throw new BadRequestException('Tax must be zero for deposit transactions')
+        }
+        return
+      default:
+        return
+    }
+  }
 
   async findAll(q: FindTransactionsDto, userId: string) {
     const isAdmin = await this.ownershipService.isAdmin(userId)
@@ -70,6 +137,7 @@ export class TransactionsService {
   async create(dto: CreateTransactionDto, userId: string): Promise<Transaction> {
     // Validate account belongs to user
     await this.ownershipService.validateAccountOwnership(dto.accountId, userId)
+    this.validateTransactionBusinessRules(dto)
     
     const created = await this.prisma.transaction.create({
       data: {
@@ -79,7 +147,9 @@ export class TransactionsService {
         amount: dto.amount,
         quantity: dto.quantity,
         price: dto.price,
-        fee: dto.fee?? 0,
+        fee: dto.fee ?? 0,
+        tax: dto.tax ?? 0,
+        brokerOrderNo: dto.brokerOrderNo,
         tradeTime: dto.tradeTime? new Date(dto.tradeTime) : new Date(),
         note: dto.note,
       },
@@ -126,6 +196,7 @@ export class TransactionsService {
     if (dto.accountId) {
       await this.ownershipService.validateAccountOwnership(dto.accountId, userId)
     }
+    this.validateTransactionBusinessRules(dto)
     
     return this.prisma.transaction.update({
       where: { id },
@@ -137,6 +208,8 @@ export class TransactionsService {
         quantity: dto.quantity,
         price: dto.price,
         fee: dto.fee ?? 0,
+        tax: dto.tax ?? 0,
+        brokerOrderNo: dto.brokerOrderNo,
         tradeTime: dto.tradeTime ? new Date(dto.tradeTime) : new Date(),
         note: dto.note,
       },
