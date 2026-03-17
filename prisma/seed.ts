@@ -18,14 +18,53 @@ async function main() {
     prisma.account.upsert({
       where: { id: 'bank-twd' },
       update: {},
-      create: { id: 'bank-twd', userId: user.id, name: 'Bank TWD', type: 'bank', currency: 'TWD' },
+      create: {
+        id: 'bank-twd',
+        userId: user.id,
+        name: 'Bank TWD',
+        type: 'bank',
+        currency: 'TWD',
+      },
     }),
     prisma.account.upsert({
       where: { id: 'broker-twd' },
-      update: {},
-      create: { id: 'broker-twd', userId: user.id, name: 'Broker TWD', type: 'broker', currency: 'TWD' },
+      update: { broker: 'fubon' },
+      create: {
+        id: 'broker-twd',
+        userId: user.id,
+        name: 'Broker TWD',
+        type: 'broker',
+        currency: 'TWD',
+        broker: 'fubon',
+      },
     }),
   ])
+
+  const tw0050 = await prisma.asset.upsert({
+    where: { symbol: '0050.TW' },
+    update: {},
+    create: {
+      symbol: '0050.TW',
+      name: '元大台灣50',
+      type: 'etf',
+      baseCurrency: 'TWD',
+    },
+  })
+
+  await prisma.assetAlias.upsert({
+    where: {
+      alias_broker: {
+        alias: '富邦台50',
+        broker: 'fubon',
+      },
+    },
+    update: { assetId: tw0050.id },
+    create: {
+      assetId: tw0050.id,
+      alias: '富邦台50',
+      broker: 'fubon',
+    },
+  })
 
   // 建立基本科目（GlAccount）
   await prisma.glAccount.createMany({
