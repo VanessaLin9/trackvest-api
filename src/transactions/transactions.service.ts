@@ -1,13 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma.service'
 import { FindTransactionsDto } from './dto/find-transaction.dto'
-import { Currency, Prisma, Transaction } from '@prisma/client'
+import { AccountType, Currency, Prisma, Transaction } from '@prisma/client'
 import { CreateTransactionDto } from './dto/create-transaction.dto'
 import { CreateAndUpdateTransactionDto } from './dto/transaction.createAndUpdate.dto'
 import { PostingService } from 'src/gl/posting.service'
 import { OwnershipService } from '../common/services/ownership.service'
 import { ImportTransactionsDto } from './dto/import-transactions.dto'
 import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
+import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
 
 @Injectable()
 export class TransactionsService {
@@ -247,11 +248,19 @@ export class TransactionsService {
 
     const account = await this.prisma.account.findUniqueOrThrow({
       where: { id: dto.accountId },
-      select: { id: true, broker: true, currency: true },
+      select: { id: true, type: true, broker: true, currency: true },
     })
+
+    if (account.type !== AccountType.broker) {
+      throw new BadRequestException('Selected account is not a broker account')
+    }
 
     if (!account.broker) {
       throw new BadRequestException('Selected account does not have a broker configured')
+    }
+
+    if (account.broker !== SUPPORTED_BROKER) {
+      throw new BadRequestException(`Only ${SUPPORTED_BROKER} broker accounts are supported for CSV import`)
     }
 
     const { headers, rows } = this.parseCsvRows(dto.csvContent)

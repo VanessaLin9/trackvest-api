@@ -28,14 +28,14 @@ async function main() {
     }),
     prisma.account.upsert({
       where: { id: 'broker-twd' },
-      update: { broker: 'fubon' },
+      update: { broker: 'cathay' },
       create: {
         id: 'broker-twd',
         userId: user.id,
         name: 'Broker TWD',
         type: 'broker',
         currency: 'TWD',
-        broker: 'fubon',
+        broker: 'cathay',
       },
     }),
   ])
@@ -54,15 +54,15 @@ async function main() {
   await prisma.assetAlias.upsert({
     where: {
       alias_broker: {
-        alias: '富邦台50',
-        broker: 'fubon',
+        alias: '國泰台灣領袖50',
+        broker: 'cathay',
       },
     },
     update: { assetId: tw0050.id },
     create: {
       assetId: tw0050.id,
-      alias: '富邦台50',
-      broker: 'fubon',
+      alias: '國泰台灣領袖50',
+      broker: 'cathay',
     },
   })
 

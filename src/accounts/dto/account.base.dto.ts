@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger'
 import { AccountType, Currency } from '@prisma/client'
 import { Expose } from 'class-transformer'
 import { IsEnum, IsOptional, IsString, Length } from 'class-validator'
+import { SUPPORTED_BROKER } from '../account-broker.constants'
 
 export class AccountBaseDto {
 
@@ -35,7 +36,7 @@ export class AccountBaseDto {
 
     @ApiProperty({
         description: '券商識別碼，只有 broker account 需要',
-        example: 'fubon',
+        example: SUPPORTED_BROKER,
         required: false,
     })
     @Expose()
