@@ -1,8 +1,10 @@
 // src/accounts/accounts.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { Account, AccountType, Currency, GlAccountType } from '@prisma/client'
 import { PrismaService } from '../prisma.service'
 import { CreateAndUpdateAccountDto } from './dto/account.createAndUpdate.dto'
 import { OwnershipService } from '../common/services/ownership.service'
+import { SUPPORTED_BROKER } from './account-broker.constants'
 
 @Injectable()
 export class AccountsService {
@@ -10,6 +12,87 @@ export class AccountsService {
     private prisma: PrismaService,
     private ownershipService: OwnershipService,
   ) {}
+
+  private normalizeBroker(type: AccountType, broker?: string | null): string | null {
+    const normalizedBroker = broker?.trim().toLowerCase() || null
+
+    if (type !== AccountType.broker) {
+      return null
+    }
+
+    if (!normalizedBroker) {
+      return null
+    }
+
+    if (normalizedBroker !== SUPPORTED_BROKER) {
+      throw new BadRequestException(
+        `Broker must be ${SUPPORTED_BROKER} or empty for broker accounts`,
+      )
+    }
+
+    return normalizedBroker
+  }
+
+  private buildAccountData(dto: CreateAndUpdateAccountDto) {
+    const trimmedName = dto.name.trim()
+    if (!trimmedName) {
+      throw new BadRequestException('Account name is required')
+    }
+
+    return {
+      userId: dto.userId,
+      name: trimmedName,
+      type: dto.type,
+      currency: dto.currency,
+      broker: this.normalizeBroker(dto.type, dto.broker),
+    }
+  }
+
+  private formatCurrencyLabel(currency: Currency): string {
+    switch (currency) {
+      case 'TWD':
+        return '台幣'
+      case 'USD':
+        return '美元'
+      case 'JPY':
+        return '日圓'
+      case 'EUR':
+        return '歐元'
+      default:
+        return currency
+    }
+  }
+
+  private buildLinkedGlAccountName(account: Pick<Account, 'id' | 'name' | 'type' | 'currency'>): string {
+    const accountTypeLabel =
+      account.type === 'broker'
+        ? '券商現金'
+        : account.type === 'bank'
+        ? '銀行'
+        : '現金'
+
+    return `資產-${accountTypeLabel}-${account.name}-${account.id.slice(0, 8)}(${this.formatCurrencyLabel(account.currency)})`
+  }
+
+  private async ensureLinkedGlAccount(account: Account) {
+    await this.prisma.glAccount.upsert({
+      where: { linkedAccountId: account.id },
+      update: {
+        userId: account.userId,
+        name: this.buildLinkedGlAccountName(account),
+        type: GlAccountType.asset,
+        currency: account.currency,
+        archivedAt: null,
+      },
+      create: {
+        userId: account.userId,
+        name: this.buildLinkedGlAccountName(account),
+        type: GlAccountType.asset,
+        currency: account.currency,
+        linkedAccountId: account.id,
+      },
+    })
+  }
 
   async create(dto: CreateAndUpdateAccountDto, userId: string) {
     // Validate user exists
@@ -20,8 +103,10 @@ export class AccountsService {
     if (!isAdmin && dto.userId !== userId) {
       throw new NotFoundException('User ID mismatch')
     }
-    
-    return this.prisma.account.create({ data: { ...dto, userId: dto.userId } })
+
+    const account = await this.prisma.account.create({ data: this.buildAccountData(dto) })
+    await this.ensureLinkedGlAccount(account)
+    return account
   }
 
   async findAll(userId: string) {
@@ -51,8 +136,13 @@ export class AccountsService {
     if (!isAdmin && dto.userId !== userId) {
       throw new NotFoundException('User ID mismatch')
     }
-    
-    return this.prisma.account.update({ where: { id }, data: { ...dto, userId: dto.userId } })
+
+    const account = await this.prisma.account.update({
+      where: { id },
+      data: this.buildAccountData(dto),
+    })
+    await this.ensureLinkedGlAccount(account)
+    return account
   }
 
   async remove(id: string, userId: string) {

@@ -10,6 +10,7 @@ export class AccountBaseResponseDto {
   id!: string
 
   @ApiProperty({ example: 'c2610e4e-1cca-401e-afa7-1ebf541d0000' })
+  @Expose()
   @IsUUID()
   userId!: string
   
