@@ -30,6 +30,7 @@ model Account {
   name      String
   type      AccountType
   currency  Currency
+  broker    Broker?
   createdAt DateTime      @default(now())
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   positions Position[]
@@ -50,6 +51,10 @@ enum AccountType {
   broker
   bank
   cash
+}
+
+enum Broker {
+  cathay
 }
 
 model Asset {
