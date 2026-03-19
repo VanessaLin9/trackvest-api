@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../../prisma.service'
-import { Currency, GlAccountType, GlEntry } from '@prisma/client'
+import { Account, Currency, GlAccountType, GlEntry } from '@prisma/client'
 import { GetAccountDto } from '../dto/get-account.dto'
 import { GlEntryDto } from '../dto/get-entry.dto'
 
@@ -12,6 +12,32 @@ import { GlEntryDto } from '../dto/get-entry.dto'
 export class GlService {
   constructor(private prisma: PrismaService) {}
 
+  private formatCurrencyLabel(currency: Currency): string {
+    switch (currency) {
+      case 'TWD':
+        return '台幣'
+      case 'USD':
+        return '美元'
+      case 'JPY':
+        return '日圓'
+      case 'EUR':
+        return '歐元'
+      default:
+        return currency
+    }
+  }
+
+  private buildLinkedGlAccountName(account: Pick<Account, 'id' | 'name' | 'type' | 'currency'>): string {
+    const accountTypeLabel =
+      account.type === 'broker'
+        ? '券商現金'
+        : account.type === 'bank'
+        ? '銀行'
+        : '現金'
+
+    return `資產-${accountTypeLabel}-${account.name}-${account.id.slice(0, 8)}(${this.formatCurrencyLabel(account.currency)})`
+  }
+
   /**
    * Find GL account linked to a regular account
    */
@@ -20,9 +46,23 @@ export class GlService {
       where: { linkedAccountId: accountId },
     })
     if (!gl) {
-      throw new BadRequestException(
-        `No GL account linked to Account(${accountId}). Seed it first.`,
-      )
+      const account = await this.prisma.account.findUnique({
+        where: { id: accountId },
+      })
+      if (!account) {
+        throw new BadRequestException(`Account(${accountId}) not found.`)
+      }
+
+      const createdGl = await this.prisma.glAccount.create({
+        data: {
+          userId: account.userId,
+          name: this.buildLinkedGlAccountName(account),
+          type: GlAccountType.asset,
+          currency: account.currency,
+          linkedAccountId: account.id,
+        },
+      })
+      return createdGl.id
     }
     return gl.id
   }

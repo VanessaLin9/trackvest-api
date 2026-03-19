@@ -1,8 +1,3 @@
-CREATE TYPE "Broker" AS ENUM ('cathay');
-
-ALTER TABLE "Account"
-ADD COLUMN "broker" "Broker";
-
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM "Account" WHERE "id" = 'bank-twd')
@@ -30,4 +25,5 @@ END $$;
 UPDATE "Account"
 SET "broker" = 'cathay'
 WHERE "id" = 'f0a6c5d2-4f9d-4d4d-b7fb-3c5ef0ddc201'
-  AND "type" = 'broker';
+  AND "type" = 'broker'
+  AND ("broker" IS NULL OR "broker" = '');

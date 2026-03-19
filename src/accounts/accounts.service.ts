@@ -1,6 +1,6 @@
 // src/accounts/accounts.service.ts
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
-import { AccountType } from '@prisma/client'
+import { Account, AccountType, Currency, GlAccountType } from '@prisma/client'
 import { PrismaService } from '../prisma.service'
 import { CreateAndUpdateAccountDto } from './dto/account.createAndUpdate.dto'
 import { OwnershipService } from '../common/services/ownership.service'
@@ -48,6 +48,52 @@ export class AccountsService {
     }
   }
 
+  private formatCurrencyLabel(currency: Currency): string {
+    switch (currency) {
+      case 'TWD':
+        return '台幣'
+      case 'USD':
+        return '美元'
+      case 'JPY':
+        return '日圓'
+      case 'EUR':
+        return '歐元'
+      default:
+        return currency
+    }
+  }
+
+  private buildLinkedGlAccountName(account: Pick<Account, 'id' | 'name' | 'type' | 'currency'>): string {
+    const accountTypeLabel =
+      account.type === 'broker'
+        ? '券商現金'
+        : account.type === 'bank'
+        ? '銀行'
+        : '現金'
+
+    return `資產-${accountTypeLabel}-${account.name}-${account.id.slice(0, 8)}(${this.formatCurrencyLabel(account.currency)})`
+  }
+
+  private async ensureLinkedGlAccount(account: Account) {
+    await this.prisma.glAccount.upsert({
+      where: { linkedAccountId: account.id },
+      update: {
+        userId: account.userId,
+        name: this.buildLinkedGlAccountName(account),
+        type: GlAccountType.asset,
+        currency: account.currency,
+        archivedAt: null,
+      },
+      create: {
+        userId: account.userId,
+        name: this.buildLinkedGlAccountName(account),
+        type: GlAccountType.asset,
+        currency: account.currency,
+        linkedAccountId: account.id,
+      },
+    })
+  }
+
   async create(dto: CreateAndUpdateAccountDto, userId: string) {
     // Validate user exists
     await this.ownershipService.validateUserExists(dto.userId)
@@ -57,8 +103,10 @@ export class AccountsService {
     if (!isAdmin && dto.userId !== userId) {
       throw new NotFoundException('User ID mismatch')
     }
-    
-    return this.prisma.account.create({ data: this.buildAccountData(dto) })
+
+    const account = await this.prisma.account.create({ data: this.buildAccountData(dto) })
+    await this.ensureLinkedGlAccount(account)
+    return account
   }
 
   async findAll(userId: string) {
@@ -88,8 +136,13 @@ export class AccountsService {
     if (!isAdmin && dto.userId !== userId) {
       throw new NotFoundException('User ID mismatch')
     }
-    
-    return this.prisma.account.update({ where: { id }, data: this.buildAccountData(dto) })
+
+    const account = await this.prisma.account.update({
+      where: { id },
+      data: this.buildAccountData(dto),
+    })
+    await this.ensureLinkedGlAccount(account)
+    return account
   }
 
   async remove(id: string, userId: string) {
