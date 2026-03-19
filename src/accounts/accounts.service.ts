@@ -1,8 +1,10 @@
 // src/accounts/accounts.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { AccountType } from '@prisma/client'
 import { PrismaService } from '../prisma.service'
 import { CreateAndUpdateAccountDto } from './dto/account.createAndUpdate.dto'
 import { OwnershipService } from '../common/services/ownership.service'
+import { SUPPORTED_BROKER } from './account-broker.constants'
 
 @Injectable()
 export class AccountsService {
@@ -10,6 +12,41 @@ export class AccountsService {
     private prisma: PrismaService,
     private ownershipService: OwnershipService,
   ) {}
+
+  private normalizeBroker(type: AccountType, broker?: string | null): string | null {
+    const normalizedBroker = broker?.trim().toLowerCase() || null
+
+    if (type !== AccountType.broker) {
+      return null
+    }
+
+    if (!normalizedBroker) {
+      return null
+    }
+
+    if (normalizedBroker !== SUPPORTED_BROKER) {
+      throw new BadRequestException(
+        `Broker must be ${SUPPORTED_BROKER} or empty for broker accounts`,
+      )
+    }
+
+    return normalizedBroker
+  }
+
+  private buildAccountData(dto: CreateAndUpdateAccountDto) {
+    const trimmedName = dto.name.trim()
+    if (!trimmedName) {
+      throw new BadRequestException('Account name is required')
+    }
+
+    return {
+      userId: dto.userId,
+      name: trimmedName,
+      type: dto.type,
+      currency: dto.currency,
+      broker: this.normalizeBroker(dto.type, dto.broker),
+    }
+  }
 
   async create(dto: CreateAndUpdateAccountDto, userId: string) {
     // Validate user exists
@@ -21,7 +58,7 @@ export class AccountsService {
       throw new NotFoundException('User ID mismatch')
     }
     
-    return this.prisma.account.create({ data: { ...dto, userId: dto.userId } })
+    return this.prisma.account.create({ data: this.buildAccountData(dto) })
   }
 
   async findAll(userId: string) {
@@ -52,7 +89,7 @@ export class AccountsService {
       throw new NotFoundException('User ID mismatch')
     }
     
-    return this.prisma.account.update({ where: { id }, data: { ...dto, userId: dto.userId } })
+    return this.prisma.account.update({ where: { id }, data: this.buildAccountData(dto) })
   }
 
   async remove(id: string, userId: string) {

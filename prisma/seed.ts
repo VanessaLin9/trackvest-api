@@ -4,6 +4,13 @@ const prisma = new PrismaClient()
 
 const SEEDED_BANK_ACCOUNT_ID = '497f9b9a-7788-4fb5-93a2-4c8d3f0d5e01'
 const SEEDED_BROKER_ACCOUNT_ID = 'f0a6c5d2-4f9d-4d4d-b7fb-3c5ef0ddc201'
+const SEEDED_ASSETS = [
+  { symbol: '2330', name: '台積電', type: 'equity', baseCurrency: 'TWD' },
+  { symbol: '006208', name: '富邦台50', type: 'etf', baseCurrency: 'TWD' },
+  { symbol: '2337', name: '旺宏', type: 'equity', baseCurrency: 'TWD' },
+  { symbol: '3711', name: '日月光投控', type: 'equity', baseCurrency: 'TWD' },
+  { symbol: '0050', name: '元大台灣50', type: 'etf', baseCurrency: 'TWD' },
+] as const
 
 async function migrateLegacySeedAccountId(legacyId: string, nextId: string) {
   const [legacyAccount, normalizedAccount] = await Promise.all([
@@ -75,6 +82,58 @@ async function main() {
       },
     }),
   ])
+
+  const seededAssets = await Promise.all(
+    SEEDED_ASSETS.map((asset) =>
+      prisma.asset.upsert({
+        where: { symbol: asset.symbol },
+        update: {
+          name: asset.name,
+          type: asset.type,
+          baseCurrency: asset.baseCurrency,
+        },
+        create: asset,
+      }),
+    ),
+  )
+
+  const seededAssetMap = new Map(
+    seededAssets.map((asset) => [asset.symbol, asset.id]),
+  )
+
+  await Promise.all(
+    SEEDED_ASSETS.map((asset) =>
+      prisma.assetAlias.upsert({
+        where: {
+          alias_broker: {
+            alias: asset.name,
+            broker: '',
+          },
+        },
+        update: { assetId: seededAssetMap.get(asset.symbol)! },
+        create: {
+          assetId: seededAssetMap.get(asset.symbol)!,
+          alias: asset.name,
+          broker: '',
+        },
+      }),
+    ),
+  )
+
+  await prisma.assetAlias.upsert({
+    where: {
+      alias_broker: {
+        alias: '國泰台灣領袖50',
+        broker: 'cathay',
+      },
+    },
+    update: { assetId: seededAssetMap.get('0050')! },
+    create: {
+      assetId: seededAssetMap.get('0050')!,
+      alias: '國泰台灣領袖50',
+      broker: 'cathay',
+    },
+  })
 
   // 建立基本科目（GlAccount）
   await prisma.glAccount.createMany({

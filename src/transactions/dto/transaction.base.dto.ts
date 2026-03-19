@@ -75,6 +75,27 @@ export class TransactionBaseDto {
     fee?: number
 
     @ApiProperty({
+        description: '交易稅額',
+        example: 3.0,
+        required: false,
+    })
+    @Expose()
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    tax?: number
+
+    @ApiProperty({
+        description: '券商委託書號',
+        example: 'k0C1i',
+        required: false,
+    })
+    @Expose()
+    @IsOptional()
+    @IsString()
+    brokerOrderNo?: string
+
+    @ApiProperty({
         description: '交易時間',
         example: '2025-01-20T10:30:00.000Z',
         required: false,

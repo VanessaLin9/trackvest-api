@@ -1,10 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { Expose } from 'class-transformer'
 import { AccountType, Currency } from '@prisma/client'
-import { IsEnum, IsIn, IsOptional, IsString, Length } from 'class-validator'
-
-const ACCOUNT_BROKER_OPTIONS = ['cathay'] as const
-type AccountBroker = (typeof ACCOUNT_BROKER_OPTIONS)[number]
+import { IsEnum, IsOptional, IsString, Length } from 'class-validator'
+import { SUPPORTED_BROKER } from '../account-broker.constants'
 
 export class AccountBaseDto {
 
@@ -37,14 +35,13 @@ export class AccountBaseDto {
     currency!: Currency
 
     @ApiProperty({
-        description: '券商代碼',
-        example: 'cathay',
-        enum: ACCOUNT_BROKER_OPTIONS,
+        description: '券商識別碼，只有 broker account 需要',
+        example: SUPPORTED_BROKER,
         required: false,
-        nullable: true,
     })
     @Expose()
     @IsOptional()
-    @IsIn(ACCOUNT_BROKER_OPTIONS)
-    broker?: AccountBroker
+    @IsString()
+    @Length(1, 50)
+    broker?: string
 }
