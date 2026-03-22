@@ -1,98 +1,145 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# trackvest-api
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS backend for Trackvest. It provides:
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+- accounts, assets, transactions, dashboard, and GL endpoints
+- PostgreSQL via Prisma
+- seeded demo data for local development
+- automatic GL posting for supported investment flows
 
-## Description
+## Stack
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- NestJS 11
+- Prisma
+- PostgreSQL 16
+- TypeScript
 
-## Project setup
+## Local setup
+
+1. Install dependencies
 
 ```bash
-$ pnpm install
+npm install
 ```
 
-## Compile and run the project
+2. Start local services
 
 ```bash
-# development
-$ pnpm run start
+npm run db:up
+```
 
+This starts:
+
+- Postgres on `localhost:5433`
+- Redis on `localhost:6379`
+
+3. Prepare environment
+
+The repo already includes `.env` for local development. The important values are:
+
+```env
+DATABASE_URL="postgresql://trackvest:trackvest@localhost:5433/trackvest?schema=public"
+PORT=3000
+JWT_SECRET="dev_dev_dev_change_me"
+```
+
+4. Apply schema and seed data
+
+```bash
+npx prisma migrate reset --force
+```
+
+If you only need to rerun seed:
+
+```bash
+npx prisma db seed
+```
+
+5. Start the API
+
+```bash
+npm run dev
+```
+
+API base URL:
+
+- `http://localhost:3000`
+- Swagger: `http://localhost:3000/docs`
+
+## Demo seed data
+
+The local seed creates:
+
+- demo user: `demo@trackvest.local`
+- seeded accounts:
+  - `Bank TWD`
+  - `Broker TWD` with broker `cathay`
+- seeded assets:
+  - `2330` 台積電
+  - `006208` 富邦台50
+  - `2337` 旺宏
+  - `3711` 日月光投控
+  - `0050` 元大台灣50
+- seeded GL accounts required by current flows
+
+## Current API scope
+
+Main modules in [src/app.module.ts](/Users/vanessa/develop/trackvest-api/src/app.module.ts):
+
+- `accounts`
+- `assets`
+- `transactions`
+- `dashboard`
+- `gl`
+- `users`
+- `health`
+
+Current investment behavior:
+
+- `deposit`, `buy`, and `dividend` are supported for posting
+- CSV import is limited to broker accounts with `broker = cathay`
+- account-linked GL accounts are auto-created when needed
+- transaction create/update/delete now keeps GL entries in sync
+
+## Important constraints
+
+- `sell` is intentionally disabled for now
+  - reason: cost basis / realized P&L logic is not implemented safely yet
+- CSV import supports Cathay-style exports only
+- authentication is currently simplified for local dev via `X-User-Id`
+
+## Useful commands
+
+```bash
 # watch mode
-$ pnpm run start:dev
+npm run dev
 
-# production mode
-$ pnpm run start:prod
+# one-shot start
+npm run start
+
+# build
+npm run build
+
+# start/stop local infra
+npm run db:up
+npm run db:down
+
+# Prisma helpers
+npx prisma studio
+npx prisma migrate dev
+npx prisma db seed
 ```
 
-## Run tests
+## Frontend pairing
 
-```bash
-# unit tests
-$ pnpm run test
+Default local frontend is expected at:
 
-# e2e tests
-$ pnpm run test:e2e
+- `http://localhost:5173`
 
-# test coverage
-$ pnpm run test:cov
-```
+The frontend sends `X-User-Id` on every request, using the configured demo user id.
 
-## Deployment
+## Known gaps
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- no automated coverage yet for the investments/import/GL path
+- `sell` and cost basis tracking still need a real position engine
+- README reflects current local-dev assumptions, not production deployment
