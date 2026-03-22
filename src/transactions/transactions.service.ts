@@ -196,7 +196,6 @@ export class TransactionsService {
 
     switch (dto.type) {
       case 'buy':
-      case 'sell':
         if (!hasAsset) {
           throw new BadRequestException(`Asset is required for ${dto.type} transactions`)
         }
@@ -207,6 +206,10 @@ export class TransactionsService {
           throw new BadRequestException(`Price must be a positive number for ${dto.type} transactions`)
         }
         return
+      case 'sell':
+        throw new BadRequestException(
+          'Sell transactions are temporarily disabled until cost basis tracking is implemented',
+        )
       case 'dividend':
         if (!hasAsset) {
           throw new BadRequestException('Asset is required for dividend transactions')
@@ -385,6 +388,14 @@ export class TransactionsService {
       }
 
       const type = netAmount < 0 ? 'buy' : 'sell'
+      if (type === 'sell') {
+        errors.push({
+          row: row.rowNumber,
+          field: '淨收付',
+          message: 'Sell transactions are temporarily disabled until cost basis tracking is implemented',
+        })
+        continue
+      }
       const importDto: CreateTransactionDto = {
         accountId: dto.accountId,
         assetId,
@@ -487,38 +498,36 @@ export class TransactionsService {
     // Validate account belongs to user
     await this.ownershipService.validateAccountOwnership(dto.accountId, userId)
     this.validateTransactionBusinessRules(dto)
-    
-    const created = await this.prisma.transaction.create({
-      data: {
-        accountId: dto.accountId,
-        assetId: dto.assetId,
-        type: dto.type,
-        amount: dto.amount,
-        quantity: dto.quantity,
-        price: dto.price,
-        fee: dto.fee ?? 0,
-        tax: dto.tax ?? 0,
-        brokerOrderNo: dto.brokerOrderNo,
-        tradeTime: dto.tradeTime? new Date(dto.tradeTime) : new Date(),
-        note: dto.note,
-      },
-      include: {
-        account: { select: { id: true, name: true, currency: true, userId: true } },
-        asset: { select: { id: true, symbol: true, name: true, baseCurrency: true } },
-      },
+
+    return this.prisma.$transaction(async (db) => {
+      const created = await db.transaction.create({
+        data: {
+          accountId: dto.accountId,
+          assetId: dto.assetId,
+          type: dto.type,
+          amount: dto.amount,
+          quantity: dto.quantity,
+          price: dto.price,
+          fee: dto.fee ?? 0,
+          tax: dto.tax ?? 0,
+          brokerOrderNo: dto.brokerOrderNo,
+          tradeTime: dto.tradeTime? new Date(dto.tradeTime) : new Date(),
+          note: dto.note,
+        },
+        include: {
+          account: { select: { id: true, name: true, currency: true, userId: true } },
+          asset: { select: { id: true, symbol: true, name: true, baseCurrency: true } },
+        },
+      })
+
+      await this.postingService.postTransaction({
+        userId: created.account.userId,
+        transaction: created,
+        db,
+      })
+
+      return created
     })
-    
-    // Get account to pass userId to posting service
-    const account = await this.prisma.account.findUniqueOrThrow({
-      where: { id: created.accountId },
-      select: { userId: true },
-    })
-    
-    await this.postingService.postTransaction({
-      userId: account.userId,
-      transaction: created,
-    })
-    return created
   }
 
   async findOne(id: string, userId: string) {
@@ -545,48 +554,102 @@ export class TransactionsService {
     if (dto.accountId) {
       await this.ownershipService.validateAccountOwnership(dto.accountId, userId)
     }
-    this.validateTransactionBusinessRules(dto)
-    
-    return this.prisma.transaction.update({
+
+    const existing = await this.prisma.transaction.findUnique({
       where: { id },
-      data: {
-        accountId: dto.accountId,
-        assetId: dto.assetId,
-        type: dto.type,
-        amount: dto.amount,
-        quantity: dto.quantity,
-        price: dto.price,
-        fee: dto.fee ?? 0,
-        tax: dto.tax ?? 0,
-        brokerOrderNo: dto.brokerOrderNo,
-        tradeTime: dto.tradeTime ? new Date(dto.tradeTime) : new Date(),
-        note: dto.note,
-      },
-      include: {
-        account: { select: { id: true, name: true, currency: true, userId: true } },
-        asset: { select: { id: true, symbol: true, name: true, baseCurrency: true } },
-        tags: { include: { tag: true } },
-      },
+    })
+    if (!existing) {
+      throw new NotFoundException('Transaction not found')
+    }
+
+    const nextTransaction: CreateTransactionDto = {
+      accountId: dto.accountId ?? existing.accountId,
+      assetId: dto.assetId === undefined ? existing.assetId ?? undefined : dto.assetId,
+      type: dto.type ?? existing.type,
+      amount: dto.amount ?? Number(existing.amount),
+      quantity: dto.quantity === undefined ? (existing.quantity == null ? undefined : Number(existing.quantity)) : dto.quantity,
+      price: dto.price === undefined ? (existing.price == null ? undefined : Number(existing.price)) : dto.price,
+      fee: dto.fee ?? Number(existing.fee),
+      tax: dto.tax ?? Number(existing.tax),
+      brokerOrderNo:
+        dto.brokerOrderNo === undefined ? existing.brokerOrderNo ?? undefined : dto.brokerOrderNo,
+      tradeTime: dto.tradeTime ?? existing.tradeTime.toISOString(),
+      note: dto.note === undefined ? existing.note ?? undefined : dto.note,
+    }
+
+    this.validateTransactionBusinessRules(nextTransaction)
+
+    return this.prisma.$transaction(async (db) => {
+      const transaction = await db.transaction.update({
+        where: { id },
+        data: {
+          accountId: nextTransaction.accountId,
+          assetId: nextTransaction.assetId,
+          type: nextTransaction.type,
+          amount: nextTransaction.amount,
+          quantity: nextTransaction.quantity,
+          price: nextTransaction.price,
+          fee: nextTransaction.fee ?? 0,
+          tax: nextTransaction.tax ?? 0,
+          brokerOrderNo: nextTransaction.brokerOrderNo,
+          tradeTime: new Date(nextTransaction.tradeTime),
+          note: nextTransaction.note,
+        },
+        include: {
+          account: { select: { id: true, name: true, currency: true, userId: true } },
+          asset: { select: { id: true, symbol: true, name: true, baseCurrency: true } },
+          tags: { include: { tag: true } },
+        },
+      })
+
+      await this.postingService.postTransaction({
+        userId: transaction.account.userId,
+        transaction,
+        db,
+      })
+
+      return transaction
     })
   }
 
   async remove(id: string, userId: string) {
     // Validate ownership
     await this.ownershipService.validateTransactionOwnership(id, userId)
-    
-    return this.prisma.transaction.update({
-      where: { id },
-      data: {
-        isDeleted: true,
-        deletedAt: new Date(),
-      },
+
+    return this.prisma.$transaction(async (db) => {
+      const transaction = await db.transaction.update({
+        where: { id },
+        data: {
+          isDeleted: true,
+          deletedAt: new Date(),
+        },
+        include: {
+          account: { select: { userId: true } },
+        },
+      })
+
+      await this.postingService.archiveTransactionEntries(transaction.account.userId, id, db)
+      return transaction
     })
   }
 
   async hardDelete(id: string, userId: string) {
     // Validate ownership
     await this.ownershipService.validateTransactionOwnership(id, userId)
-    
-    return this.prisma.transaction.delete({ where: { id } })
+
+    return this.prisma.$transaction(async (db) => {
+      const existing = await db.transaction.findUnique({
+        where: { id },
+        include: {
+          account: { select: { userId: true } },
+        },
+      })
+      if (!existing) {
+        throw new NotFoundException('Transaction not found')
+      }
+
+      await this.postingService.archiveTransactionEntries(existing.account.userId, id, db)
+      return db.transaction.delete({ where: { id } })
+    })
   }
 }
