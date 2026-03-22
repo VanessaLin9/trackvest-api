@@ -5,6 +5,8 @@ import { FindTransactionsDto } from './dto/find-transaction.dto'
 import { CreateTransactionDto } from './dto/create-transaction.dto'
 import { CreateAndUpdateTransactionDto } from './dto/transaction.createAndUpdate.dto'
 import { TransactionResponseDto } from './dto/transaction.response.dto'
+import { ImportTransactionsDto } from './dto/import-transactions.dto'
+import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
 import { plainToInstance } from 'class-transformer'
 import { ErrorResponse } from 'src/common/dto'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
@@ -24,6 +26,15 @@ export class TransactionsController {
   ): Promise<TransactionResponseDto> {
     const created = await this.svc.create(dto, userId)
     return plainToInstance(TransactionResponseDto, created, { excludeExtraneousValues: true })
+  }
+
+  @Post('import')
+  @ApiCreatedResponse({ type: ImportTransactionsResponseDto })
+  async importTransactions(
+    @Body() dto: ImportTransactionsDto,
+    @CurrentUser() userId: string,
+  ): Promise<ImportTransactionsResponseDto> {
+    return this.svc.importTransactions(dto, userId)
   }
 
   @Get()
