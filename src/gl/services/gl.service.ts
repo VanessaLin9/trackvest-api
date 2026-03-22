@@ -1,8 +1,10 @@
 import { Injectable, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../../prisma.service'
-import { Account, Currency, GlAccountType, GlEntry } from '@prisma/client'
+import { Account, Currency, GlAccountType, GlEntry, Prisma } from '@prisma/client'
 import { GetAccountDto } from '../dto/get-account.dto'
 import { GlEntryDto } from '../dto/get-entry.dto'
+
+type DbClient = Prisma.TransactionClient | PrismaService
 
 /**
  * Service for looking up GL accounts by various criteria
@@ -11,6 +13,10 @@ import { GlEntryDto } from '../dto/get-entry.dto'
 @Injectable()
 export class GlService {
   constructor(private prisma: PrismaService) {}
+
+  private getDb(db?: DbClient) {
+    return db ?? this.prisma
+  }
 
   private formatCurrencyLabel(currency: Currency): string {
     switch (currency) {
@@ -41,19 +47,20 @@ export class GlService {
   /**
    * Find GL account linked to a regular account
    */
-  async getLinkedCashGlAccountId(accountId: string): Promise<string> {
-    const gl = await this.prisma.glAccount.findFirst({
+  async getLinkedCashGlAccountId(accountId: string, db?: DbClient): Promise<string> {
+    const prisma = this.getDb(db)
+    const gl = await prisma.glAccount.findFirst({
       where: { linkedAccountId: accountId },
     })
     if (!gl) {
-      const account = await this.prisma.account.findUnique({
+      const account = await prisma.account.findUnique({
         where: { id: accountId },
       })
       if (!account) {
         throw new BadRequestException(`Account(${accountId}) not found.`)
       }
 
-      const createdGl = await this.prisma.glAccount.create({
+      const createdGl = await prisma.glAccount.create({
         data: {
           userId: account.userId,
           name: this.buildLinkedGlAccountName(account),
@@ -73,8 +80,9 @@ export class GlService {
   async getNamedGlAccountId(
     userId: string,
     nameContains: string,
+    db?: DbClient,
   ): Promise<string> {
-    const gl = await this.prisma.glAccount.findFirst({
+    const gl = await this.getDb(db).glAccount.findFirst({
       where: {
         userId,
         name: { contains: nameContains },
@@ -94,8 +102,9 @@ export class GlService {
   async getInvestmentBucketGlAccountId(
     userId: string,
     currency: Currency,
+    db?: DbClient,
   ): Promise<string> {
-    const gl = await this.prisma.glAccount.findFirst({
+    const gl = await this.getDb(db).glAccount.findFirst({
       where: {
         userId,
         type: 'asset',
@@ -114,36 +123,36 @@ export class GlService {
   /**
    * Find fee expense GL account
    */
-  async getFeeExpenseGlAccountId(userId: string): Promise<string> {
-    return this.getNamedGlAccountId(userId, '手續費')
+  async getFeeExpenseGlAccountId(userId: string, db?: DbClient): Promise<string> {
+    return this.getNamedGlAccountId(userId, '手續費', db)
   }
 
   /**
    * Find dividend income GL account
    */
-  async getDividendIncomeGlAccountId(userId: string): Promise<string> {
-    return this.getNamedGlAccountId(userId, '股利')
+  async getDividendIncomeGlAccountId(userId: string, db?: DbClient): Promise<string> {
+    return this.getNamedGlAccountId(userId, '股利', db)
   }
 
   /**
    * Find realized gain income GL account
    */
-  async getRealizedGainIncomeGlAccountId(userId: string): Promise<string> {
-    return this.getNamedGlAccountId(userId, '已實現損益-收益')
+  async getRealizedGainIncomeGlAccountId(userId: string, db?: DbClient): Promise<string> {
+    return this.getNamedGlAccountId(userId, '已實現損益-收益', db)
   }
 
   /**
    * Find realized loss expense GL account
    */
-  async getRealizedLossExpenseGlAccountId(userId: string): Promise<string> {
-    return this.getNamedGlAccountId(userId, '已實現損益-損失')
+  async getRealizedLossExpenseGlAccountId(userId: string, db?: DbClient): Promise<string> {
+    return this.getNamedGlAccountId(userId, '已實現損益-損失', db)
   }
 
   /**
    * Find equity GL account
    */
-  async getEquityGlAccountId(userId: string): Promise<string> {
-    return this.getNamedGlAccountId(userId, '權益')
+  async getEquityGlAccountId(userId: string, db?: DbClient): Promise<string> {
+    return this.getNamedGlAccountId(userId, '權益', db)
   }
 
   /**

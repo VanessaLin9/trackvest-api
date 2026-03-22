@@ -1,10 +1,12 @@
 // src/accounts/accounts.service.ts
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
-import { Account, AccountType, Currency, GlAccountType } from '@prisma/client'
+import { Account, AccountType, Currency, GlAccountType, Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma.service'
 import { CreateAndUpdateAccountDto } from './dto/account.createAndUpdate.dto'
 import { OwnershipService } from '../common/services/ownership.service'
 import { SUPPORTED_BROKER } from './account-broker.constants'
+
+type DbClient = Prisma.TransactionClient | PrismaService
 
 @Injectable()
 export class AccountsService {
@@ -12,6 +14,10 @@ export class AccountsService {
     private prisma: PrismaService,
     private ownershipService: OwnershipService,
   ) {}
+
+  private getDb(db?: DbClient) {
+    return db ?? this.prisma
+  }
 
   private normalizeBroker(type: AccountType, broker?: string | null): string | null {
     const normalizedBroker = broker?.trim().toLowerCase() || null
@@ -74,8 +80,8 @@ export class AccountsService {
     return `資產-${accountTypeLabel}-${account.name}-${account.id.slice(0, 8)}(${this.formatCurrencyLabel(account.currency)})`
   }
 
-  private async ensureLinkedGlAccount(account: Account) {
-    await this.prisma.glAccount.upsert({
+  private async ensureLinkedGlAccount(account: Account, db?: DbClient) {
+    await this.getDb(db).glAccount.upsert({
       where: { linkedAccountId: account.id },
       update: {
         userId: account.userId,
@@ -104,9 +110,11 @@ export class AccountsService {
       throw new NotFoundException('User ID mismatch')
     }
 
-    const account = await this.prisma.account.create({ data: this.buildAccountData(dto) })
-    await this.ensureLinkedGlAccount(account)
-    return account
+    return this.prisma.$transaction(async (db) => {
+      const account = await db.account.create({ data: this.buildAccountData(dto) })
+      await this.ensureLinkedGlAccount(account, db)
+      return account
+    })
   }
 
   async findAll(userId: string) {
@@ -137,12 +145,14 @@ export class AccountsService {
       throw new NotFoundException('User ID mismatch')
     }
 
-    const account = await this.prisma.account.update({
-      where: { id },
-      data: this.buildAccountData(dto),
+    return this.prisma.$transaction(async (db) => {
+      const account = await db.account.update({
+        where: { id },
+        data: this.buildAccountData(dto),
+      })
+      await this.ensureLinkedGlAccount(account, db)
+      return account
     })
-    await this.ensureLinkedGlAccount(account)
-    return account
   }
 
   async remove(id: string, userId: string) {
