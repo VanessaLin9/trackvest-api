@@ -1,10 +1,12 @@
 import type { Prisma, Transaction } from '@prisma/client'
 import { TransactionsService } from './transactions.service'
 
-describe('TransactionsService.create', () => {
+describe('TransactionsService', () => {
   const userId = 'user-1'
   const accountId = 'account-1'
+  const anotherAccountId = 'account-2'
   const assetId = 'asset-1'
+  const anotherAssetId = 'asset-2'
   const tradeTime = '2026-03-25T09:30:00.000Z'
 
   function buildCreatedTransaction(
@@ -36,9 +38,9 @@ describe('TransactionsService.create', () => {
     const txClient = {
       transaction: {
         create: jest.fn(),
-      },
-      account: {
-        findUniqueOrThrow: jest.fn(),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
       },
       position: {
         findFirst: jest.fn(),
@@ -48,6 +50,9 @@ describe('TransactionsService.create', () => {
     }
 
     const prisma = {
+      transaction: {
+        findUnique: jest.fn(),
+      },
       $transaction: jest.fn(
         async (callback: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
           callback(txClient as unknown as Prisma.TransactionClient),
@@ -56,10 +61,12 @@ describe('TransactionsService.create', () => {
 
     const postingService = {
       postTransaction: jest.fn(),
+      archiveTransactionEntries: jest.fn(),
     }
 
     const ownershipService = {
       validateAccountOwnership: jest.fn(),
+      validateTransactionOwnership: jest.fn(),
     }
 
     const service = new TransactionsService(
@@ -162,5 +169,251 @@ describe('TransactionsService.create', () => {
         avgCost: expect.closeTo(51.1538461538, 10),
       },
     })
+  })
+
+  it('recalculates position and reposts GL when a buy transaction is updated', async () => {
+    const { service, prisma, txClient, postingService, ownershipService } =
+      createHarness()
+    const existingTransaction = buildCreatedTransaction()
+    const updatedTransaction = buildCreatedTransaction({
+      amount: 330,
+      quantity: 6,
+      price: 54,
+      fee: 6,
+    })
+
+    prisma.transaction.findUnique.mockResolvedValue(existingTransaction)
+    txClient.transaction.update.mockResolvedValue(updatedTransaction)
+    txClient.position.findFirst.mockResolvedValue({
+      id: 'position-1',
+      quantity: 10,
+      avgCost: 101.5,
+    })
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-2' })
+
+    await service.update(
+      'tx-1',
+      {
+        amount: 330,
+        quantity: 6,
+        price: 54,
+        fee: 6,
+        tradeTime,
+      },
+      userId,
+    )
+
+    expect(ownershipService.validateTransactionOwnership).toHaveBeenCalledWith(
+      'tx-1',
+      userId,
+    )
+    expect(postingService.postTransaction).toHaveBeenCalledWith({
+      userId,
+      transaction: updatedTransaction,
+      db: txClient,
+    })
+    expect(txClient.position.update).toHaveBeenCalledWith({
+      where: { id: 'position-1' },
+      data: {
+        quantity: 6,
+        avgCost: 55,
+        closedAt: null,
+      },
+    })
+  })
+
+  it('archives GL and closes the position when removing the last buy transaction', async () => {
+    const { service, txClient, postingService, ownershipService } =
+      createHarness()
+    const removedTransaction = buildCreatedTransaction({
+      isDeleted: true,
+      deletedAt: new Date('2026-03-25T10:00:00.000Z'),
+    })
+
+    txClient.transaction.update.mockResolvedValue(removedTransaction)
+    txClient.position.findFirst.mockResolvedValue({
+      id: 'position-1',
+      quantity: 10,
+      avgCost: 101.5,
+    })
+
+    await service.remove('tx-1', userId)
+
+    expect(ownershipService.validateTransactionOwnership).toHaveBeenCalledWith(
+      'tx-1',
+      userId,
+    )
+    expect(postingService.archiveTransactionEntries).toHaveBeenCalledWith(
+      userId,
+      'tx-1',
+      txClient,
+    )
+    expect(txClient.position.update).toHaveBeenCalledWith({
+      where: { id: 'position-1' },
+      data: {
+        quantity: 0,
+        avgCost: 0,
+        closedAt: removedTransaction.tradeTime,
+      },
+    })
+  })
+
+  it('archives GL and closes the position when hard deleting the last buy transaction', async () => {
+    const { service, txClient, postingService, ownershipService } =
+      createHarness()
+    const existingTransaction = buildCreatedTransaction()
+
+    txClient.transaction.findUnique.mockResolvedValue(existingTransaction)
+    txClient.transaction.delete.mockResolvedValue(existingTransaction)
+    txClient.position.findFirst.mockResolvedValue({
+      id: 'position-1',
+      quantity: 10,
+      avgCost: 101.5,
+    })
+
+    await service.hardDelete('tx-1', userId)
+
+    expect(ownershipService.validateTransactionOwnership).toHaveBeenCalledWith(
+      'tx-1',
+      userId,
+    )
+    expect(postingService.archiveTransactionEntries).toHaveBeenCalledWith(
+      userId,
+      'tx-1',
+      txClient,
+    )
+    expect(txClient.position.update).toHaveBeenCalledWith({
+      where: { id: 'position-1' },
+      data: {
+        quantity: 0,
+        avgCost: 0,
+        closedAt: existingTransaction.tradeTime,
+      },
+    })
+  })
+
+  it('moves holdings when a buy transaction is updated to a different account and asset', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+    const existingTransaction = buildCreatedTransaction()
+    const movedTransaction = buildCreatedTransaction({
+      accountId: anotherAccountId,
+      assetId: anotherAssetId,
+      amount: 330,
+      quantity: 6,
+      price: 54,
+      fee: 6,
+      account: {
+        userId,
+      },
+    })
+
+    prisma.transaction.findUnique.mockResolvedValue(existingTransaction)
+    txClient.transaction.update.mockResolvedValue(movedTransaction)
+    txClient.position.findFirst
+      .mockResolvedValueOnce({
+        id: 'old-position',
+        quantity: 10,
+        avgCost: 101.5,
+      })
+      .mockResolvedValueOnce(null)
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-3' })
+
+    await service.update(
+      'tx-1',
+      {
+        accountId: anotherAccountId,
+        assetId: anotherAssetId,
+        amount: 330,
+        quantity: 6,
+        price: 54,
+        fee: 6,
+        tradeTime,
+      },
+      userId,
+    )
+
+    expect(txClient.position.update).toHaveBeenCalledWith({
+      where: { id: 'old-position' },
+      data: {
+        quantity: 0,
+        avgCost: 0,
+        closedAt: existingTransaction.tradeTime,
+      },
+    })
+    expect(txClient.position.create).toHaveBeenCalledWith({
+      data: {
+        accountId: anotherAccountId,
+        assetId: anotherAssetId,
+        quantity: 6,
+        avgCost: 55,
+        openedAt: movedTransaction.tradeTime,
+      },
+    })
+  })
+
+  it('does not touch positions when updating a non-buy transaction', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+    const existingTransaction = buildCreatedTransaction({
+      type: 'deposit',
+      assetId: null,
+      quantity: null,
+      price: null,
+      fee: 0,
+      tax: 0,
+      amount: 1000,
+    })
+    const updatedTransaction = buildCreatedTransaction({
+      type: 'deposit',
+      assetId: null,
+      quantity: null,
+      price: null,
+      fee: 0,
+      tax: 0,
+      amount: 1200,
+    })
+
+    prisma.transaction.findUnique.mockResolvedValue(existingTransaction)
+    txClient.transaction.update.mockResolvedValue(updatedTransaction)
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-4' })
+
+    await service.update(
+      'tx-1',
+      {
+        amount: 1200,
+        tradeTime,
+      },
+      userId,
+    )
+
+    expect(txClient.position.findFirst).not.toHaveBeenCalled()
+    expect(txClient.position.create).not.toHaveBeenCalled()
+    expect(txClient.position.update).not.toHaveBeenCalled()
+  })
+
+  it('does not touch positions when removing a non-buy transaction', async () => {
+    const { service, txClient, postingService } = createHarness()
+    const removedTransaction = buildCreatedTransaction({
+      type: 'deposit',
+      assetId: null,
+      quantity: null,
+      price: null,
+      fee: 0,
+      tax: 0,
+      amount: 1000,
+      isDeleted: true,
+      deletedAt: new Date('2026-03-25T10:00:00.000Z'),
+    })
+
+    txClient.transaction.update.mockResolvedValue(removedTransaction)
+
+    await service.remove('tx-1', userId)
+
+    expect(postingService.archiveTransactionEntries).toHaveBeenCalledWith(
+      userId,
+      'tx-1',
+      txClient,
+    )
+    expect(txClient.position.findFirst).not.toHaveBeenCalled()
+    expect(txClient.position.update).not.toHaveBeenCalled()
   })
 })
