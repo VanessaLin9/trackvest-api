@@ -4,11 +4,12 @@ import { FindTransactionsDto } from './dto/find-transaction.dto'
 import { AccountType, Currency, Prisma, Transaction } from '@prisma/client'
 import { CreateTransactionDto } from './dto/create-transaction.dto'
 import { CreateAndUpdateTransactionDto } from './dto/transaction.createAndUpdate.dto'
-import { PostingService } from 'src/gl/posting.service'
+import { PostingService } from '../gl/posting.service'
 import { OwnershipService } from '../common/services/ownership.service'
 import { ImportTransactionsDto } from './dto/import-transactions.dto'
 import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
 import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
+import { toNumber } from '../common/utils/number.util'
 
 @Injectable()
 export class TransactionsService {
@@ -443,6 +444,63 @@ export class TransactionsService {
     }
   }
 
+  private async syncPositionOnCreate(
+    prisma: Prisma.TransactionClient,
+    transaction: Transaction,
+  ) {
+    if (transaction.type !== 'buy' || !transaction.assetId) {
+      return
+    }
+
+    const quantity = toNumber(transaction.quantity)
+    const totalCost = toNumber(transaction.amount)
+
+    if (quantity <= 0 || totalCost <= 0) {
+      throw new BadRequestException('buy transactions require positive quantity and amount')
+    }
+
+    const existingPosition = await prisma.position.findFirst({
+      where: {
+        accountId: transaction.accountId,
+        assetId: transaction.assetId,
+        closedAt: null,
+      },
+      orderBy: { openedAt: 'desc' },
+    })
+
+    if (!existingPosition) {
+      await prisma.position.create({
+        data: {
+          accountId: transaction.accountId,
+          assetId: transaction.assetId,
+          quantity,
+          avgCost: totalCost / quantity,
+          openedAt: transaction.tradeTime,
+        },
+      })
+      return
+    }
+
+    const currentQuantity = toNumber(existingPosition.quantity)
+    const currentAvgCost = toNumber(existingPosition.avgCost)
+    const nextQuantity = currentQuantity + quantity
+
+    if (nextQuantity <= 0) {
+      throw new BadRequestException('resulting position quantity must stay positive')
+    }
+
+    const nextAvgCost =
+      (currentQuantity * currentAvgCost + totalCost) / nextQuantity
+
+    await prisma.position.update({
+      where: { id: existingPosition.id },
+      data: {
+        quantity: nextQuantity,
+        avgCost: nextAvgCost,
+      },
+    })
+  }
+
   async findAll(q: FindTransactionsDto, userId: string) {
     const isAdmin = await this.ownershipService.isAdmin(userId)
     
@@ -525,7 +583,7 @@ export class TransactionsService {
         transaction: created,
         db,
       })
-
+      await this.syncPositionOnCreate(db, created)
       return created
     })
   }
