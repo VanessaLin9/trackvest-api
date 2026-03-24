@@ -292,6 +292,69 @@ describe('TransactionsService', () => {
     })
   })
 
+  it('reduces quantity and keeps the position open when removing a non-final buy transaction', async () => {
+    const { service, txClient, postingService } = createHarness()
+    const removedTransaction = buildCreatedTransaction({
+      amount: 330,
+      quantity: 6,
+      price: 54,
+      fee: 6,
+      isDeleted: true,
+      deletedAt: new Date('2026-03-25T10:00:00.000Z'),
+    })
+
+    txClient.transaction.update.mockResolvedValue(removedTransaction)
+    txClient.position.findFirst.mockResolvedValue({
+      id: 'position-1',
+      quantity: 26,
+      avgCost: 51.1538461538,
+    })
+
+    await service.remove('tx-1', userId)
+
+    expect(postingService.archiveTransactionEntries).toHaveBeenCalledWith(
+      userId,
+      'tx-1',
+      txClient,
+    )
+    const updateCall = txClient.position.update.mock.calls[0][0]
+    expect(updateCall.where).toEqual({ id: 'position-1' })
+    expect(updateCall.data.quantity).toBe(20)
+    expect(updateCall.data.avgCost).toBeCloseTo(50, 8)
+    expect(updateCall.data.closedAt).toBeNull()
+  })
+
+  it('reduces quantity and keeps the position open when hard deleting a non-final buy transaction', async () => {
+    const { service, txClient, postingService } = createHarness()
+    const existingTransaction = buildCreatedTransaction({
+      amount: 330,
+      quantity: 6,
+      price: 54,
+      fee: 6,
+    })
+
+    txClient.transaction.findUnique.mockResolvedValue(existingTransaction)
+    txClient.transaction.delete.mockResolvedValue(existingTransaction)
+    txClient.position.findFirst.mockResolvedValue({
+      id: 'position-1',
+      quantity: 26,
+      avgCost: 51.1538461538,
+    })
+
+    await service.hardDelete('tx-1', userId)
+
+    expect(postingService.archiveTransactionEntries).toHaveBeenCalledWith(
+      userId,
+      'tx-1',
+      txClient,
+    )
+    const updateCall = txClient.position.update.mock.calls[0][0]
+    expect(updateCall.where).toEqual({ id: 'position-1' })
+    expect(updateCall.data.quantity).toBe(20)
+    expect(updateCall.data.avgCost).toBeCloseTo(50, 8)
+    expect(updateCall.data.closedAt).toBeNull()
+  })
+
   it('moves holdings when a buy transaction is updated to a different account and asset', async () => {
     const { service, prisma, txClient, postingService } = createHarness()
     const existingTransaction = buildCreatedTransaction()
@@ -415,5 +478,45 @@ describe('TransactionsService', () => {
     )
     expect(txClient.position.findFirst).not.toHaveBeenCalled()
     expect(txClient.position.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects a buy update when the resulting position would become invalid', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+    const existingTransaction = buildCreatedTransaction()
+    const updatedTransaction = buildCreatedTransaction({
+      amount: 100,
+      quantity: 1,
+      price: 100,
+      fee: 0,
+    })
+
+    prisma.transaction.findUnique.mockResolvedValue(existingTransaction)
+    txClient.transaction.update.mockResolvedValue(updatedTransaction)
+    txClient.position.findFirst.mockResolvedValue({
+      id: 'position-1',
+      quantity: 5,
+      avgCost: 50,
+    })
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-5' })
+
+    await expect(
+      service.update(
+        'tx-1',
+        {
+          amount: 100,
+          quantity: 1,
+          price: 100,
+          fee: 0,
+          tradeTime,
+        },
+        userId,
+      ),
+    ).rejects.toThrow('updated buy transaction would invalidate the active position')
+
+    expect(postingService.postTransaction).toHaveBeenCalledWith({
+      userId,
+      transaction: updatedTransaction,
+      db: txClient,
+    })
   })
 })
