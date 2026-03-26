@@ -1,7 +1,8 @@
-import type { Prisma, Transaction } from '@prisma/client'
+import { Prisma, type Transaction } from '@prisma/client'
 import { TransactionsService } from './transactions.service'
 import { AccountType, Currency } from '@prisma/client'
 import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
+import { BadRequestException } from '@nestjs/common'
 
 describe('TransactionsService', () => {
   const userId = 'user-1'
@@ -934,5 +935,160 @@ describe('TransactionsService', () => {
 
     expect(txClient.transaction.create).not.toHaveBeenCalled()
     expect(postingService.postTransaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects the import before processing rows when the broker account has no broker configured', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+
+    mockImportAccount(prisma, { broker: null })
+
+    await expect(
+      service.importTransactions(
+        {
+          accountId,
+          csvContent: buildImportContent([
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-NO-BROKER-001', 'TWD', '缺 broker'],
+          ]),
+        },
+        userId,
+      ),
+    ).rejects.toThrow('Selected account does not have a broker configured')
+
+    expect(txClient.transaction.create).not.toHaveBeenCalled()
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects the import before processing rows when the broker is unsupported', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+
+    mockImportAccount(prisma, { broker: 'other-broker' })
+
+    await expect(
+      service.importTransactions(
+        {
+          accountId,
+          csvContent: buildImportContent([
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-OTHER-001', 'TWD', '不支援券商'],
+          ]),
+        },
+        userId,
+      ),
+    ).rejects.toThrow(`Only ${SUPPORTED_BROKER} broker accounts are supported for CSV import`)
+
+    expect(txClient.transaction.create).not.toHaveBeenCalled()
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
+  })
+
+  it('returns a row error when the imported currency is unsupported', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+
+    mockImportAccount(prisma)
+    prisma.transaction.findFirst.mockResolvedValue(null)
+
+    const result = await service.importTransactions(
+      {
+        accountId,
+        csvContent: buildImportContent([
+          ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-CUR-001', 'HKD', '不支援幣別'],
+        ]),
+      },
+      userId,
+    )
+
+    expect(prisma.assetAlias.findUnique).not.toHaveBeenCalled()
+    expect(txClient.transaction.create).not.toHaveBeenCalled()
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      totalRows: 1,
+      successCount: 0,
+      failureCount: 1,
+      createdTransactionIds: [],
+      errors: [
+        {
+          row: 2,
+          field: '幣別',
+          message: 'Unsupported currency: HKD',
+        },
+      ],
+    })
+  })
+
+  it('returns a duplicate broker order error when create raises P2002 during import', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+    const duplicateError = new Prisma.PrismaClientKnownRequestError(
+      'Unique constraint failed',
+      {
+        code: 'P2002',
+        clientVersion: 'test',
+      },
+    )
+
+    mockImportAccount(prisma)
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.assetAlias.findUnique.mockResolvedValueOnce({ assetId })
+    txClient.transaction.create.mockRejectedValue(duplicateError)
+
+    const result = await service.importTransactions(
+      {
+        accountId,
+        csvContent: buildImportContent([
+          ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-P2002-001', 'TWD', '建立時重複'],
+        ]),
+      },
+      userId,
+    )
+
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
+    expect(txClient.position.create).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      totalRows: 1,
+      successCount: 0,
+      failureCount: 1,
+      createdTransactionIds: [],
+      errors: [
+        {
+          row: 2,
+          field: '委託書號',
+          message: 'Duplicate broker order number for selected account',
+        },
+      ],
+    })
+  })
+
+  it('returns the create error message when a row fails business validation during import', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+
+    mockImportAccount(prisma)
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.assetAlias.findUnique.mockResolvedValueOnce({ assetId })
+    txClient.transaction.create.mockRejectedValue(
+      new BadRequestException('Amount must be a positive number'),
+    )
+
+    const result = await service.importTransactions(
+      {
+        accountId,
+        csvContent: buildImportContent([
+          ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-BIZ-001', 'TWD', '業務驗證錯誤'],
+        ]),
+      },
+      userId,
+    )
+
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
+    expect(txClient.position.create).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      totalRows: 1,
+      successCount: 0,
+      failureCount: 1,
+      createdTransactionIds: [],
+      errors: [
+        {
+          row: 2,
+          field: 'row',
+          message: 'Amount must be a positive number',
+        },
+      ],
+    })
   })
 })
