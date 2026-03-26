@@ -113,12 +113,16 @@ describe('TransactionsService', () => {
     ].join('\n')
   }
 
-  function mockImportAccount(prisma: ReturnType<typeof createHarness>['prisma']) {
+  function mockImportAccount(
+    prisma: ReturnType<typeof createHarness>['prisma'],
+    overrides: Record<string, unknown> = {},
+  ) {
     prisma.account.findUniqueOrThrow.mockResolvedValue({
       id: accountId,
       type: AccountType.broker,
       broker: SUPPORTED_BROKER,
       currency: Currency.TWD,
+      ...overrides,
     })
   }
 
@@ -566,12 +570,12 @@ describe('TransactionsService', () => {
       amount: 1015,
       quantity: 10,
       price: 100,
-        fee: 10,
-        tax: 5,
-        brokerOrderNo: 'BRK-001',
-        note: '整股',
-        tradeTime: importedTradeTime,
-      })
+      fee: 10,
+      tax: 5,
+      brokerOrderNo: 'BRK-001',
+      note: '整股',
+      tradeTime: importedTradeTime,
+    })
 
     mockImportAccount(prisma)
     prisma.assetAlias.findUnique
@@ -724,5 +728,211 @@ describe('TransactionsService', () => {
         userId,
       ),
     ).rejects.toThrow('Missing required import column: 委託書號')
+  })
+
+  it('continues importing later rows after a row-level validation error', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+    const secondImportedTradeTime = new Date('2026-03-24T16:00:00.000Z')
+    const firstImportedTransaction = buildCreatedTransaction({
+      id: 'tx-import-1',
+      amount: 1015,
+      quantity: 10,
+      price: 100,
+      fee: 10,
+      tax: 5,
+      brokerOrderNo: 'BRK-001',
+      note: '首筆',
+      tradeTime: importedTradeTime,
+    })
+    const secondImportedTransaction = buildCreatedTransaction({
+      id: 'tx-import-2',
+      amount: 505,
+      quantity: 5,
+      price: 100,
+      fee: 5,
+      tax: 0,
+      brokerOrderNo: 'BRK-002',
+      note: '第三列',
+      tradeTime: secondImportedTradeTime,
+    })
+
+    mockImportAccount(prisma)
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.assetAlias.findUnique
+      .mockResolvedValueOnce({ assetId })
+      .mockResolvedValueOnce({ assetId })
+    txClient.transaction.create
+      .mockResolvedValueOnce(firstImportedTransaction)
+      .mockResolvedValueOnce(secondImportedTransaction)
+    txClient.position.findFirst.mockResolvedValue(null)
+    postingService.postTransaction
+      .mockResolvedValueOnce({ id: 'entry-import-1' })
+      .mockResolvedValueOnce({ id: 'entry-import-2' })
+
+    const result = await service.importTransactions(
+      {
+        accountId,
+        csvContent: buildImportContent([
+          ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-001', 'TWD', '首筆'],
+          ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-USD', 'USD', '幣別錯誤'],
+          ['富邦台50', '2026/03/25', '5', '-505', '100', '5', '0', '0', 'BRK-002', 'TWD', '第三列'],
+        ]),
+      },
+      userId,
+    )
+
+    expect(txClient.transaction.create).toHaveBeenCalledTimes(2)
+    expect(postingService.postTransaction).toHaveBeenCalledTimes(2)
+    expect(txClient.position.create).toHaveBeenCalledTimes(2)
+    expect(result).toEqual({
+      totalRows: 3,
+      successCount: 2,
+      failureCount: 1,
+      createdTransactionIds: ['tx-import-1', 'tx-import-2'],
+      errors: [
+        {
+          row: 3,
+          field: '幣別',
+          message: 'Currency USD does not match account currency TWD',
+        },
+      ],
+    })
+  })
+
+  it('falls back to the global asset alias when the broker-specific alias is missing', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+    const importedTransaction = buildCreatedTransaction({
+      id: 'tx-import-global-alias',
+      assetId: anotherAssetId,
+      amount: 1015,
+      quantity: 10,
+      price: 100,
+      fee: 10,
+      tax: 5,
+      brokerOrderNo: 'BRK-GLOBAL-001',
+      note: '全域別名',
+      tradeTime: importedTradeTime,
+    })
+
+    mockImportAccount(prisma)
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.assetAlias.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ assetId: anotherAssetId })
+    txClient.transaction.create.mockResolvedValue(importedTransaction)
+    txClient.position.findFirst.mockResolvedValue(null)
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-import-global-alias' })
+
+    const result = await service.importTransactions(
+      {
+        accountId,
+        csvContent: buildImportContent([
+          ['全域ETF', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-GLOBAL-001', 'TWD', '全域別名'],
+        ]),
+      },
+      userId,
+    )
+
+    expect(prisma.assetAlias.findUnique).toHaveBeenNthCalledWith(1, {
+      where: {
+        alias_broker: {
+          alias: '全域ETF',
+          broker: SUPPORTED_BROKER,
+        },
+      },
+      select: { assetId: true },
+    })
+    expect(prisma.assetAlias.findUnique).toHaveBeenNthCalledWith(2, {
+      where: {
+        alias_broker: {
+          alias: '全域ETF',
+          broker: '',
+        },
+      },
+      select: { assetId: true },
+    })
+    expect(txClient.transaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          assetId: anotherAssetId,
+          brokerOrderNo: 'BRK-GLOBAL-001',
+        }),
+      }),
+    )
+    expect(result.successCount).toBe(1)
+    expect(result.failureCount).toBe(0)
+  })
+
+  it('returns a row error when the same broker order number appears twice in the import file', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+    const importedTransaction = buildCreatedTransaction({
+      id: 'tx-import-1',
+      amount: 1015,
+      quantity: 10,
+      price: 100,
+      fee: 10,
+      tax: 5,
+      brokerOrderNo: 'BRK-DUP-001',
+      note: '第一列',
+      tradeTime: importedTradeTime,
+    })
+
+    mockImportAccount(prisma)
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.assetAlias.findUnique
+      .mockResolvedValueOnce({ assetId })
+      .mockResolvedValueOnce({ assetId })
+    txClient.transaction.create.mockResolvedValue(importedTransaction)
+    txClient.position.findFirst.mockResolvedValue(null)
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-import-1' })
+
+    const result = await service.importTransactions(
+      {
+        accountId,
+        csvContent: buildImportContent([
+          ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-DUP-001', 'TWD', '第一列'],
+          ['富邦台50', '2026/03/25', '5', '-505', '100', '5', '0', '0', 'BRK-DUP-001', 'TWD', '重複單號'],
+        ]),
+      },
+      userId,
+    )
+
+    expect(prisma.transaction.findFirst).toHaveBeenCalledTimes(1)
+    expect(txClient.transaction.create).toHaveBeenCalledTimes(1)
+    expect(postingService.postTransaction).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({
+      totalRows: 2,
+      successCount: 1,
+      failureCount: 1,
+      createdTransactionIds: ['tx-import-1'],
+      errors: [
+        {
+          row: 3,
+          field: '委託書號',
+          message: 'Duplicate broker order number in import file',
+        },
+      ],
+    })
+  })
+
+  it('rejects the import before processing rows when the selected account is not a broker account', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+
+    mockImportAccount(prisma, { type: AccountType.bank, broker: null })
+
+    await expect(
+      service.importTransactions(
+        {
+          accountId,
+          csvContent: buildImportContent([
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-BANK-001', 'TWD', '非券商帳戶'],
+          ]),
+        },
+        userId,
+      ),
+    ).rejects.toThrow('Selected account is not a broker account')
+
+    expect(txClient.transaction.create).not.toHaveBeenCalled()
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
   })
 })
