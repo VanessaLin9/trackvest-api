@@ -430,14 +430,6 @@ export class TransactionsService {
       }
 
       const type = netAmount < 0 ? 'buy' : 'sell'
-      if (type === 'sell') {
-        errors.push({
-          row: row.rowNumber,
-          field: '淨收付',
-          message: 'Sell transactions are temporarily disabled until cost basis tracking is implemented',
-        })
-        continue
-      }
       const importDto: CreateTransactionDto = {
         accountId: dto.accountId,
         assetId,

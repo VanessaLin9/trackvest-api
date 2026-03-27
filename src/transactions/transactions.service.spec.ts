@@ -1242,26 +1242,135 @@ describe('TransactionsService', () => {
     })
   })
 
-  it('returns a row error and skips side effects when importing a sell row', async () => {
+  it('imports a valid sell row and creates FIFO lot matches', async () => {
     const { service, prisma, txClient, postingService } = createHarness()
+    const importedSellTransaction = buildCreatedTransaction({
+      id: 'tx-import-sell-1',
+      type: 'sell',
+      amount: 985,
+      quantity: 4,
+      price: 250,
+      fee: 10,
+      tax: 5,
+      brokerOrderNo: 'BRK-SELL-001',
+      note: '匯入賣出',
+      tradeTime: importedTradeTime,
+    })
 
     mockImportAccount(prisma)
     prisma.assetAlias.findUnique.mockResolvedValueOnce({ assetId })
     prisma.transaction.findFirst.mockResolvedValue(null)
+    txClient.position.findFirst.mockResolvedValue({
+      id: 'position-1',
+      quantity: 10,
+      avgCost: 100,
+      openedAt: new Date('2026-03-20T09:30:00.000Z'),
+      closedAt: null,
+    })
+    txClient.positionLot.findMany.mockResolvedValue([
+      {
+        id: 'lot-1',
+        accountId,
+        assetId,
+        sourceTransactionId: 'buy-1',
+        originalQuantity: 10,
+        remainingQuantity: 10,
+        unitCost: 100,
+        openedAt: new Date('2026-03-20T09:30:00.000Z'),
+        closedAt: null,
+      },
+    ])
+    txClient.transaction.create.mockResolvedValue(importedSellTransaction)
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-import-sell-1' })
 
     const result = await service.importTransactions(
       {
         accountId,
         csvContent: buildImportContent([
-          ['富邦台50', '2026/03/24', '10', '985', '100', '10', '3', '2', 'BRK-SELL-001', 'TWD', '賣出'],
+          ['富邦台50', '2026/03/24', '4', '985', '250', '10', '3', '2', 'BRK-SELL-001', 'TWD', '匯入賣出'],
+        ]),
+      },
+      userId,
+    )
+
+    expect(txClient.transaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'sell',
+          amount: 985,
+          quantity: 4,
+          price: 250,
+          fee: 10,
+          tax: 5,
+          brokerOrderNo: 'BRK-SELL-001',
+          tradeTime: importedTradeTime,
+        }),
+      }),
+    )
+    expect(txClient.sellLotMatch.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          sellTransactionId: 'tx-import-sell-1',
+          buyLotId: 'lot-1',
+          quantity: 4,
+          unitCost: 100,
+        },
+      ],
+    })
+    expect(postingService.postTransaction).toHaveBeenCalledWith({
+      userId,
+      transaction: importedSellTransaction,
+      db: txClient,
+    })
+    expect(result).toEqual({
+      totalRows: 1,
+      successCount: 1,
+      failureCount: 0,
+      createdTransactionIds: ['tx-import-sell-1'],
+      errors: [],
+    })
+  })
+
+  it('returns a row error when an imported sell exceeds the remaining open lots', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+
+    mockImportAccount(prisma)
+    prisma.assetAlias.findUnique.mockResolvedValueOnce({ assetId })
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    txClient.position.findFirst.mockResolvedValue({
+      id: 'position-1',
+      quantity: 5,
+      avgCost: 100,
+      openedAt: new Date('2026-03-20T09:30:00.000Z'),
+      closedAt: null,
+    })
+    txClient.positionLot.findMany.mockResolvedValue([
+      {
+        id: 'lot-1',
+        accountId,
+        assetId,
+        sourceTransactionId: 'buy-1',
+        originalQuantity: 5,
+        remainingQuantity: 5,
+        unitCost: 100,
+        openedAt: new Date('2026-03-20T09:30:00.000Z'),
+        closedAt: null,
+      },
+    ])
+
+    const result = await service.importTransactions(
+      {
+        accountId,
+        csvContent: buildImportContent([
+          ['富邦台50', '2026/03/24', '6', '1500', '250', '0', '0', '0', 'BRK-SELL-OVR', 'TWD', '超賣'],
         ]),
       },
       userId,
     )
 
     expect(txClient.transaction.create).not.toHaveBeenCalled()
+    expect(txClient.sellLotMatch.createMany).not.toHaveBeenCalled()
     expect(postingService.postTransaction).not.toHaveBeenCalled()
-    expect(txClient.position.create).not.toHaveBeenCalled()
     expect(result).toEqual({
       totalRows: 1,
       successCount: 0,
@@ -1270,9 +1379,8 @@ describe('TransactionsService', () => {
       errors: [
         {
           row: 2,
-          field: '淨收付',
-          message:
-            'Sell transactions are temporarily disabled until cost basis tracking is implemented',
+          field: 'row',
+          message: 'sell quantity exceeds the remaining open position lots',
         },
       ],
     })
@@ -1397,6 +1505,102 @@ describe('TransactionsService', () => {
           message: 'Currency USD does not match account currency TWD',
         },
       ],
+    })
+  })
+
+  it('continues importing a mixed buy and sell file when both rows are valid', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+    const buyImportedTradeTime = importedTradeTime
+    const sellImportedTradeTime = new Date('2026-03-24T16:00:00.000Z')
+    const importedBuyTransaction = buildCreatedTransaction({
+      id: 'tx-import-buy-1',
+      type: 'buy',
+      amount: 1010,
+      quantity: 10,
+      price: 100,
+      fee: 10,
+      tax: 0,
+      brokerOrderNo: 'BRK-MIX-BUY-001',
+      note: '混合檔買進',
+      tradeTime: buyImportedTradeTime,
+    })
+    const importedSellTransaction = buildCreatedTransaction({
+      id: 'tx-import-sell-2',
+      type: 'sell',
+      amount: 630,
+      quantity: 5,
+      price: 126,
+      fee: 0,
+      tax: 0,
+      brokerOrderNo: 'BRK-MIX-SELL-001',
+      note: '混合檔賣出',
+      tradeTime: sellImportedTradeTime,
+    })
+
+    mockImportAccount(prisma)
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.assetAlias.findUnique
+      .mockResolvedValueOnce({ assetId })
+      .mockResolvedValueOnce({ assetId })
+    txClient.transaction.create
+      .mockResolvedValueOnce(importedBuyTransaction)
+      .mockResolvedValueOnce(importedSellTransaction)
+    txClient.position.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'position-1',
+        quantity: 10,
+        avgCost: 101,
+        openedAt: buyImportedTradeTime,
+        closedAt: null,
+      })
+    txClient.positionLot.findMany.mockResolvedValueOnce([
+      {
+        id: 'lot-1',
+        accountId,
+        assetId,
+        sourceTransactionId: 'tx-import-buy-1',
+        originalQuantity: 10,
+        remainingQuantity: 10,
+        unitCost: 101,
+        openedAt: buyImportedTradeTime,
+        closedAt: null,
+      },
+    ])
+    postingService.postTransaction
+      .mockResolvedValueOnce({ id: 'entry-import-buy-1' })
+      .mockResolvedValueOnce({ id: 'entry-import-sell-2' })
+
+    const result = await service.importTransactions(
+      {
+        accountId,
+        csvContent: buildImportContent([
+          ['富邦台50', '2026/03/24', '10', '-1,010', '100', '10', '0', '0', 'BRK-MIX-BUY-001', 'TWD', '混合檔買進'],
+          ['富邦台50', '2026/03/25', '5', '630', '126', '0', '0', '0', 'BRK-MIX-SELL-001', 'TWD', '混合檔賣出'],
+        ]),
+      },
+      userId,
+    )
+
+    expect(txClient.transaction.create).toHaveBeenCalledTimes(2)
+    expect(txClient.positionLot.create).toHaveBeenCalledTimes(1)
+    expect(txClient.sellLotMatch.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          sellTransactionId: 'tx-import-sell-2',
+          buyLotId: 'lot-1',
+          quantity: 5,
+          unitCost: 101,
+        },
+      ],
+    })
+    expect(postingService.postTransaction).toHaveBeenCalledTimes(2)
+    expect(result).toEqual({
+      totalRows: 2,
+      successCount: 2,
+      failureCount: 0,
+      createdTransactionIds: ['tx-import-buy-1', 'tx-import-sell-2'],
+      errors: [],
     })
   })
 
