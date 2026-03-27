@@ -552,6 +552,35 @@ describe('TransactionsService', () => {
     expect(postingService.postTransaction).not.toHaveBeenCalled()
   })
 
+  it('rejects a sell when there is no active position for the asset', async () => {
+    const { service, txClient, postingService } = createHarness()
+
+    txClient.position.findFirst.mockResolvedValue(null)
+
+    await expect(
+      service.create(
+        {
+          accountId,
+          assetId,
+          type: 'sell',
+          amount: 520,
+          quantity: 4,
+          price: 130,
+          fee: 0,
+          tax: 0,
+          tradeTime: sellTradeTime,
+          note: 'No active position',
+        },
+        userId,
+      ),
+    ).rejects.toThrow('Active position not found for sell transaction')
+
+    expect(txClient.positionLot.findMany).not.toHaveBeenCalled()
+    expect(txClient.transaction.create).not.toHaveBeenCalled()
+    expect(txClient.sellLotMatch.createMany).not.toHaveBeenCalled()
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
+  })
+
   it('recalculates position and reposts GL when a buy transaction is updated', async () => {
     const { service, prisma, txClient, postingService, ownershipService } =
       createHarness()
