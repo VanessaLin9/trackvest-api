@@ -25,6 +25,26 @@ type SellLotConsumptionPlan = {
   nextPositionClosedAt: Date | null
 }
 
+type PositionScope = {
+  accountId: string
+  assetId: string
+}
+
+type RebuildTransaction = Transaction & {
+  account: {
+    id: string
+    name: string
+    currency: Currency
+    userId: string
+  }
+  asset: {
+    id: string
+    symbol: string
+    name: string
+    baseCurrency: string
+  } | null
+}
+
 @Injectable()
 export class TransactionsService {
   constructor(
@@ -656,6 +676,257 @@ export class TransactionsService {
     })
   }
 
+  private getTransactionScope(transaction: Pick<Transaction, 'accountId' | 'assetId' | 'type'>) {
+    if (!transaction.assetId) {
+      return null
+    }
+
+    if (transaction.type !== 'buy' && transaction.type !== 'sell') {
+      return null
+    }
+
+    return {
+      accountId: transaction.accountId,
+      assetId: transaction.assetId,
+    }
+  }
+
+  private getDistinctScopes(...scopes: Array<PositionScope | null>) {
+    const uniqueScopes = new Map<string, PositionScope>()
+
+    for (const scope of scopes) {
+      if (!scope) {
+        continue
+      }
+
+      uniqueScopes.set(`${scope.accountId}:${scope.assetId}`, scope)
+    }
+
+    return [...uniqueScopes.values()]
+  }
+
+  private async rebuildPositionScope(
+    prisma: Prisma.TransactionClient,
+    scope: PositionScope,
+  ): Promise<RebuildTransaction[]> {
+    const scopedTransactions = await prisma.transaction.findMany({
+      where: {
+        accountId: scope.accountId,
+        assetId: scope.assetId,
+        type: { in: ['buy', 'sell'] },
+      },
+      orderBy: [{ tradeTime: 'asc' }, { id: 'asc' }],
+      include: {
+        account: { select: { id: true, name: true, currency: true, userId: true } },
+        asset: { select: { id: true, symbol: true, name: true, baseCurrency: true } },
+      },
+    }) as RebuildTransaction[]
+
+    const scopedTransactionIds = scopedTransactions.map((transaction) => transaction.id)
+    if (scopedTransactionIds.length > 0) {
+      await prisma.sellLotMatch.deleteMany({
+        where: {
+          sellTransactionId: {
+            in: scopedTransactionIds,
+          },
+        },
+      })
+    }
+
+    await prisma.positionLot.deleteMany({
+      where: {
+        accountId: scope.accountId,
+        assetId: scope.assetId,
+      },
+    })
+    await prisma.position.deleteMany({
+      where: {
+        accountId: scope.accountId,
+        assetId: scope.assetId,
+      },
+    })
+
+    const activeTransactions = scopedTransactions.filter((transaction) => !transaction.isDeleted)
+    let currentPosition: { id: string; quantity: number; avgCost: number } | null = null
+    const openLots: Array<{ id: string; remainingQuantity: number; unitCost: number }> = []
+    const sellTransactionsToRepost: RebuildTransaction[] = []
+
+    for (const transaction of activeTransactions) {
+      if (!transaction.assetId) {
+        continue
+      }
+
+      if (transaction.type === 'buy') {
+        const quantity = toNumber(transaction.quantity)
+        const totalCost = toNumber(transaction.amount)
+        const unitCost = totalCost / quantity
+
+        if (!currentPosition) {
+          const createdPosition = await prisma.position.create({
+            data: {
+              accountId: scope.accountId,
+              assetId: scope.assetId,
+              quantity,
+              avgCost: unitCost,
+              openedAt: transaction.tradeTime,
+            },
+          })
+
+          currentPosition = {
+            id: createdPosition.id,
+            quantity,
+            avgCost: unitCost,
+          }
+        } else {
+          const nextQuantity = currentPosition.quantity + quantity
+          const nextAvgCost =
+            (currentPosition.quantity * currentPosition.avgCost + totalCost) /
+            nextQuantity
+
+          await prisma.position.update({
+            where: { id: currentPosition.id },
+            data: {
+              quantity: nextQuantity,
+              avgCost: nextAvgCost,
+              closedAt: null,
+            },
+          })
+
+          currentPosition = {
+            ...currentPosition,
+            quantity: nextQuantity,
+            avgCost: nextAvgCost,
+          }
+        }
+
+        const createdLot = await prisma.positionLot.create({
+          data: {
+            accountId: scope.accountId,
+            assetId: scope.assetId,
+            sourceTransactionId: transaction.id,
+            originalQuantity: quantity,
+            remainingQuantity: quantity,
+            unitCost,
+            openedAt: transaction.tradeTime,
+          },
+        })
+
+        openLots.push({
+          id: createdLot.id,
+          remainingQuantity: quantity,
+          unitCost,
+        })
+        continue
+      }
+
+      if (!currentPosition) {
+        throw new NotFoundException('Active position not found for sell transaction')
+      }
+
+      let remainingToSell = toNumber(transaction.quantity)
+      const lotMatches: Array<{
+        sellTransactionId: string
+        buyLotId: string
+        quantity: number
+        unitCost: number
+      }> = []
+
+      for (const lot of openLots) {
+        if (remainingToSell <= 1e-9) {
+          break
+        }
+
+        if (lot.remainingQuantity <= 1e-9) {
+          continue
+        }
+
+        const consumedQuantity = Math.min(lot.remainingQuantity, remainingToSell)
+        lot.remainingQuantity -= consumedQuantity
+        remainingToSell -= consumedQuantity
+
+        await prisma.positionLot.update({
+          where: { id: lot.id },
+          data: {
+            remainingQuantity: lot.remainingQuantity,
+            closedAt: lot.remainingQuantity <= 1e-9 ? transaction.tradeTime : null,
+          },
+        })
+
+        lotMatches.push({
+          sellTransactionId: transaction.id,
+          buyLotId: lot.id,
+          quantity: consumedQuantity,
+          unitCost: lot.unitCost,
+        })
+      }
+
+      if (remainingToSell > 1e-9) {
+        throw new BadRequestException('sell quantity exceeds the remaining open position lots')
+      }
+
+      await prisma.sellLotMatch.createMany({
+        data: lotMatches,
+      })
+
+      const nextQuantity = openLots.reduce(
+        (sum, lot) => sum + (lot.remainingQuantity > 1e-9 ? lot.remainingQuantity : 0),
+        0,
+      )
+      const nextCost = openLots.reduce(
+        (sum, lot) =>
+          sum +
+          (lot.remainingQuantity > 1e-9
+            ? lot.remainingQuantity * lot.unitCost
+            : 0),
+        0,
+      )
+      const nextAvgCost = nextQuantity > 1e-9 ? nextCost / nextQuantity : 0
+
+      await prisma.position.update({
+        where: { id: currentPosition.id },
+        data: {
+          quantity: nextQuantity,
+          avgCost: nextAvgCost,
+          closedAt: nextQuantity > 1e-9 ? null : transaction.tradeTime,
+        },
+      })
+
+      if (nextQuantity > 1e-9) {
+        currentPosition = {
+          ...currentPosition,
+          quantity: nextQuantity,
+          avgCost: nextAvgCost,
+        }
+      } else {
+        currentPosition = null
+      }
+
+      sellTransactionsToRepost.push(transaction)
+    }
+
+    return sellTransactionsToRepost
+  }
+
+  private async rebuildAndRepostSellScopes(
+    prisma: Prisma.TransactionClient,
+    scopes: PositionScope[],
+  ) {
+    const sellTransactionsToRepost: RebuildTransaction[] = []
+
+    for (const scope of scopes) {
+      const rebuiltSellTransactions = await this.rebuildPositionScope(prisma, scope)
+      sellTransactionsToRepost.push(...rebuiltSellTransactions)
+    }
+
+    for (const sellTransaction of sellTransactionsToRepost) {
+      await this.postingService.postTransaction({
+        userId: sellTransaction.account.userId,
+        transaction: sellTransaction,
+        db: prisma,
+      })
+    }
+  }
+
   private async rollbackBuyPositionEffect(
     prisma: Prisma.TransactionClient,
     transaction: Transaction,
@@ -914,12 +1185,6 @@ export class TransactionsService {
       throw new NotFoundException('Transaction not found')
     }
 
-    if (existing.type === 'sell') {
-      throw new BadRequestException(
-        'Updating sell transactions is not supported until FIFO rollback is implemented',
-      )
-    }
-
     const nextTransaction: CreateTransactionDto = {
       accountId: dto.accountId ?? existing.accountId,
       assetId: dto.assetId === undefined ? existing.assetId ?? undefined : dto.assetId,
@@ -936,6 +1201,45 @@ export class TransactionsService {
     }
 
     this.validateTransactionBusinessRules(nextTransaction)
+
+    if (existing.type === 'sell' || nextTransaction.type === 'sell') {
+      if (existing.type !== 'sell' || nextTransaction.type !== 'sell') {
+        throw new BadRequestException(
+          'Changing a transaction into or out of sell is not supported until FIFO rebuild is expanded',
+        )
+      }
+
+      return this.prisma.$transaction(async (db) => {
+        const transaction = await db.transaction.update({
+          where: { id },
+          data: {
+            accountId: nextTransaction.accountId,
+            assetId: nextTransaction.assetId,
+            type: nextTransaction.type,
+            amount: nextTransaction.amount,
+            quantity: nextTransaction.quantity,
+            price: nextTransaction.price,
+            fee: nextTransaction.fee ?? 0,
+            tax: nextTransaction.tax ?? 0,
+            brokerOrderNo: nextTransaction.brokerOrderNo,
+            tradeTime: new Date(nextTransaction.tradeTime),
+            note: nextTransaction.note,
+          },
+          include: {
+            account: { select: { id: true, name: true, currency: true, userId: true } },
+            asset: { select: { id: true, symbol: true, name: true, baseCurrency: true } },
+            tags: { include: { tag: true } },
+          },
+        })
+
+        const scopes = this.getDistinctScopes(
+          this.getTransactionScope(existing),
+          this.getTransactionScope(transaction),
+        )
+        await this.rebuildAndRepostSellScopes(db, scopes)
+        return transaction
+      })
+    }
 
     return this.prisma.$transaction(async (db) => {
       const transaction = await db.transaction.update({
@@ -978,12 +1282,26 @@ export class TransactionsService {
     return this.prisma.$transaction(async (db) => {
       const existing = await db.transaction.findUnique({
         where: { id },
-        select: { type: true },
+        include: {
+          account: { select: { userId: true } },
+        },
       })
-      if (existing?.type === 'sell') {
-        throw new BadRequestException(
-          'Removing sell transactions is not supported until FIFO rollback is implemented',
-        )
+
+      if (existing?.type === 'sell' && existing.assetId) {
+        const transaction = await db.transaction.update({
+          where: { id },
+          data: {
+            isDeleted: true,
+            deletedAt: new Date(),
+          },
+          include: {
+            account: { select: { userId: true } },
+          },
+        })
+
+        await this.postingService.archiveTransactionEntries(transaction.account.userId, id, db)
+        await this.rebuildAndRepostSellScopes(db, this.getDistinctScopes(this.getTransactionScope(transaction)))
+        return transaction
       }
 
       const transaction = await db.transaction.update({
@@ -1017,10 +1335,11 @@ export class TransactionsService {
       if (!existing) {
         throw new NotFoundException('Transaction not found')
       }
-      if (existing.type === 'sell') {
-        throw new BadRequestException(
-          'Hard deleting sell transactions is not supported until FIFO rollback is implemented',
-        )
+      if (existing.type === 'sell' && existing.assetId) {
+        await this.postingService.archiveTransactionEntries(existing.account.userId, id, db)
+        const deleted = await db.transaction.delete({ where: { id } })
+        await this.rebuildAndRepostSellScopes(db, this.getDistinctScopes(this.getTransactionScope(existing)))
+        return deleted
       }
 
       await this.postingService.archiveTransactionEntries(existing.account.userId, id, db)

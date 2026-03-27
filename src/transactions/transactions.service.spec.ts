@@ -44,21 +44,25 @@ describe('TransactionsService', () => {
       transaction: {
         create: jest.fn(),
         findUnique: jest.fn(),
+        findMany: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
       },
       position: {
         findFirst: jest.fn(),
         create: jest.fn(),
+        deleteMany: jest.fn(),
         update: jest.fn(),
       },
       positionLot: {
         findMany: jest.fn(),
         create: jest.fn(),
+        deleteMany: jest.fn(),
         update: jest.fn(),
       },
       sellLotMatch: {
         createMany: jest.fn(),
+        deleteMany: jest.fn(),
       },
     }
 
@@ -72,6 +76,7 @@ describe('TransactionsService', () => {
       transaction: {
         findUnique: jest.fn(),
         findFirst: jest.fn(),
+        findMany: jest.fn(),
       },
       $transaction: jest.fn(
         async (callback: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
@@ -863,9 +868,20 @@ describe('TransactionsService', () => {
     expect(txClient.position.update).not.toHaveBeenCalled()
   })
 
-  it('rejects updating a sell transaction until FIFO rollback is implemented', async () => {
+  it('rebuilds FIFO lots and reposts sell GL when updating a sell transaction', async () => {
     const { service, prisma, txClient, postingService } = createHarness()
+    const buyTransaction = buildCreatedTransaction({
+      id: 'buy-1',
+      amount: 1000,
+      quantity: 10,
+      price: 100,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-20T09:30:00.000Z'),
+      note: 'Initial buy',
+    })
     const existingTransaction = buildCreatedTransaction({
+      id: 'tx-sell-1',
       type: 'sell',
       amount: 508,
       quantity: 4,
@@ -874,25 +890,86 @@ describe('TransactionsService', () => {
       tax: 2,
       tradeTime: new Date(sellTradeTime),
     })
+    const updatedTransaction = buildCreatedTransaction({
+      id: 'tx-sell-1',
+      type: 'sell',
+      amount: 390,
+      quantity: 3,
+      price: 130,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date(sellTradeTime),
+      note: 'Updated sell',
+    })
 
     prisma.transaction.findUnique.mockResolvedValue(existingTransaction)
+    txClient.transaction.update.mockResolvedValue(updatedTransaction)
+    txClient.transaction.findMany.mockResolvedValue([
+      buyTransaction,
+      updatedTransaction,
+    ])
+    txClient.position.deleteMany.mockResolvedValue({ count: 1 })
+    txClient.position.create.mockResolvedValue({
+      id: 'rebuilt-position',
+      accountId,
+      assetId,
+      quantity: 10,
+      avgCost: 100,
+      openedAt: buyTransaction.tradeTime,
+      closedAt: null,
+    })
+    txClient.positionLot.deleteMany.mockResolvedValue({ count: 1 })
+    txClient.positionLot.create.mockResolvedValue({
+      id: 'lot-1',
+    })
+    txClient.sellLotMatch.deleteMany.mockResolvedValue({ count: 1 })
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-sell-1' })
 
-    await expect(
-      service.update(
-        'tx-sell-1',
-        {
-          amount: 520,
-          tradeTime: sellTradeTime,
-        },
-        userId,
-      ),
-    ).rejects.toThrow(
-      'Updating sell transactions is not supported until FIFO rollback is implemented',
+    await service.update(
+      'tx-sell-1',
+      {
+        amount: 390,
+        quantity: 3,
+        fee: 0,
+        tax: 0,
+        tradeTime: sellTradeTime,
+        note: 'Updated sell',
+      },
+      userId,
     )
 
-    expect(txClient.transaction.update).not.toHaveBeenCalled()
-    expect(postingService.postTransaction).not.toHaveBeenCalled()
-    expect(txClient.positionLot.update).not.toHaveBeenCalled()
+    expect(txClient.sellLotMatch.deleteMany).toHaveBeenCalledWith({
+      where: {
+        sellTransactionId: {
+          in: ['buy-1', 'tx-sell-1'],
+        },
+      },
+    })
+    expect(txClient.position.deleteMany).toHaveBeenCalledWith({
+      where: { accountId, assetId },
+    })
+    expect(txClient.positionLot.update).toHaveBeenCalledWith({
+      where: { id: 'lot-1' },
+      data: {
+        remainingQuantity: 7,
+        closedAt: null,
+      },
+    })
+    expect(txClient.sellLotMatch.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          sellTransactionId: 'tx-sell-1',
+          buyLotId: 'lot-1',
+          quantity: 3,
+          unitCost: 100,
+        },
+      ],
+    })
+    expect(postingService.postTransaction).toHaveBeenCalledWith({
+      userId,
+      transaction: updatedTransaction,
+      db: txClient,
+    })
   })
 
   it('does not touch positions when removing a non-buy transaction', async () => {
@@ -922,27 +999,87 @@ describe('TransactionsService', () => {
     expect(txClient.position.update).not.toHaveBeenCalled()
   })
 
-  it('rejects removing a sell transaction until FIFO rollback is implemented', async () => {
+  it('rebuilds FIFO lots and restores the position when removing a sell transaction', async () => {
     const { service, txClient, postingService } = createHarness()
+    const buyTransaction = buildCreatedTransaction({
+      id: 'buy-1',
+      amount: 1000,
+      quantity: 10,
+      price: 100,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-20T09:30:00.000Z'),
+      note: 'Initial buy',
+    })
+    const removedTransaction = buildCreatedTransaction({
+      id: 'tx-sell-1',
+      type: 'sell',
+      amount: 508,
+      quantity: 4,
+      price: 130,
+      fee: 10,
+      tax: 2,
+      tradeTime: new Date(sellTradeTime),
+      isDeleted: true,
+      deletedAt: new Date('2026-03-27T10:00:00.000Z'),
+      account: {
+        userId,
+      },
+    })
 
     txClient.transaction.findUnique.mockResolvedValue({
       type: 'sell',
     })
+    txClient.transaction.update.mockResolvedValue(removedTransaction)
+    txClient.transaction.findMany.mockResolvedValue([
+      buyTransaction,
+      removedTransaction,
+    ])
+    txClient.position.deleteMany.mockResolvedValue({ count: 1 })
+    txClient.position.create.mockResolvedValue({
+      id: 'rebuilt-position',
+      accountId,
+      assetId,
+      quantity: 10,
+      avgCost: 100,
+      openedAt: buyTransaction.tradeTime,
+      closedAt: null,
+    })
+    txClient.positionLot.deleteMany.mockResolvedValue({ count: 1 })
+    txClient.positionLot.create.mockResolvedValue({
+      id: 'lot-1',
+    })
+    txClient.sellLotMatch.deleteMany.mockResolvedValue({ count: 1 })
 
-    await expect(
-      service.remove('tx-sell-1', userId),
-    ).rejects.toThrow(
-      'Removing sell transactions is not supported until FIFO rollback is implemented',
+    await service.remove('tx-sell-1', userId)
+
+    expect(postingService.archiveTransactionEntries).toHaveBeenCalledWith(
+      userId,
+      'tx-sell-1',
+      txClient,
     )
-
-    expect(txClient.transaction.update).not.toHaveBeenCalled()
-    expect(postingService.archiveTransactionEntries).not.toHaveBeenCalled()
+    expect(txClient.sellLotMatch.createMany).not.toHaveBeenCalled()
     expect(txClient.positionLot.update).not.toHaveBeenCalled()
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
   })
 
-  it('rejects hard deleting a sell transaction until FIFO rollback is implemented', async () => {
+  it('rebuilds FIFO lots and restores the position when hard deleting a sell transaction', async () => {
     const { service, txClient, postingService } = createHarness()
+    const buyTransaction = buildCreatedTransaction({
+      id: 'buy-1',
+      amount: 1000,
+      quantity: 10,
+      price: 100,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-20T09:30:00.000Z'),
+      note: 'Initial buy',
+      account: {
+        userId,
+      },
+    })
     const existingTransaction = buildCreatedTransaction({
+      id: 'tx-sell-1',
       type: 'sell',
       amount: 508,
       quantity: 4,
@@ -953,16 +1090,37 @@ describe('TransactionsService', () => {
     })
 
     txClient.transaction.findUnique.mockResolvedValue(existingTransaction)
+    txClient.transaction.delete.mockResolvedValue(existingTransaction)
+    txClient.transaction.findMany.mockResolvedValue([buyTransaction])
+    txClient.position.deleteMany.mockResolvedValue({ count: 1 })
+    txClient.position.create.mockResolvedValue({
+      id: 'rebuilt-position',
+      accountId,
+      assetId,
+      quantity: 10,
+      avgCost: 100,
+      openedAt: buyTransaction.tradeTime,
+      closedAt: null,
+    })
+    txClient.positionLot.deleteMany.mockResolvedValue({ count: 1 })
+    txClient.positionLot.create.mockResolvedValue({
+      id: 'lot-1',
+    })
+    txClient.sellLotMatch.deleteMany.mockResolvedValue({ count: 1 })
 
-    await expect(
-      service.hardDelete('tx-sell-1', userId),
-    ).rejects.toThrow(
-      'Hard deleting sell transactions is not supported until FIFO rollback is implemented',
+    await service.hardDelete('tx-sell-1', userId)
+
+    expect(txClient.transaction.delete).toHaveBeenCalledWith({
+      where: { id: 'tx-sell-1' },
+    })
+    expect(postingService.archiveTransactionEntries).toHaveBeenCalledWith(
+      userId,
+      'tx-sell-1',
+      txClient,
     )
-
-    expect(txClient.transaction.delete).not.toHaveBeenCalled()
-    expect(postingService.archiveTransactionEntries).not.toHaveBeenCalled()
+    expect(txClient.sellLotMatch.createMany).not.toHaveBeenCalled()
     expect(txClient.positionLot.update).not.toHaveBeenCalled()
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
   })
 
   it('rejects a buy update when the resulting position would become invalid', async () => {
