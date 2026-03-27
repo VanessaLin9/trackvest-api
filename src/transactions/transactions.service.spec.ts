@@ -12,6 +12,7 @@ describe('TransactionsService', () => {
   const anotherAssetId = 'asset-2'
   const tradeTime = '2026-03-25T09:30:00.000Z'
   const importedTradeTime = new Date('2026-03-23T16:00:00.000Z')
+  const sellTradeTime = '2026-03-26T09:30:00.000Z'
 
   function buildCreatedTransaction(
     overrides: Record<string, unknown> = {},
@@ -50,6 +51,14 @@ describe('TransactionsService', () => {
         findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+      },
+      positionLot: {
+        findMany: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+      sellLotMatch: {
+        createMany: jest.fn(),
       },
     }
 
@@ -212,6 +221,335 @@ describe('TransactionsService', () => {
         avgCost: expect.closeTo(51.1538461538, 10),
       },
     })
+  })
+
+  it('consumes the oldest lot first when partially selling from a single open lot', async () => {
+    const { service, txClient, postingService } = createHarness()
+    const createdTransaction = buildCreatedTransaction({
+      id: 'tx-sell-1',
+      type: 'sell',
+      amount: 508,
+      quantity: 4,
+      price: 130,
+      fee: 10,
+      tax: 2,
+      tradeTime: new Date(sellTradeTime),
+      note: 'Partial sell',
+    })
+
+    txClient.position.findFirst.mockResolvedValue({
+      id: 'position-1',
+      quantity: 10,
+      avgCost: 100,
+      openedAt: new Date('2026-03-20T09:30:00.000Z'),
+      closedAt: null,
+    })
+    txClient.positionLot.findMany.mockResolvedValue([
+      {
+        id: 'lot-1',
+        accountId,
+        assetId,
+        sourceTransactionId: 'buy-1',
+        originalQuantity: 10,
+        remainingQuantity: 10,
+        unitCost: 100,
+        openedAt: new Date('2026-03-20T09:30:00.000Z'),
+        closedAt: null,
+      },
+    ])
+    txClient.transaction.create.mockResolvedValue(createdTransaction)
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-sell-1' })
+
+    const result = await service.create(
+      {
+        accountId,
+        assetId,
+        type: 'sell',
+        amount: 508,
+        quantity: 4,
+        price: 130,
+        fee: 10,
+        tax: 2,
+        tradeTime: sellTradeTime,
+        note: 'Partial sell',
+      },
+      userId,
+    )
+
+    expect(result).toBe(createdTransaction)
+    expect(txClient.positionLot.findMany).toHaveBeenCalledWith({
+      where: {
+        accountId,
+        assetId,
+        remainingQuantity: { gt: 0 },
+      },
+      orderBy: { openedAt: 'asc' },
+    })
+    expect(txClient.transaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'sell',
+          quantity: 4,
+          price: 130,
+        }),
+      }),
+    )
+    expect(txClient.positionLot.update).toHaveBeenCalledWith({
+      where: { id: 'lot-1' },
+      data: {
+        remainingQuantity: 6,
+        closedAt: null,
+      },
+    })
+    expect(txClient.sellLotMatch.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          sellTransactionId: 'tx-sell-1',
+          buyLotId: 'lot-1',
+          quantity: 4,
+          unitCost: 100,
+        },
+      ],
+    })
+    expect(txClient.position.update).toHaveBeenCalledWith({
+      where: { id: 'position-1' },
+      data: {
+        quantity: 6,
+        avgCost: 100,
+        closedAt: null,
+      },
+    })
+    expect(postingService.postTransaction).toHaveBeenCalledWith({
+      userId,
+      transaction: createdTransaction,
+      db: txClient,
+    })
+  })
+
+  it('consumes multiple lots in FIFO order and recalculates the remaining average cost', async () => {
+    const { service, txClient, postingService } = createHarness()
+    const createdTransaction = buildCreatedTransaction({
+      id: 'tx-sell-2',
+      type: 'sell',
+      amount: 1040,
+      quantity: 8,
+      price: 132,
+      fee: 12,
+      tax: 4,
+      tradeTime: new Date(sellTradeTime),
+      note: 'FIFO sell',
+    })
+
+    txClient.position.findFirst.mockResolvedValue({
+      id: 'position-1',
+      quantity: 15,
+      avgCost: 113.3333333333,
+      openedAt: new Date('2026-03-20T09:30:00.000Z'),
+      closedAt: null,
+    })
+    txClient.positionLot.findMany.mockResolvedValue([
+      {
+        id: 'lot-1',
+        accountId,
+        assetId,
+        sourceTransactionId: 'buy-1',
+        originalQuantity: 5,
+        remainingQuantity: 5,
+        unitCost: 100,
+        openedAt: new Date('2026-03-20T09:30:00.000Z'),
+        closedAt: null,
+      },
+      {
+        id: 'lot-2',
+        accountId,
+        assetId,
+        sourceTransactionId: 'buy-2',
+        originalQuantity: 10,
+        remainingQuantity: 10,
+        unitCost: 120,
+        openedAt: new Date('2026-03-21T09:30:00.000Z'),
+        closedAt: null,
+      },
+    ])
+    txClient.transaction.create.mockResolvedValue(createdTransaction)
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-sell-2' })
+
+    await service.create(
+      {
+        accountId,
+        assetId,
+        type: 'sell',
+        amount: 1040,
+        quantity: 8,
+        price: 132,
+        fee: 12,
+        tax: 4,
+        tradeTime: sellTradeTime,
+        note: 'FIFO sell',
+      },
+      userId,
+    )
+
+    expect(txClient.positionLot.update).toHaveBeenNthCalledWith(1, {
+      where: { id: 'lot-1' },
+      data: {
+        remainingQuantity: 0,
+        closedAt: new Date(sellTradeTime),
+      },
+    })
+    expect(txClient.positionLot.update).toHaveBeenNthCalledWith(2, {
+      where: { id: 'lot-2' },
+      data: {
+        remainingQuantity: 7,
+        closedAt: null,
+      },
+    })
+    expect(txClient.sellLotMatch.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          sellTransactionId: 'tx-sell-2',
+          buyLotId: 'lot-1',
+          quantity: 5,
+          unitCost: 100,
+        },
+        {
+          sellTransactionId: 'tx-sell-2',
+          buyLotId: 'lot-2',
+          quantity: 3,
+          unitCost: 120,
+        },
+      ],
+    })
+    expect(txClient.position.update).toHaveBeenCalledWith({
+      where: { id: 'position-1' },
+      data: {
+        quantity: 7,
+        avgCost: 120,
+        closedAt: null,
+      },
+    })
+  })
+
+  it('closes the position when a sell fully consumes all remaining lots', async () => {
+    const { service, txClient, postingService } = createHarness()
+    const createdTransaction = buildCreatedTransaction({
+      id: 'tx-sell-3',
+      type: 'sell',
+      amount: 1485,
+      quantity: 15,
+      price: 100,
+      fee: 10,
+      tax: 5,
+      tradeTime: new Date(sellTradeTime),
+      note: 'Full sell',
+    })
+
+    txClient.position.findFirst.mockResolvedValue({
+      id: 'position-1',
+      quantity: 15,
+      avgCost: 113.3333333333,
+      openedAt: new Date('2026-03-20T09:30:00.000Z'),
+      closedAt: null,
+    })
+    txClient.positionLot.findMany.mockResolvedValue([
+      {
+        id: 'lot-1',
+        accountId,
+        assetId,
+        sourceTransactionId: 'buy-1',
+        originalQuantity: 5,
+        remainingQuantity: 5,
+        unitCost: 100,
+        openedAt: new Date('2026-03-20T09:30:00.000Z'),
+        closedAt: null,
+      },
+      {
+        id: 'lot-2',
+        accountId,
+        assetId,
+        sourceTransactionId: 'buy-2',
+        originalQuantity: 10,
+        remainingQuantity: 10,
+        unitCost: 120,
+        openedAt: new Date('2026-03-21T09:30:00.000Z'),
+        closedAt: null,
+      },
+    ])
+    txClient.transaction.create.mockResolvedValue(createdTransaction)
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-sell-3' })
+
+    await service.create(
+      {
+        accountId,
+        assetId,
+        type: 'sell',
+        amount: 1485,
+        quantity: 15,
+        price: 100,
+        fee: 10,
+        tax: 5,
+        tradeTime: sellTradeTime,
+        note: 'Full sell',
+      },
+      userId,
+    )
+
+    expect(txClient.position.update).toHaveBeenCalledWith({
+      where: { id: 'position-1' },
+      data: {
+        quantity: 0,
+        avgCost: 0,
+        closedAt: new Date(sellTradeTime),
+      },
+    })
+  })
+
+  it('rejects a sell when the requested quantity exceeds the remaining open lots', async () => {
+    const { service, txClient, postingService } = createHarness()
+
+    txClient.position.findFirst.mockResolvedValue({
+      id: 'position-1',
+      quantity: 5,
+      avgCost: 100,
+      openedAt: new Date('2026-03-20T09:30:00.000Z'),
+      closedAt: null,
+    })
+    txClient.positionLot.findMany.mockResolvedValue([
+      {
+        id: 'lot-1',
+        accountId,
+        assetId,
+        sourceTransactionId: 'buy-1',
+        originalQuantity: 5,
+        remainingQuantity: 5,
+        unitCost: 100,
+        openedAt: new Date('2026-03-20T09:30:00.000Z'),
+        closedAt: null,
+      },
+    ])
+
+    await expect(
+      service.create(
+        {
+          accountId,
+          assetId,
+          type: 'sell',
+          amount: 780,
+          quantity: 6,
+          price: 130,
+          fee: 0,
+          tax: 0,
+          tradeTime: sellTradeTime,
+          note: 'Oversell',
+        },
+        userId,
+      ),
+    ).rejects.toThrow('sell quantity exceeds the remaining open position lots')
+
+    expect(txClient.transaction.create).not.toHaveBeenCalled()
+    expect(txClient.sellLotMatch.createMany).not.toHaveBeenCalled()
+    expect(txClient.position.update).not.toHaveBeenCalled()
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
   })
 
   it('recalculates position and reposts GL when a buy transaction is updated', async () => {

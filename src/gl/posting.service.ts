@@ -187,9 +187,61 @@ export class PostingService {
         return this.createEntry(userId, date, tx.note ?? undefined, 'auto:transaction:buy', lines, tx.id, prisma)
       }
       case 'sell': {
-        throw new BadRequestException(
-          'Sell transactions are temporarily disabled until cost basis tracking is implemented',
+        const investGlId = await this.glService.getInvestmentBucketGlAccountId(userId, ccy, prisma)
+        const feeGlId = await this.glService.getFeeExpenseGlAccountId(userId, prisma)
+        const matches = await prisma.sellLotMatch.findMany({
+          where: { sellTransactionId: tx.id },
+        })
+
+        if (matches.length === 0) {
+          throw new BadRequestException('Sell transaction is missing FIFO lot matches')
+        }
+
+        const netProceeds = toNumber(tx.amount)
+        const charges = toNumber(tx.fee) + toNumber(tx.tax)
+        const grossProceeds = netProceeds + charges
+        const historicalCost = matches.reduce(
+          (sum, match) => sum + toNumber(match.quantity) * toNumber(match.unitCost),
+          0,
         )
+        const realizedPnl = grossProceeds - historicalCost
+
+        const lines: GlLineInput[] = [
+          { glAccountId: cashGlId, side: 'debit', amount: netProceeds, currency: ccy, note: 'sell proceeds in' },
+          { glAccountId: investGlId, side: 'credit', amount: historicalCost, currency: ccy, note: 'sell cost basis out' },
+        ]
+
+        if (charges > 0) {
+          lines.push({
+            glAccountId: feeGlId,
+            side: 'debit',
+            amount: charges,
+            currency: ccy,
+            note: 'sell fee and tax',
+          })
+        }
+
+        if (realizedPnl > 0) {
+          const realizedGainGlId = await this.glService.getRealizedGainIncomeGlAccountId(userId, prisma)
+          lines.push({
+            glAccountId: realizedGainGlId,
+            side: 'credit',
+            amount: realizedPnl,
+            currency: ccy,
+            note: 'realized gain',
+          })
+        } else if (realizedPnl < 0) {
+          const realizedLossGlId = await this.glService.getRealizedLossExpenseGlAccountId(userId, prisma)
+          lines.push({
+            glAccountId: realizedLossGlId,
+            side: 'debit',
+            amount: Math.abs(realizedPnl),
+            currency: ccy,
+            note: 'realized loss',
+          })
+        }
+
+        return this.createEntry(userId, date, tx.note ?? undefined, 'auto:transaction:sell', lines, tx.id, prisma)
       }
       case 'dividend': {
         const divGlId = await this.glService.getDividendIncomeGlAccountId(userId, prisma)

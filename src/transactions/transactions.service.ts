@@ -11,6 +11,20 @@ import { ImportTransactionsResponseDto } from './dto/import-transactions.respons
 import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
 import { toNumber } from '../common/utils/number.util'
 
+type SellLotConsumptionPlan = {
+  positionId: string
+  lotConsumptions: Array<{
+    buyLotId: string
+    consumedQuantity: number
+    unitCost: number
+    nextRemainingQuantity: number
+    nextClosedAt: Date | null
+  }>
+  nextPositionQuantity: number
+  nextPositionAvgCost: number
+  nextPositionClosedAt: Date | null
+}
+
 @Injectable()
 export class TransactionsService {
   constructor(
@@ -208,9 +222,16 @@ export class TransactionsService {
         }
         return
       case 'sell':
-        throw new BadRequestException(
-          'Sell transactions are temporarily disabled until cost basis tracking is implemented',
-        )
+        if (!hasAsset) {
+          throw new BadRequestException(`Asset is required for ${dto.type} transactions`)
+        }
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+          throw new BadRequestException(`Quantity must be a positive number for ${dto.type} transactions`)
+        }
+        if (!Number.isFinite(price) || price <= 0) {
+          throw new BadRequestException(`Price must be a positive number for ${dto.type} transactions`)
+        }
+        return
       case 'dividend':
         if (!hasAsset) {
           throw new BadRequestException('Asset is required for dividend transactions')
@@ -501,6 +522,140 @@ export class TransactionsService {
     })
   }
 
+  private async createBuyLotOnCreate(
+    prisma: Prisma.TransactionClient,
+    transaction: Transaction,
+  ) {
+    if (transaction.type !== 'buy' || !transaction.assetId) {
+      return
+    }
+
+    const quantity = toNumber(transaction.quantity)
+    const totalCost = toNumber(transaction.amount)
+
+    if (quantity <= 0 || totalCost <= 0) {
+      throw new BadRequestException('buy transactions require positive quantity and amount')
+    }
+
+    await prisma.positionLot.create({
+      data: {
+        accountId: transaction.accountId,
+        assetId: transaction.assetId,
+        sourceTransactionId: transaction.id,
+        originalQuantity: quantity,
+        remainingQuantity: quantity,
+        unitCost: totalCost / quantity,
+        openedAt: transaction.tradeTime,
+      },
+    })
+  }
+
+  private async buildSellLotConsumptionPlan(
+    prisma: Prisma.TransactionClient,
+    transactionLike: {
+      accountId: string
+      assetId: string
+      quantity: number
+      tradeTime: Date
+    },
+  ): Promise<SellLotConsumptionPlan> {
+    const activePosition = await prisma.position.findFirst({
+      where: {
+        accountId: transactionLike.accountId,
+        assetId: transactionLike.assetId,
+        closedAt: null,
+      },
+      orderBy: { openedAt: 'desc' },
+    })
+
+    if (!activePosition) {
+      throw new NotFoundException('Active position not found for sell transaction')
+    }
+
+    const openLots = await prisma.positionLot.findMany({
+      where: {
+        accountId: transactionLike.accountId,
+        assetId: transactionLike.assetId,
+        remainingQuantity: { gt: 0 },
+      },
+      orderBy: { openedAt: 'asc' },
+    })
+
+    let remainingToSell = transactionLike.quantity
+    let remainingQuantity = 0
+    let remainingCost = 0
+    const lotConsumptions: SellLotConsumptionPlan['lotConsumptions'] = []
+
+    for (const lot of openLots) {
+      const lotRemainingQuantity = toNumber(lot.remainingQuantity)
+      const unitCost = toNumber(lot.unitCost)
+      const consumedQuantity = Math.min(lotRemainingQuantity, remainingToSell)
+      const nextRemainingQuantity = lotRemainingQuantity - consumedQuantity
+
+      if (consumedQuantity > 0) {
+        lotConsumptions.push({
+          buyLotId: lot.id,
+          consumedQuantity,
+          unitCost,
+          nextRemainingQuantity,
+          nextClosedAt: nextRemainingQuantity <= 1e-9 ? transactionLike.tradeTime : null,
+        })
+        remainingToSell -= consumedQuantity
+      }
+
+      if (nextRemainingQuantity > 1e-9) {
+        remainingQuantity += nextRemainingQuantity
+        remainingCost += nextRemainingQuantity * unitCost
+      }
+    }
+
+    if (remainingToSell > 1e-9) {
+      throw new BadRequestException('sell quantity exceeds the remaining open position lots')
+    }
+
+    return {
+      positionId: activePosition.id,
+      lotConsumptions,
+      nextPositionQuantity: remainingQuantity,
+      nextPositionAvgCost: remainingQuantity > 1e-9 ? remainingCost / remainingQuantity : 0,
+      nextPositionClosedAt: remainingQuantity > 1e-9 ? null : transactionLike.tradeTime,
+    }
+  }
+
+  private async applySellLotConsumptionPlan(
+    prisma: Prisma.TransactionClient,
+    transaction: Transaction,
+    plan: SellLotConsumptionPlan,
+  ) {
+    for (const lotConsumption of plan.lotConsumptions) {
+      await prisma.positionLot.update({
+        where: { id: lotConsumption.buyLotId },
+        data: {
+          remainingQuantity: lotConsumption.nextRemainingQuantity,
+          closedAt: lotConsumption.nextClosedAt,
+        },
+      })
+    }
+
+    await prisma.sellLotMatch.createMany({
+      data: plan.lotConsumptions.map((lotConsumption) => ({
+        sellTransactionId: transaction.id,
+        buyLotId: lotConsumption.buyLotId,
+        quantity: lotConsumption.consumedQuantity,
+        unitCost: lotConsumption.unitCost,
+      })),
+    })
+
+    await prisma.position.update({
+      where: { id: plan.positionId },
+      data: {
+        quantity: plan.nextPositionQuantity,
+        avgCost: plan.nextPositionAvgCost,
+        closedAt: plan.nextPositionClosedAt,
+      },
+    })
+  }
+
   private async rollbackBuyPositionEffect(
     prisma: Prisma.TransactionClient,
     transaction: Transaction,
@@ -678,6 +833,17 @@ export class TransactionsService {
     this.validateTransactionBusinessRules(dto)
 
     return this.prisma.$transaction(async (db) => {
+      const tradeTime = dto.tradeTime ? new Date(dto.tradeTime) : new Date()
+      const sellPlan =
+        dto.type === 'sell' && dto.assetId
+          ? await this.buildSellLotConsumptionPlan(db, {
+              accountId: dto.accountId,
+              assetId: dto.assetId,
+              quantity: Number(dto.quantity),
+              tradeTime,
+            })
+          : null
+
       const created = await db.transaction.create({
         data: {
           accountId: dto.accountId,
@@ -689,7 +855,7 @@ export class TransactionsService {
           fee: dto.fee ?? 0,
           tax: dto.tax ?? 0,
           brokerOrderNo: dto.brokerOrderNo,
-          tradeTime: dto.tradeTime? new Date(dto.tradeTime) : new Date(),
+          tradeTime,
           note: dto.note,
         },
         include: {
@@ -698,12 +864,20 @@ export class TransactionsService {
         },
       })
 
+      if (created.type === 'buy') {
+        await this.syncPositionOnCreate(db, created)
+        await this.createBuyLotOnCreate(db, created)
+      }
+
+      if (created.type === 'sell' && sellPlan) {
+        await this.applySellLotConsumptionPlan(db, created, sellPlan)
+      }
+
       await this.postingService.postTransaction({
         userId: created.account.userId,
         transaction: created,
         db,
       })
-      await this.syncPositionOnCreate(db, created)
       return created
     })
   }
@@ -738,6 +912,12 @@ export class TransactionsService {
     })
     if (!existing) {
       throw new NotFoundException('Transaction not found')
+    }
+
+    if (existing.type === 'sell') {
+      throw new BadRequestException(
+        'Updating sell transactions is not supported until FIFO rollback is implemented',
+      )
     }
 
     const nextTransaction: CreateTransactionDto = {
@@ -796,6 +976,16 @@ export class TransactionsService {
     await this.ownershipService.validateTransactionOwnership(id, userId)
 
     return this.prisma.$transaction(async (db) => {
+      const existing = await db.transaction.findUnique({
+        where: { id },
+        select: { type: true },
+      })
+      if (existing?.type === 'sell') {
+        throw new BadRequestException(
+          'Removing sell transactions is not supported until FIFO rollback is implemented',
+        )
+      }
+
       const transaction = await db.transaction.update({
         where: { id },
         data: {
@@ -826,6 +1016,11 @@ export class TransactionsService {
       })
       if (!existing) {
         throw new NotFoundException('Transaction not found')
+      }
+      if (existing.type === 'sell') {
+        throw new BadRequestException(
+          'Hard deleting sell transactions is not supported until FIFO rollback is implemented',
+        )
       }
 
       await this.postingService.archiveTransactionEntries(existing.account.userId, id, db)
