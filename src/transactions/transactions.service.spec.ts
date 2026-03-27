@@ -863,6 +863,38 @@ describe('TransactionsService', () => {
     expect(txClient.position.update).not.toHaveBeenCalled()
   })
 
+  it('rejects updating a sell transaction until FIFO rollback is implemented', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+    const existingTransaction = buildCreatedTransaction({
+      type: 'sell',
+      amount: 508,
+      quantity: 4,
+      price: 130,
+      fee: 10,
+      tax: 2,
+      tradeTime: new Date(sellTradeTime),
+    })
+
+    prisma.transaction.findUnique.mockResolvedValue(existingTransaction)
+
+    await expect(
+      service.update(
+        'tx-sell-1',
+        {
+          amount: 520,
+          tradeTime: sellTradeTime,
+        },
+        userId,
+      ),
+    ).rejects.toThrow(
+      'Updating sell transactions is not supported until FIFO rollback is implemented',
+    )
+
+    expect(txClient.transaction.update).not.toHaveBeenCalled()
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
+    expect(txClient.positionLot.update).not.toHaveBeenCalled()
+  })
+
   it('does not touch positions when removing a non-buy transaction', async () => {
     const { service, txClient, postingService } = createHarness()
     const removedTransaction = buildCreatedTransaction({
@@ -888,6 +920,49 @@ describe('TransactionsService', () => {
     )
     expect(txClient.position.findFirst).not.toHaveBeenCalled()
     expect(txClient.position.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects removing a sell transaction until FIFO rollback is implemented', async () => {
+    const { service, txClient, postingService } = createHarness()
+
+    txClient.transaction.findUnique.mockResolvedValue({
+      type: 'sell',
+    })
+
+    await expect(
+      service.remove('tx-sell-1', userId),
+    ).rejects.toThrow(
+      'Removing sell transactions is not supported until FIFO rollback is implemented',
+    )
+
+    expect(txClient.transaction.update).not.toHaveBeenCalled()
+    expect(postingService.archiveTransactionEntries).not.toHaveBeenCalled()
+    expect(txClient.positionLot.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects hard deleting a sell transaction until FIFO rollback is implemented', async () => {
+    const { service, txClient, postingService } = createHarness()
+    const existingTransaction = buildCreatedTransaction({
+      type: 'sell',
+      amount: 508,
+      quantity: 4,
+      price: 130,
+      fee: 10,
+      tax: 2,
+      tradeTime: new Date(sellTradeTime),
+    })
+
+    txClient.transaction.findUnique.mockResolvedValue(existingTransaction)
+
+    await expect(
+      service.hardDelete('tx-sell-1', userId),
+    ).rejects.toThrow(
+      'Hard deleting sell transactions is not supported until FIFO rollback is implemented',
+    )
+
+    expect(txClient.transaction.delete).not.toHaveBeenCalled()
+    expect(postingService.archiveTransactionEntries).not.toHaveBeenCalled()
+    expect(txClient.positionLot.update).not.toHaveBeenCalled()
   })
 
   it('rejects a buy update when the resulting position would become invalid', async () => {
