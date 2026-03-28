@@ -631,6 +631,350 @@ describe('Transactions sell FIFO (e2e)', () => {
     expect(persistedBuy1).toBeNull()
   })
 
+  it('rejects creating a sell when quantity exceeds remaining lots and leaves no side effects', async () => {
+    const { user, account, asset } = await createFixture()
+
+    await createTransaction(user.id, {
+      accountId: account.id,
+      assetId: asset.id,
+      type: 'buy',
+      amount: 1000,
+      quantity: 10,
+      price: 100,
+      fee: 0,
+      tax: 0,
+      tradeTime: '2026-03-20T09:30:00.000Z',
+      note: 'only buy',
+    })
+
+    const response = await request(app.getHttpServer())
+      .post('/transactions')
+      .set(auth(user.id))
+      .send({
+        accountId: account.id,
+        assetId: asset.id,
+        type: 'sell',
+        amount: 1650,
+        quantity: 15,
+        price: 110,
+        fee: 0,
+        tax: 0,
+        tradeTime: '2026-03-21T09:30:00.000Z',
+        note: 'oversell',
+      })
+      .expect(400)
+
+    expect(response.body.message).toBe('sell quantity exceeds the remaining open position lots')
+
+    const transactions = await prisma.transaction.findMany({
+      where: { accountId: account.id },
+      orderBy: { tradeTime: 'asc' },
+    })
+    expect(transactions).toHaveLength(1)
+    expect(transactions[0].type).toBe('buy')
+
+    const sellMatches = await prisma.sellLotMatch.findMany()
+    const sellEntries = await prisma.glEntry.findMany({
+      where: { source: 'auto:transaction:sell' },
+    })
+
+    expect(sellMatches).toHaveLength(0)
+    expect(sellEntries).toHaveLength(0)
+  })
+
+  it('rejects creating a sell when there is no active position', async () => {
+    const { user, account, asset } = await createFixture()
+
+    const response = await request(app.getHttpServer())
+      .post('/transactions')
+      .set(auth(user.id))
+      .send({
+        accountId: account.id,
+        assetId: asset.id,
+        type: 'sell',
+        amount: 520,
+        quantity: 4,
+        price: 130,
+        fee: 0,
+        tax: 0,
+        tradeTime: '2026-03-21T09:30:00.000Z',
+        note: 'sell without position',
+      })
+      .expect(404)
+
+    expect(response.body.message).toBe('Active position not found for sell transaction')
+
+    const transactions = await prisma.transaction.findMany({
+      where: { accountId: account.id },
+    })
+    expect(transactions).toHaveLength(0)
+  })
+
+  it('rebuilds sell matches and GL when a backdated buy is inserted before an existing sell', async () => {
+    const { user, account, asset } = await createFixture()
+
+    const buyLater = await createTransaction(user.id, {
+      accountId: account.id,
+      assetId: asset.id,
+      type: 'buy',
+      amount: 1000,
+      quantity: 10,
+      price: 100,
+      fee: 0,
+      tax: 0,
+      tradeTime: '2026-03-21T09:30:00.000Z',
+      note: 'later buy',
+    })
+
+    const sell = await createTransaction(user.id, {
+      accountId: account.id,
+      assetId: asset.id,
+      type: 'sell',
+      amount: 550,
+      quantity: 5,
+      price: 110,
+      fee: 0,
+      tax: 0,
+      tradeTime: '2026-03-22T09:30:00.000Z',
+      note: 'sell after later buy',
+    })
+
+    const backdatedBuy = await createTransaction(user.id, {
+      accountId: account.id,
+      assetId: asset.id,
+      type: 'buy',
+      amount: 800,
+      quantity: 10,
+      price: 80,
+      fee: 0,
+      tax: 0,
+      tradeTime: '2026-03-20T09:30:00.000Z',
+      note: 'backdated buy',
+    })
+
+    const position = await findActivePosition(account.id, asset.id)
+    expect(position).not.toBeNull()
+    expect(Number(position?.quantity)).toBe(15)
+    expect(Number(position?.avgCost)).toBeCloseTo(93.3333333333, 8)
+
+    const lots = await findLots(account.id, asset.id)
+    expect(
+      lots.map((lot) => ({
+        sourceTransactionId: lot.sourceTransactionId,
+        remainingQuantity: Number(lot.remainingQuantity),
+        unitCost: Number(lot.unitCost),
+        isClosed: lot.closedAt !== null,
+      })),
+    ).toEqual([
+      {
+        sourceTransactionId: backdatedBuy.body.id,
+        remainingQuantity: 5,
+        unitCost: 80,
+        isClosed: false,
+      },
+      {
+        sourceTransactionId: buyLater.body.id,
+        remainingQuantity: 10,
+        unitCost: 100,
+        isClosed: false,
+      },
+    ])
+
+    const sellMatches = await prisma.sellLotMatch.findMany({
+      where: { sellTransactionId: sell.body.id },
+      include: {
+        buyLot: {
+          select: { sourceTransactionId: true },
+        },
+      },
+    })
+    expect(sellMatches).toHaveLength(1)
+    expect(Number(sellMatches[0].quantity)).toBe(5)
+    expect(Number(sellMatches[0].unitCost)).toBe(80)
+    expect(sellMatches[0].buyLot.sourceTransactionId).toBe(backdatedBuy.body.id)
+
+    const { active, archived } = await findSellEntries(sell.body.id)
+    expect(active).toHaveLength(1)
+    expect(archived).toHaveLength(1)
+    expect(
+      active[0].lines.map((line) => ({
+        side: line.side,
+        amount: Number(line.amount),
+        note: line.note,
+      })),
+    ).toEqual(
+      expect.arrayContaining([
+        { side: 'debit', amount: 550, note: 'sell proceeds in' },
+        { side: 'credit', amount: 400, note: 'sell cost basis out' },
+        { side: 'credit', amount: 150, note: 'realized gain' },
+      ]),
+    )
+  })
+
+  it('rebuilds position, lot matches, and GL when a backdated sell is inserted before a later buy', async () => {
+    const { user, account, asset } = await createFixture()
+
+    const buy1 = await createTransaction(user.id, {
+      accountId: account.id,
+      assetId: asset.id,
+      type: 'buy',
+      amount: 1000,
+      quantity: 10,
+      price: 100,
+      fee: 0,
+      tax: 0,
+      tradeTime: '2026-03-20T09:30:00.000Z',
+      note: 'buy lot 1',
+    })
+
+    const buy2 = await createTransaction(user.id, {
+      accountId: account.id,
+      assetId: asset.id,
+      type: 'buy',
+      amount: 1200,
+      quantity: 10,
+      price: 120,
+      fee: 0,
+      tax: 0,
+      tradeTime: '2026-03-22T09:30:00.000Z',
+      note: 'buy lot 2',
+    })
+
+    const sell = await createTransaction(user.id, {
+      accountId: account.id,
+      assetId: asset.id,
+      type: 'sell',
+      amount: 360,
+      quantity: 4,
+      price: 90,
+      fee: 0,
+      tax: 0,
+      tradeTime: '2026-03-21T09:30:00.000Z',
+      note: 'backdated sell',
+    })
+
+    const position = await findActivePosition(account.id, asset.id)
+    expect(position).not.toBeNull()
+    expect(Number(position?.quantity)).toBe(16)
+    expect(Number(position?.avgCost)).toBeCloseTo(112.5, 8)
+
+    const lots = await findLots(account.id, asset.id)
+    expect(
+      lots.map((lot) => ({
+        sourceTransactionId: lot.sourceTransactionId,
+        remainingQuantity: Number(lot.remainingQuantity),
+        unitCost: Number(lot.unitCost),
+        isClosed: lot.closedAt !== null,
+      })),
+    ).toEqual([
+      {
+        sourceTransactionId: buy1.body.id,
+        remainingQuantity: 6,
+        unitCost: 100,
+        isClosed: false,
+      },
+      {
+        sourceTransactionId: buy2.body.id,
+        remainingQuantity: 10,
+        unitCost: 120,
+        isClosed: false,
+      },
+    ])
+
+    const sellMatches = await prisma.sellLotMatch.findMany({
+      where: { sellTransactionId: sell.body.id },
+      include: {
+        buyLot: {
+          select: { sourceTransactionId: true },
+        },
+      },
+    })
+    expect(sellMatches).toHaveLength(1)
+    expect(Number(sellMatches[0].quantity)).toBe(4)
+    expect(Number(sellMatches[0].unitCost)).toBe(100)
+    expect(sellMatches[0].buyLot.sourceTransactionId).toBe(buy1.body.id)
+
+    const { active, archived } = await findSellEntries(sell.body.id)
+    expect(active).toHaveLength(1)
+    expect(archived).toHaveLength(0)
+    expect(
+      active[0].lines.map((line) => ({
+        side: line.side,
+        amount: Number(line.amount),
+        note: line.note,
+      })),
+    ).toEqual(
+      expect.arrayContaining([
+        { side: 'debit', amount: 360, note: 'sell proceeds in' },
+        { side: 'credit', amount: 400, note: 'sell cost basis out' },
+        { side: 'debit', amount: 40, note: 'realized loss' },
+      ]),
+    )
+  })
+
+  it('rejects changing a buy transaction into sell via update', async () => {
+    const { user, account, asset } = await createFixture()
+
+    const buy = await createTransaction(user.id, {
+      accountId: account.id,
+      assetId: asset.id,
+      type: 'buy',
+      amount: 1000,
+      quantity: 10,
+      price: 100,
+      fee: 0,
+      tax: 0,
+      tradeTime: '2026-03-20T09:30:00.000Z',
+      note: 'buy to convert',
+    })
+
+    const response = await request(app.getHttpServer())
+      .patch(`/transactions/${buy.body.id}`)
+      .set(auth(user.id))
+      .send({
+        type: 'sell',
+        amount: 500,
+        quantity: 5,
+        price: 100,
+        fee: 0,
+        tax: 0,
+        tradeTime: '2026-03-20T09:30:00.000Z',
+      })
+      .expect(400)
+
+    expect(response.body.message).toBe('Changing a transaction into or out of sell is not supported')
+
+    const persisted = await prisma.transaction.findUniqueOrThrow({
+      where: { id: buy.body.id },
+    })
+    expect(persisted.type).toBe('buy')
+  })
+
+  it('rejects changing a sell transaction into buy via update', async () => {
+    const { user, sell } = await createBaseScenario()
+
+    const response = await request(app.getHttpServer())
+      .patch(`/transactions/${sell.body.id}`)
+      .set(auth(user.id))
+      .send({
+        type: 'buy',
+        amount: 1776,
+        quantity: 12,
+        price: 150,
+        fee: 12,
+        tax: 12,
+        tradeTime: '2026-03-22T09:30:00.000Z',
+      })
+      .expect(400)
+
+    expect(response.body.message).toBe('Changing a transaction into or out of sell is not supported')
+
+    const persisted = await prisma.transaction.findUniqueOrThrow({
+      where: { id: sell.body.id },
+    })
+    expect(persisted.type).toBe('sell')
+  })
+
   it('imports a sell row through the HTTP endpoint and creates FIFO matches', async () => {
     const { user, account, asset } = await createFixture()
 
