@@ -1280,6 +1280,74 @@ describe('TransactionsService', () => {
     })
   })
 
+  it('rejects changing a buy transaction into sell', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+    const existingTransaction = buildCreatedTransaction({
+      id: 'buy-1',
+      type: 'buy',
+      amount: 1000,
+      quantity: 10,
+      price: 100,
+      fee: 0,
+      tax: 0,
+    })
+
+    prisma.transaction.findUnique.mockResolvedValue(existingTransaction)
+
+    await expect(
+      service.update(
+        'buy-1',
+        {
+          type: 'sell',
+          amount: 500,
+          quantity: 5,
+          price: 100,
+          fee: 0,
+          tax: 0,
+          tradeTime,
+        },
+        userId,
+      ),
+    ).rejects.toThrow('Changing a transaction into or out of sell is not supported')
+
+    expect(txClient.transaction.update).not.toHaveBeenCalled()
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects changing a sell transaction into buy', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+    const existingTransaction = buildCreatedTransaction({
+      id: 'sell-1',
+      type: 'sell',
+      amount: 500,
+      quantity: 5,
+      price: 100,
+      fee: 0,
+      tax: 0,
+    })
+
+    prisma.transaction.findUnique.mockResolvedValue(existingTransaction)
+
+    await expect(
+      service.update(
+        'sell-1',
+        {
+          type: 'buy',
+          amount: 500,
+          quantity: 5,
+          price: 100,
+          fee: 0,
+          tax: 0,
+          tradeTime,
+        },
+        userId,
+      ),
+    ).rejects.toThrow('Changing a transaction into or out of sell is not supported')
+
+    expect(txClient.transaction.update).not.toHaveBeenCalled()
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
+  })
+
   it('does not touch positions when removing a non-buy transaction', async () => {
     const { service, txClient, postingService } = createHarness()
     const removedTransaction = buildCreatedTransaction({

@@ -1263,6 +1263,15 @@ export class TransactionsService {
 
     this.validateTransactionBusinessRules(nextTransaction)
 
+    if (
+      existing.type !== nextTransaction.type &&
+      (existing.type === 'sell' || nextTransaction.type === 'sell')
+    ) {
+      throw new BadRequestException(
+        'Changing a transaction into or out of sell is not supported',
+      )
+    }
+
     return this.prisma.$transaction(async (db) => {
       const transaction = await db.transaction.update({
         where: { id },
