@@ -12,6 +12,7 @@
     "dev": "nest start --watch --preserveWatchOutput",
     "start": "nest start",
     "build": "nest build",
+    "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "prisma:migrate": "prisma migrate dev",
