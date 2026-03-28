@@ -34,6 +34,7 @@ model Account {
   createdAt DateTime      @default(now())
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   positions Position[]
+  positionLots PositionLot[]
   txs       Transaction[]
   glAccount GlAccount?    @relation("AccountToGlAccount")
 
@@ -61,6 +62,7 @@ model Asset {
   baseCurrency String
   prices       Price[]
   positions    Position[]
+  positionLots PositionLot[]
   txs          Transaction[]
   aliases      AssetAlias[]
 }
@@ -92,6 +94,8 @@ model Transaction {
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   asset   Asset?  @relation(fields: [assetId], references: [id])
   tags    TxTag[]
+  buyLots PositionLot[]  @relation("BuyTransactionLots")
+  sellLotMatches SellLotMatch[] @relation("SellTransactionMatches")
 
   @@index([accountId, isDeleted, tradeTime])
   @@index([assetId, isDeleted, tradeTime])
@@ -173,6 +177,39 @@ model Position {
   asset     Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
   @@index([accountId, assetId])
+}
+
+model PositionLot {
+  id                  String    @id @default(uuid())
+  accountId           String
+  assetId             String
+  sourceTransactionId String
+  originalQuantity    Decimal
+  remainingQuantity   Decimal
+  unitCost            Decimal
+  openedAt            DateTime
+  closedAt            DateTime?
+  account             Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  asset               Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  sourceTransaction   Transaction @relation("BuyTransactionLots", fields: [sourceTransactionId], references: [id], onDelete: Cascade)
+  sellMatches         SellLotMatch[]
+
+  @@index([accountId, assetId, openedAt])
+  @@index([accountId, assetId, closedAt])
+  @@index([sourceTransactionId])
+}
+
+model SellLotMatch {
+  id                String      @id @default(uuid())
+  sellTransactionId String
+  buyLotId          String
+  quantity          Decimal
+  unitCost          Decimal
+  sellTransaction   Transaction @relation("SellTransactionMatches", fields: [sellTransactionId], references: [id], onDelete: Cascade)
+  buyLot            PositionLot @relation(fields: [buyLotId], references: [id], onDelete: Cascade)
+
+  @@index([sellTransactionId])
+  @@index([buyLotId])
 }
 
 // 科目表（Chart of Accounts）
