@@ -43,6 +43,7 @@ describe('TransactionsService', () => {
     const txClient = {
       transaction: {
         create: jest.fn(),
+        findFirst: jest.fn(),
         findUnique: jest.fn(),
         findMany: jest.fn(),
         update: jest.fn(),
@@ -99,6 +100,12 @@ describe('TransactionsService', () => {
       postingService as never,
       ownershipService as never,
     )
+
+    txClient.transaction.findFirst.mockResolvedValue(null)
+    txClient.transaction.findMany.mockResolvedValue([])
+    txClient.position.deleteMany.mockResolvedValue({ count: 0 })
+    txClient.positionLot.deleteMany.mockResolvedValue({ count: 0 })
+    txClient.sellLotMatch.deleteMany.mockResolvedValue({ count: 0 })
 
     return {
       service,
@@ -432,6 +439,207 @@ describe('TransactionsService', () => {
         avgCost: 120,
         closedAt: null,
       },
+    })
+  })
+
+  it('rebuilds the scope when creating a backdated buy before later sells', async () => {
+    const { service, txClient, postingService } = createHarness()
+    const createdTransaction = buildCreatedTransaction({
+      id: 'buy-backfill-1',
+      amount: 800,
+      quantity: 10,
+      price: 80,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-19T09:30:00.000Z'),
+      note: 'Backdated buy',
+    })
+    const laterBuy = buildCreatedTransaction({
+      id: 'buy-later-1',
+      amount: 1000,
+      quantity: 10,
+      price: 100,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-20T09:30:00.000Z'),
+    })
+    const laterSell = buildCreatedTransaction({
+      id: 'sell-later-1',
+      type: 'sell',
+      amount: 550,
+      quantity: 5,
+      price: 110,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-21T09:30:00.000Z'),
+      account: {
+        userId,
+      },
+    })
+
+    txClient.transaction.findFirst.mockResolvedValue({ id: laterSell.id })
+    txClient.transaction.create.mockResolvedValue(createdTransaction)
+    txClient.transaction.findMany.mockResolvedValue([
+      createdTransaction,
+      laterBuy,
+      laterSell,
+    ])
+    txClient.position.create.mockResolvedValue({
+      id: 'rebuilt-position',
+      accountId,
+      assetId,
+      quantity: 10,
+      avgCost: 80,
+      openedAt: createdTransaction.tradeTime,
+      closedAt: null,
+    })
+    txClient.positionLot.create
+      .mockResolvedValueOnce({ id: 'lot-backfill' })
+      .mockResolvedValueOnce({ id: 'lot-later-buy' })
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-rebuilt-sell' })
+
+    await service.create(
+      {
+        accountId,
+        assetId,
+        type: 'buy',
+        amount: 800,
+        quantity: 10,
+        price: 80,
+        fee: 0,
+        tax: 0,
+        tradeTime: '2026-03-19T09:30:00.000Z',
+        note: 'Backdated buy',
+      },
+      userId,
+    )
+
+    expect(txClient.position.deleteMany).toHaveBeenCalledWith({
+      where: { accountId, assetId },
+    })
+    expect(txClient.positionLot.deleteMany).toHaveBeenCalledWith({
+      where: { accountId, assetId },
+    })
+    expect(txClient.positionLot.update).toHaveBeenCalledWith({
+      where: { id: 'lot-backfill' },
+      data: {
+        remainingQuantity: 5,
+        closedAt: null,
+      },
+    })
+    expect(txClient.sellLotMatch.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          sellTransactionId: 'sell-later-1',
+          buyLotId: 'lot-backfill',
+          quantity: 5,
+          unitCost: 80,
+        },
+      ],
+    })
+    expect(postingService.postTransaction).toHaveBeenNthCalledWith(1, {
+      userId,
+      transaction: laterSell,
+      db: txClient,
+    })
+    expect(postingService.postTransaction).toHaveBeenNthCalledWith(2, {
+      userId,
+      transaction: createdTransaction,
+      db: txClient,
+    })
+  })
+
+  it('rebuilds the scope when creating a backdated sell before later buys', async () => {
+    const { service, txClient, postingService } = createHarness()
+    const createdTransaction = buildCreatedTransaction({
+      id: 'sell-backfill-1',
+      type: 'sell',
+      amount: 360,
+      quantity: 4,
+      price: 90,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-21T09:30:00.000Z'),
+      note: 'Backdated sell',
+    })
+    const earlierBuy = buildCreatedTransaction({
+      id: 'buy-1',
+      amount: 1000,
+      quantity: 10,
+      price: 100,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-20T09:30:00.000Z'),
+    })
+    const laterBuy = buildCreatedTransaction({
+      id: 'buy-2',
+      amount: 1200,
+      quantity: 10,
+      price: 120,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-22T09:30:00.000Z'),
+    })
+
+    txClient.transaction.findFirst.mockResolvedValue({ id: laterBuy.id })
+    txClient.transaction.create.mockResolvedValue(createdTransaction)
+    txClient.transaction.findMany.mockResolvedValue([
+      earlierBuy,
+      createdTransaction,
+      laterBuy,
+    ])
+    txClient.position.create.mockResolvedValue({
+      id: 'rebuilt-position',
+      accountId,
+      assetId,
+      quantity: 10,
+      avgCost: 100,
+      openedAt: earlierBuy.tradeTime,
+      closedAt: null,
+    })
+    txClient.positionLot.create
+      .mockResolvedValueOnce({ id: 'lot-1' })
+      .mockResolvedValueOnce({ id: 'lot-2' })
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-backdated-sell' })
+
+    await service.create(
+      {
+        accountId,
+        assetId,
+        type: 'sell',
+        amount: 360,
+        quantity: 4,
+        price: 90,
+        fee: 0,
+        tax: 0,
+        tradeTime: '2026-03-21T09:30:00.000Z',
+        note: 'Backdated sell',
+      },
+      userId,
+    )
+
+    expect(txClient.positionLot.update).toHaveBeenCalledWith({
+      where: { id: 'lot-1' },
+      data: {
+        remainingQuantity: 6,
+        closedAt: null,
+      },
+    })
+    expect(txClient.sellLotMatch.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          sellTransactionId: 'sell-backfill-1',
+          buyLotId: 'lot-1',
+          quantity: 4,
+          unitCost: 100,
+        },
+      ],
+    })
+    expect(postingService.postTransaction).toHaveBeenCalledTimes(1)
+    expect(postingService.postTransaction).toHaveBeenCalledWith({
+      userId,
+      transaction: createdTransaction,
+      db: txClient,
     })
   })
 
@@ -829,6 +1037,106 @@ describe('TransactionsService', () => {
     })
   })
 
+  it('rebuilds FIFO lots and reposts sells when updating a buy that is before later sells', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+    const existingTransaction = buildCreatedTransaction({
+      id: 'buy-1',
+      amount: 1000,
+      quantity: 10,
+      price: 100,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-20T09:30:00.000Z'),
+      note: 'Original buy',
+    })
+    const updatedTransaction = buildCreatedTransaction({
+      id: 'buy-1',
+      amount: 900,
+      quantity: 10,
+      price: 90,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-20T09:30:00.000Z'),
+      note: 'Updated buy',
+      account: {
+        userId,
+      },
+    })
+    const laterSell = buildCreatedTransaction({
+      id: 'sell-1',
+      type: 'sell',
+      amount: 440,
+      quantity: 4,
+      price: 110,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-21T09:30:00.000Z'),
+      account: {
+        userId,
+      },
+    })
+
+    prisma.transaction.findUnique.mockResolvedValue(existingTransaction)
+    txClient.transaction.update.mockResolvedValue(updatedTransaction)
+    txClient.transaction.findFirst.mockResolvedValue({ id: laterSell.id })
+    txClient.transaction.findMany.mockResolvedValue([
+      updatedTransaction,
+      laterSell,
+    ])
+    txClient.position.create.mockResolvedValue({
+      id: 'rebuilt-position',
+      accountId,
+      assetId,
+      quantity: 10,
+      avgCost: 90,
+      openedAt: updatedTransaction.tradeTime,
+      closedAt: null,
+    })
+    txClient.positionLot.create.mockResolvedValue({ id: 'lot-1' })
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-updated' })
+
+    await service.update(
+      'buy-1',
+      {
+        amount: 900,
+        quantity: 10,
+        price: 90,
+        fee: 0,
+        tradeTime: '2026-03-20T09:30:00.000Z',
+        note: 'Updated buy',
+      },
+      userId,
+    )
+
+    expect(txClient.positionLot.update).toHaveBeenCalledWith({
+      where: { id: 'lot-1' },
+      data: {
+        remainingQuantity: 6,
+        closedAt: null,
+      },
+    })
+    expect(txClient.sellLotMatch.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          sellTransactionId: 'sell-1',
+          buyLotId: 'lot-1',
+          quantity: 4,
+          unitCost: 90,
+        },
+      ],
+    })
+    expect(postingService.postTransaction).toHaveBeenNthCalledWith(1, {
+      userId,
+      transaction: laterSell,
+      db: txClient,
+    })
+    expect(postingService.postTransaction).toHaveBeenNthCalledWith(2, {
+      userId,
+      transaction: updatedTransaction,
+      db: txClient,
+    })
+  })
+
   it('does not touch positions when updating a non-buy transaction', async () => {
     const { service, prisma, txClient, postingService } = createHarness()
     const existingTransaction = buildCreatedTransaction({
@@ -1063,6 +1371,90 @@ describe('TransactionsService', () => {
     expect(postingService.postTransaction).not.toHaveBeenCalled()
   })
 
+  it('rebuilds FIFO lots and reposts sells when removing a buy that is before later sells', async () => {
+    const { service, txClient, postingService } = createHarness()
+    const removedTransaction = buildCreatedTransaction({
+      id: 'buy-1',
+      amount: 1000,
+      quantity: 10,
+      price: 100,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-20T09:30:00.000Z'),
+      isDeleted: true,
+      deletedAt: new Date('2026-03-27T10:00:00.000Z'),
+      account: {
+        userId,
+      },
+    })
+    const laterBuy = buildCreatedTransaction({
+      id: 'buy-2',
+      amount: 900,
+      quantity: 10,
+      price: 90,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-22T09:30:00.000Z'),
+    })
+    const laterSell = buildCreatedTransaction({
+      id: 'sell-1',
+      type: 'sell',
+      amount: 440,
+      quantity: 4,
+      price: 110,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-23T09:30:00.000Z'),
+      account: {
+        userId,
+      },
+    })
+
+    txClient.transaction.findUnique.mockResolvedValue({
+      ...removedTransaction,
+      isDeleted: false,
+      deletedAt: null,
+    })
+    txClient.transaction.update.mockResolvedValue(removedTransaction)
+    txClient.transaction.findFirst.mockResolvedValue({ id: laterSell.id })
+    txClient.transaction.findMany.mockResolvedValue([
+      removedTransaction,
+      laterBuy,
+      laterSell,
+    ])
+    txClient.position.create.mockResolvedValue({
+      id: 'rebuilt-position',
+      accountId,
+      assetId,
+      quantity: 10,
+      avgCost: 90,
+      openedAt: laterBuy.tradeTime,
+      closedAt: null,
+    })
+    txClient.positionLot.create.mockResolvedValue({ id: 'lot-2' })
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-reposted-sell' })
+
+    await service.remove('buy-1', userId)
+
+    expect(postingService.archiveTransactionEntries).toHaveBeenCalledWith(
+      userId,
+      'buy-1',
+      txClient,
+    )
+    expect(txClient.positionLot.update).toHaveBeenCalledWith({
+      where: { id: 'lot-2' },
+      data: {
+        remainingQuantity: 6,
+        closedAt: null,
+      },
+    })
+    expect(postingService.postTransaction).toHaveBeenCalledWith({
+      userId,
+      transaction: laterSell,
+      db: txClient,
+    })
+  })
+
   it('rebuilds FIFO lots and restores the position when hard deleting a sell transaction', async () => {
     const { service, txClient, postingService } = createHarness()
     const buyTransaction = buildCreatedTransaction({
@@ -1123,6 +1515,86 @@ describe('TransactionsService', () => {
     expect(postingService.postTransaction).not.toHaveBeenCalled()
   })
 
+  it('rebuilds FIFO lots and reposts sells when hard deleting a buy that is before later sells', async () => {
+    const { service, txClient, postingService } = createHarness()
+    const existingTransaction = buildCreatedTransaction({
+      id: 'buy-1',
+      amount: 1000,
+      quantity: 10,
+      price: 100,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-20T09:30:00.000Z'),
+      account: {
+        userId,
+      },
+    })
+    const laterBuy = buildCreatedTransaction({
+      id: 'buy-2',
+      amount: 900,
+      quantity: 10,
+      price: 90,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-22T09:30:00.000Z'),
+    })
+    const laterSell = buildCreatedTransaction({
+      id: 'sell-1',
+      type: 'sell',
+      amount: 440,
+      quantity: 4,
+      price: 110,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-23T09:30:00.000Z'),
+      account: {
+        userId,
+      },
+    })
+
+    txClient.transaction.findUnique.mockResolvedValue(existingTransaction)
+    txClient.transaction.findFirst.mockResolvedValue({ id: laterSell.id })
+    txClient.transaction.delete.mockResolvedValue(existingTransaction)
+    txClient.transaction.findMany.mockResolvedValue([
+      laterBuy,
+      laterSell,
+    ])
+    txClient.position.create.mockResolvedValue({
+      id: 'rebuilt-position',
+      accountId,
+      assetId,
+      quantity: 10,
+      avgCost: 90,
+      openedAt: laterBuy.tradeTime,
+      closedAt: null,
+    })
+    txClient.positionLot.create.mockResolvedValue({ id: 'lot-2' })
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-reposted-sell' })
+
+    await service.hardDelete('buy-1', userId)
+
+    expect(txClient.transaction.delete).toHaveBeenCalledWith({
+      where: { id: 'buy-1' },
+    })
+    expect(postingService.archiveTransactionEntries).toHaveBeenCalledWith(
+      userId,
+      'buy-1',
+      txClient,
+    )
+    expect(txClient.positionLot.update).toHaveBeenCalledWith({
+      where: { id: 'lot-2' },
+      data: {
+        remainingQuantity: 6,
+        closedAt: null,
+      },
+    })
+    expect(postingService.postTransaction).toHaveBeenCalledWith({
+      userId,
+      transaction: laterSell,
+      db: txClient,
+    })
+  })
+
   it('rejects a buy update when the resulting position would become invalid', async () => {
     const { service, prisma, txClient, postingService } = createHarness()
     const existingTransaction = buildCreatedTransaction()
@@ -1156,11 +1628,7 @@ describe('TransactionsService', () => {
       ),
     ).rejects.toThrow('updated buy transaction would invalidate the active position')
 
-    expect(postingService.postTransaction).toHaveBeenCalledWith({
-      userId,
-      transaction: updatedTransaction,
-      db: txClient,
-    })
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
   })
 
   it('imports a valid broker buy row and creates GL and position side effects', async () => {
