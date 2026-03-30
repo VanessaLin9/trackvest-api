@@ -1,31 +1,62 @@
 # trackvest-api
 
-NestJS backend for Trackvest. It provides:
+`trackvest-api` is the backend for Trackvest's investment bookkeeping flows.
 
-- accounts, assets, transactions, dashboard, and GL endpoints
-- PostgreSQL via Prisma
-- seeded demo data for local development
-- automatic GL posting for supported investment flows
+Today this repo serves two purposes:
 
-## Stack
+- an internal/local HTTP API for development and debugging
+- an MCP server surface for agent-facing read workflows
 
-- NestJS 11
-- Prisma
-- PostgreSQL 16
-- TypeScript
+The long-term direction is not "public REST API for third-party consumers".
+If there is one interface we expect to expose more intentionally, it is the MCP layer.
+
+## Current status
+
+Current implemented investment behavior:
+
+- `deposit`, `withdraw`, `buy`, `sell`, `dividend`, and `fee` transactions exist in the domain
+- `sell` now uses FIFO lots via `PositionLot` and `SellLotMatch`
+- transaction create/update/delete keeps GL entries in sync
+- backdated buy/sell changes rebuild affected position scopes
+- CSV import currently supports Cathay-style broker exports
+
+Current MCP status:
+
+- MCP server exists as a separate entrypoint from the HTTP API
+- read-only tools currently implemented:
+  - `list_accounts`
+  - `search_transactions`
+  - `get_position_detail`
+  - `get_sell_fifo_detail`
+
+## Repo shape
+
+Main code lives under [src](/Users/vanessa/develop/trackvest-api/src):
+
+- [src/accounts](/Users/vanessa/develop/trackvest-api/src/accounts)
+- [src/assets](/Users/vanessa/develop/trackvest-api/src/assets)
+- [src/transactions](/Users/vanessa/develop/trackvest-api/src/transactions)
+- [src/dashboard](/Users/vanessa/develop/trackvest-api/src/dashboard)
+- [src/gl](/Users/vanessa/develop/trackvest-api/src/gl)
+- [src/mcp](/Users/vanessa/develop/trackvest-api/src/mcp)
+
+Entry points:
+
+- HTTP API: [src/main.ts](/Users/vanessa/develop/trackvest-api/src/main.ts)
+- MCP server: [src/mcp-main.ts](/Users/vanessa/develop/trackvest-api/src/mcp-main.ts)
 
 ## Local setup
 
 1. Install dependencies
 
 ```bash
-npm install
+pnpm install
 ```
 
-2. Start local services
+2. Start local infrastructure
 
 ```bash
-npm run db:up
+pnpm db:up
 ```
 
 This starts:
@@ -33,9 +64,35 @@ This starts:
 - Postgres on `localhost:5433`
 - Redis on `localhost:6379`
 
-3. Prepare environment
+3. Prepare database
 
-The repo already includes `.env` for local development. The important values are:
+```bash
+npx prisma migrate reset --force
+```
+
+If you only need to reseed:
+
+```bash
+pnpm db:seed
+```
+
+4. Start the HTTP API
+
+```bash
+pnpm dev
+```
+
+5. Start the MCP server
+
+```bash
+pnpm mcp:dev
+```
+
+## Environment
+
+The repo already includes a local `.env`.
+
+Important values:
 
 ```env
 DATABASE_URL="postgresql://trackvest:trackvest@localhost:5433/trackvest?schema=public"
@@ -43,103 +100,110 @@ PORT=3000
 JWT_SECRET="dev_dev_dev_change_me"
 ```
 
-4. Apply schema and seed data
+MCP-specific local-dev value:
 
-```bash
-npx prisma migrate reset --force
+```env
+MCP_DEFAULT_USER_ID="5f9b7d4a-69d4-4a78-98f4-bc82eeac1001"
 ```
 
-If you only need to rerun seed:
-
-```bash
-npx prisma db seed
-```
-
-5. Start the API
-
-```bash
-npm run dev
-```
-
-API base URL:
-
-- `http://localhost:3000`
-- Swagger: `http://localhost:3000/docs`
+If `MCP_DEFAULT_USER_ID` is not set, the MCP server currently falls back to the seeded demo user.
 
 ## Demo seed data
 
 The local seed creates:
 
-- demo user: `demo@trackvest.local`
+- demo user email: `demo@trackvest.local`
+- demo user id: `5f9b7d4a-69d4-4a78-98f4-bc82eeac1001`
 - seeded accounts:
   - `Bank TWD`
   - `Broker TWD` with broker `cathay`
 - seeded assets:
   - `2330` 台積電
+  - `0050` 元大台灣50
   - `006208` 富邦台50
   - `2337` 旺宏
   - `3711` 日月光投控
-  - `0050` 元大台灣50
-- seeded GL accounts required by current flows
+- seeded GL accounts required by current investment flows
 
-## Current API scope
+## HTTP API
 
-Main modules in [src/app.module.ts](/Users/vanessa/develop/trackvest-api/src/app.module.ts):
+The HTTP API is still useful for:
 
-- `accounts`
-- `assets`
-- `transactions`
-- `dashboard`
-- `gl`
-- `users`
-- `health`
+- local frontend development
+- Swagger inspection
+- manual debugging
+- integration/e2e testing
 
-Current investment behavior:
+Base URL:
 
-- `deposit`, `buy`, and `dividend` are supported for posting
-- CSV import is limited to broker accounts with `broker = cathay`
-- account-linked GL accounts are auto-created when needed
-- transaction create/update/delete now keeps GL entries in sync
+- `http://localhost:3000`
 
-## Important constraints
+Swagger:
 
-- `sell` is intentionally disabled for now
-  - reason: cost basis / realized P&L logic is not implemented safely yet
-- CSV import supports Cathay-style exports only
-- authentication is currently simplified for local dev via `X-User-Id`
+- `http://localhost:3000/docs`
 
-## Useful commands
+Authentication is still simplified for local development:
+
+- controllers read `X-User-Id`
+- there is no final user auth flow yet
+
+This is a development convenience, not the intended long-term agent auth model.
+
+## MCP server
+
+The MCP server uses the same Prisma models and the same Postgres database as the HTTP API.
+It is not a separate data store.
+
+Current transport:
+
+- stdio
+
+Current shape:
+
+- separate Nest application context
+- separate MCP module
+- shared domain/services underneath
+
+See [docs/mcp.md](/Users/vanessa/develop/trackvest-api/docs/mcp.md) for:
+
+- architecture
+- tool catalog
+- local usage
+- planned auth direction
+
+## Validation and testing
+
+Build:
 
 ```bash
-# watch mode
-npm run dev
-
-# one-shot start
-npm run start
-
-# build
-npm run build
-
-# start/stop local infra
-npm run db:up
-npm run db:down
-
-# Prisma helpers
-npx prisma studio
-npx prisma migrate dev
-npx prisma db seed
+pnpm build
 ```
 
-## Frontend pairing
+Unit tests:
 
-Default local frontend is expected at:
+```bash
+npx jest --runInBand
+```
 
-- `http://localhost:5173`
+HTTP e2e tests:
 
-The frontend sends `X-User-Id` on every request, using the configured demo user id.
+```bash
+npx jest --config ./test/jest-e2e.json --runInBand
+```
+
+## Documentation map
+
+Canonical docs right now:
+
+- [README.md](/Users/vanessa/develop/trackvest-api/README.md)
+- [docs/mcp.md](/Users/vanessa/develop/trackvest-api/docs/mcp.md)
+
+There are also older root-level markdown files such as [FEATURES.md](/Users/vanessa/develop/trackvest-api/FEATURES.md) and [PROJECT_OVERVIEW.md](/Users/vanessa/develop/trackvest-api/PROJECT_OVERVIEW.md). Treat those as historical notes unless they are updated; they are not the current source of truth.
 
 ## Known gaps
 
-- no automated coverage yet for the investments/import/GL path
-- `sell` and cost basis tracking still need a real position engine
-- README reflects current local-dev assumptions, not production deployment
+- final user auth flow is not implemented yet
+- MCP still uses a local-dev owner user scope instead of real agent credentials
+- MCP currently focuses on read-only investment queries
+- CSV import is still broker-format specific
+- documentation is now being rewritten around the MCP-first direction

@@ -11,6 +11,8 @@
   "scripts": {
     "dev": "nest start --watch --preserveWatchOutput",
     "start": "nest start",
+    "mcp:start": "ts-node src/mcp-main.ts",
+    "mcp:dev": "ts-node-dev --respawn --transpile-only src/mcp-main.ts",
     "build": "nest build",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
@@ -23,6 +25,7 @@
     "@fastify/cors": "^11.1.0",
     "@fastify/swagger": "^9.5.2",
     "@fastify/swagger-ui": "^5.2.3",
+    "@modelcontextprotocol/sdk": "^1.28.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
@@ -37,7 +40,8 @@
     "pino-http": "^11.0.0",
     "prisma": "^6.16.3",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
