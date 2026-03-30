@@ -1,11 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import * as z from 'zod/v4'
 import { AccountsService } from '../../accounts/accounts.service'
-import { ACCOUNT_TYPES, CURRENCIES, DEFAULT_MCP_USER_ID } from '../mcp.constants'
-
-function resolveOwnerUserId() {
-  return process.env.MCP_DEFAULT_USER_ID || DEFAULT_MCP_USER_ID
-}
+import { ACCOUNT_TYPES, CURRENCIES } from '../mcp.constants'
+import { resolveOwnerUserId } from '../mcp-context'
 
 export function registerAccountTools(server: McpServer, accountsService: AccountsService) {
   server.registerTool(
