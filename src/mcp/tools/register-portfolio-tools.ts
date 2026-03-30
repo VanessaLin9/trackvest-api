@@ -105,4 +105,105 @@ export function registerPortfolioTools(server: McpServer, portfolioQueryService:
       }
     },
   )
+
+  server.registerTool(
+    'get_sell_fifo_detail',
+    {
+      title: 'Get Sell FIFO Detail',
+      description:
+        'Explain a single sell transaction in FIFO terms, including matched buy lots, cost basis, fee and tax, and realized profit or loss.',
+      inputSchema: {
+        sellTransactionId: z.string().uuid().describe('Sell transaction ID'),
+      },
+      outputSchema: {
+        ownerUserId: z.string().uuid(),
+        account: z.object({
+          id: z.string().uuid(),
+          name: z.string(),
+          currency: z.enum(CURRENCIES),
+          userId: z.string().uuid(),
+        }),
+        asset: z
+          .object({
+            id: z.string().uuid(),
+            symbol: z.string(),
+            name: z.string(),
+            baseCurrency: z.string(),
+          })
+          .nullable(),
+        sellTransaction: z.object({
+          id: z.string().uuid(),
+          accountId: z.string().uuid(),
+          assetId: z.string().uuid().nullable(),
+          tradeTime: z.string(),
+          quantity: z.number().nullable(),
+          amount: z.number(),
+          price: z.number().nullable(),
+          fee: z.number(),
+          tax: z.number(),
+          brokerOrderNo: z.string().nullable(),
+          note: z.string().nullable(),
+          isDeleted: z.boolean(),
+          deletedAt: z.string().nullable(),
+        }),
+        summary: z.object({
+          matchedQuantity: z.number(),
+          grossProceeds: z.number(),
+          netProceeds: z.number(),
+          totalCostBasis: z.number(),
+          feeAndTax: z.number(),
+          realizedPnl: z.number(),
+          realizedPnlType: z.enum(['gain', 'loss', 'breakeven']),
+        }),
+        matches: z.array(
+          z.object({
+            id: z.string().uuid(),
+            quantity: z.number(),
+            unitCost: z.number(),
+            matchedCostBasis: z.number(),
+            buyLot: z.object({
+              id: z.string().uuid(),
+              sourceTransactionId: z.string().uuid(),
+              originalQuantity: z.number(),
+              remainingQuantity: z.number(),
+              unitCost: z.number(),
+              openedAt: z.string(),
+              closedAt: z.string().nullable(),
+            }),
+            buyTransaction: z.object({
+              id: z.string().uuid(),
+              tradeTime: z.string(),
+              brokerOrderNo: z.string().nullable(),
+              note: z.string().nullable(),
+              amount: z.number(),
+              quantity: z.number().nullable(),
+              price: z.number().nullable(),
+              fee: z.number(),
+              tax: z.number(),
+              impliedUnitCost: z.number().nullable(),
+            }),
+          }),
+        ),
+      },
+    },
+    async ({ sellTransactionId }) => {
+      const ownerUserId = resolveOwnerUserId()
+      const detail = await portfolioQueryService.getSellFifoDetail(ownerUserId, sellTransactionId)
+
+      const structuredContent = {
+        ownerUserId,
+        ...detail,
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(structuredContent, null, 2),
+          },
+        ],
+        structuredContent,
+      }
+    },
+  )
 }
