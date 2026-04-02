@@ -1,8 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { Expose } from 'class-transformer'
 import { AccountType, Currency } from '@prisma/client'
-import { IsEnum, IsOptional, IsString, Length } from 'class-validator'
+import { IsEnum, IsIn, IsOptional, IsString, Length } from 'class-validator'
 import { SUPPORTED_BROKER } from '../account-broker.constants'
+import { APP_CURRENCIES } from '../../common/constants/currency.constants'
 
 export class AccountBaseDto {
 
@@ -27,10 +28,10 @@ export class AccountBaseDto {
     @ApiProperty({
         description: '幣別',
         example: 'TWD',
-        enum: Currency,
+        enum: APP_CURRENCIES,
     })
     @Expose()
-    @IsEnum(Currency)
+    @IsIn(APP_CURRENCIES)
     @Length(3, 10)
     currency!: Currency
 

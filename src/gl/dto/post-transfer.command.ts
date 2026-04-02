@@ -1,7 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { IsUUID, IsNumber, IsPositive, IsEnum, IsOptional, IsDateString, IsString } from 'class-validator'
+import { IsUUID, IsNumber, IsPositive, IsIn, IsOptional, IsDateString, IsString } from 'class-validator'
 import { Currency } from '@prisma/client'
 import { Type } from 'class-transformer'
+import { APP_CURRENCIES } from '../../common/constants/currency.constants'
 
 export class PostTransferCommand {
   @ApiProperty({ example: 'c2610e4e-1cca-401e-afa7-1ebf541d0000' })
@@ -22,8 +23,8 @@ export class PostTransferCommand {
   @IsPositive()
   amount!: number
 
-  @ApiProperty({ example: 'TWD', enum: Currency })
-  @IsEnum(Currency)
+  @ApiProperty({ example: 'TWD', enum: APP_CURRENCIES })
+  @IsIn(APP_CURRENCIES)
   currency!: Currency
 
   @ApiProperty({ example: '2025-01-01T00:00:00.000Z', required: false })
@@ -41,4 +42,3 @@ export class PostTransferCommand {
   @IsString()
   source?: string
 }
-

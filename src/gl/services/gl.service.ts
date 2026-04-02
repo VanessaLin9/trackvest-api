@@ -24,10 +24,6 @@ export class GlService {
         return '台幣'
       case 'USD':
         return '美元'
-      case 'JPY':
-        return '日圓'
-      case 'EUR':
-        return '歐元'
       default:
         return currency
     }

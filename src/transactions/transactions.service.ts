@@ -161,13 +161,6 @@ export class TransactionsService {
       case '美元':
       case '美金':
         return Currency.USD
-      case 'JPY':
-      case '日圓':
-      case '日元':
-        return Currency.JPY
-      case 'EUR':
-      case '歐元':
-        return Currency.EUR
       default:
         return null
     }
