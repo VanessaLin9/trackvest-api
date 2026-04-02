@@ -44,6 +44,22 @@ describe('AssetsService', () => {
     })
   })
 
+  it('throws conflict when a normalized create symbol already exists', async () => {
+    const { service, prisma } = createHarness()
+    prisma.asset.findUnique.mockResolvedValue({ id: 'asset-1', symbol: 'AAPL' })
+
+    await expect(
+      service.create({
+        symbol: ' aapl ',
+        name: 'Apple Inc.',
+        type: 'equity',
+        baseCurrency: 'usd',
+      }),
+    ).rejects.toThrow(
+      new ConflictException('Asset with this symbol already exists'),
+    )
+  })
+
   it('applies search, filter, and pagination when listing assets', async () => {
     const { service, prisma } = createHarness()
     prisma.asset.findMany.mockResolvedValue([])
@@ -111,5 +127,41 @@ describe('AssetsService', () => {
     ).rejects.toThrow(
       new ConflictException('Asset with this symbol already exists'),
     )
+  })
+
+  it('updates an asset with normalized payload when there is no collision', async () => {
+    const { service, prisma } = createHarness()
+    prisma.asset.findUnique.mockResolvedValue({ id: 'asset-1' })
+    prisma.asset.findFirst.mockResolvedValue(null)
+    prisma.asset.update.mockResolvedValue({ id: 'asset-1', symbol: 'MSFT' })
+
+    await service.update('asset-1', {
+      symbol: ' msft ',
+      name: ' Microsoft   Corp ',
+      type: 'equity',
+      baseCurrency: ' usd ',
+    })
+
+    expect(prisma.asset.update).toHaveBeenCalledWith({
+      where: { id: 'asset-1' },
+      data: {
+        symbol: 'MSFT',
+        name: 'Microsoft Corp',
+        type: 'equity',
+        baseCurrency: 'USD',
+      },
+    })
+  })
+
+  it('deletes an asset after confirming it exists', async () => {
+    const { service, prisma } = createHarness()
+    prisma.asset.findUnique.mockResolvedValue({ id: 'asset-1' })
+    prisma.asset.delete.mockResolvedValue({ id: 'asset-1' })
+
+    await service.remove('asset-1')
+
+    expect(prisma.asset.delete).toHaveBeenCalledWith({
+      where: { id: 'asset-1' },
+    })
   })
 })
