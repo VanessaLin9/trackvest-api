@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger'
 import { Expose } from 'class-transformer'
 import { AssetType } from '@prisma/client'
 import { IsEnum, IsIn, IsString, Length } from 'class-validator'
-import { APP_CURRENCIES } from '../../common/constants/currency.constants'
+import { SUPPORTED_CURRENCIES } from '../../common/constants/currency.constants'
 
 export class AssetBaseDto {
 
@@ -36,11 +36,11 @@ export class AssetBaseDto {
     @ApiProperty({
         description: '基礎貨幣',
         example: 'USD',
-        enum: APP_CURRENCIES,
+        enum: SUPPORTED_CURRENCIES,
     })
     @Expose()
     @IsString()
-    @IsIn(APP_CURRENCIES)
+    @IsIn(SUPPORTED_CURRENCIES)
     @Length(3, 10)
     baseCurrency!: string
 }

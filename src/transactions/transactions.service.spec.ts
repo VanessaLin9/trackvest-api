@@ -2353,6 +2353,23 @@ describe('TransactionsService', () => {
     })
   })
 
+  it.each([
+    ['JPY', Currency.JPY],
+    ['日圓', Currency.JPY],
+    ['EUR', Currency.EUR],
+    ['歐元', Currency.EUR],
+  ])('accepts supported imported currency %s', async (inputCurrency, expectedCurrency) => {
+    const { service, prisma } = createHarness()
+
+    mockImportAccount(prisma)
+
+    const normalizedCurrency = (service as unknown as {
+      normalizeCurrency(value: string): Currency | null
+    }).normalizeCurrency(inputCurrency)
+
+    expect(normalizedCurrency).toBe(expectedCurrency)
+  })
+
   it('returns a duplicate broker order error when create raises P2002 during import', async () => {
     const { service, prisma, txClient, postingService } = createHarness()
     const duplicateError = new Prisma.PrismaClientKnownRequestError(
