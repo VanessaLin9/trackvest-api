@@ -13,3 +13,21 @@ export class AssetResponseDto extends IntersectionType(
   AssetBaseDto,
   AssetBaseResponseDto,
 ) {}
+
+export class AssetListResponseDto {
+  @ApiProperty({ type: AssetResponseDto, isArray: true })
+  @Expose()
+  items!: AssetResponseDto[]
+
+  @ApiProperty({ example: 42 })
+  @Expose()
+  total!: number
+
+  @ApiProperty({ example: 1 })
+  @Expose()
+  page!: number
+
+  @ApiProperty({ example: 10 })
+  @Expose()
+  take!: number
+}

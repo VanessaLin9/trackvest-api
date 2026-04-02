@@ -40,25 +40,21 @@ export class AssetsService {
 
   findAll(query: FindAssetsDto = {}) {
     const where: Prisma.AssetWhereInput = {}
-    const search = query.search
-      ? normalizeAssetSearchInput(query.search)
-      : undefined
-    const symbol = query.symbol
-      ? normalizeAssetSymbolInput(query.symbol)
+    const search = query.q
+      ? normalizeAssetSearchInput(query.q)
       : undefined
     const baseCurrency = query.baseCurrency
       ? normalizeAssetCurrencyInput(query.baseCurrency)
       : undefined
+    const page = query.page ?? 1
+    const take = query.take ?? 10
+    const skip = (page - 1) * take
 
     if (search) {
       where.OR = [
         { symbol: { contains: search, mode: 'insensitive' } },
         { name: { contains: search, mode: 'insensitive' } },
       ]
-    }
-
-    if (symbol) {
-      where.symbol = symbol
     }
 
     if (query.type) {
@@ -69,11 +65,23 @@ export class AssetsService {
       where.baseCurrency = baseCurrency
     }
 
-    return this.prisma.asset.findMany({
-      where,
-      orderBy: { symbol: 'asc' },
-      skip: query.skip ?? 0,
-      take: query.take ?? 50,
+    return this.prisma.$transaction(async (db) => {
+      const [items, total] = await Promise.all([
+        db.asset.findMany({
+          where,
+          orderBy: { symbol: 'asc' },
+          skip,
+          take,
+        }),
+        db.asset.count({ where }),
+      ])
+
+      return {
+        items,
+        total,
+        page,
+        take,
+      }
     })
   }
 

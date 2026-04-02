@@ -15,10 +15,8 @@ import {
 import { SUPPORTED_CURRENCIES } from '../../common/constants/currency.constants'
 import {
   ASSET_SEARCH_REGEX,
-  ASSET_SYMBOL_REGEX,
   normalizeAssetCurrencyInput,
   normalizeAssetSearchInput,
-  normalizeAssetSymbolInput,
 } from '../../common/utils'
 
 export class FindAssetsDto {
@@ -32,24 +30,9 @@ export class FindAssetsDto {
   @IsString()
   @Length(1, 100)
   @Matches(ASSET_SEARCH_REGEX, {
-    message: 'search contains unsupported characters',
+    message: 'q contains unsupported characters',
   })
-  search?: string
-
-  @ApiPropertyOptional({
-    description: 'Exact symbol filter',
-    example: 'AAPL',
-  })
-  @IsOptional()
-  @Transform(({ value }) =>
-    typeof value === 'string' ? normalizeAssetSymbolInput(value) : value)
-  @IsString()
-  @Length(1, 20)
-  @Matches(ASSET_SYMBOL_REGEX, {
-    message:
-      'symbol may only contain uppercase letters, numbers, and . _ : / - without spaces',
-  })
-  symbol?: string
+  q?: string
 
   @ApiPropertyOptional({
     description: 'Asset type filter',
@@ -73,18 +56,18 @@ export class FindAssetsDto {
   @Length(3, 10)
   baseCurrency?: string
 
-  @ApiPropertyOptional({ example: 0, minimum: 0 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  skip?: number = 0
-
-  @ApiPropertyOptional({ example: 50, minimum: 1, maximum: 200 })
+  @ApiPropertyOptional({ example: 1, minimum: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(200)
-  take?: number = 50
+  page?: number = 1
+
+  @ApiPropertyOptional({ example: 10, minimum: 1, maximum: 100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  take?: number = 10
 }

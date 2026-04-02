@@ -45,22 +45,31 @@ describe('AssetsController', () => {
     expect(result).toEqual(asset)
   })
 
-  it('passes list query filters to the service and maps the response array', async () => {
+  it('passes list query filters to the service and maps the paginated response', async () => {
     const { controller, service } = createHarness()
-    service.findAll.mockResolvedValue([asset])
+    service.findAll.mockResolvedValue({
+      items: [asset],
+      total: 42,
+      page: 2,
+      take: 10,
+    })
 
     const query = {
-      search: 'apple',
-      symbol: 'AAPL',
+      q: 'apple',
       type: AssetType.equity,
       baseCurrency: 'USD',
-      skip: 0,
-      take: 50,
+      page: 2,
+      take: 10,
     }
     const result = await controller.findAll(query)
 
     expect(service.findAll).toHaveBeenCalledWith(query)
-    expect(result).toEqual([asset])
+    expect(result).toEqual({
+      items: [asset],
+      total: 42,
+      page: 2,
+      take: 10,
+    })
   })
 
   it('looks up an asset by symbol', async () => {

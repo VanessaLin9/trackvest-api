@@ -36,30 +36,38 @@ describe('Asset DTOs', () => {
 
   it('normalizes asset list query filters', async () => {
     const dto = plainToInstance(FindAssetsDto, {
-      search: '  apple   inc  ',
-      symbol: ' tsla ',
+      q: '  apple   inc  ',
       baseCurrency: ' usd ',
-      skip: '5',
-      take: '20',
+      page: '2',
+      take: '10',
     })
 
     const errors = await validate(dto)
 
     expect(errors).toHaveLength(0)
-    expect(dto.search).toBe('apple inc')
-    expect(dto.symbol).toBe('TSLA')
+    expect(dto.q).toBe('apple inc')
     expect(dto.baseCurrency).toBe('USD')
-    expect(dto.skip).toBe(5)
-    expect(dto.take).toBe(20)
+    expect(dto.page).toBe(2)
+    expect(dto.take).toBe(10)
   })
 
   it('rejects unsupported asset list search characters', async () => {
     const dto = plainToInstance(FindAssetsDto, {
-      search: 'AAPL<>',
+      q: 'AAPL<>',
     })
 
     const errors = await validate(dto)
 
-    expect(errors.some((error) => error.property === 'search')).toBe(true)
+    expect(errors.some((error) => error.property === 'q')).toBe(true)
+  })
+
+  it('rejects invalid page values', async () => {
+    const dto = plainToInstance(FindAssetsDto, {
+      page: '0',
+    })
+
+    const errors = await validate(dto)
+
+    expect(errors.some((error) => error.property === 'page')).toBe(true)
   })
 })

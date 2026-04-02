@@ -4,15 +4,20 @@ import { AssetsService } from './assets.service'
 describe('AssetsService', () => {
   function createHarness() {
     const prisma = {
+      $transaction: jest.fn(),
       asset: {
         findUnique: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn(),
+        count: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
       },
     }
+    prisma.$transaction.mockImplementation(
+      async (callback: (db: typeof prisma) => Promise<unknown>) => callback(prisma),
+    )
 
     const service = new AssetsService(prisma as never)
 
@@ -60,17 +65,17 @@ describe('AssetsService', () => {
     )
   })
 
-  it('applies search, filter, and pagination when listing assets', async () => {
+  it('filters first and then paginates asset results', async () => {
     const { service, prisma } = createHarness()
     prisma.asset.findMany.mockResolvedValue([])
+    prisma.asset.count.mockResolvedValue(23)
 
-    await service.findAll({
-      search: '  apple   inc ',
-      symbol: ' aapl ',
+    const result = await service.findAll({
+      q: '  apple   inc ',
       type: 'equity',
       baseCurrency: ' usd ',
-      skip: 5,
-      take: 20,
+      page: 3,
+      take: 10,
     })
 
     expect(prisma.asset.findMany).toHaveBeenCalledWith({
@@ -79,13 +84,49 @@ describe('AssetsService', () => {
           { symbol: { contains: 'apple inc', mode: 'insensitive' } },
           { name: { contains: 'apple inc', mode: 'insensitive' } },
         ],
-        symbol: 'AAPL',
         type: 'equity',
         baseCurrency: 'USD',
       },
       orderBy: { symbol: 'asc' },
-      skip: 5,
-      take: 20,
+      skip: 20,
+      take: 10,
+    })
+    expect(prisma.asset.count).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          { symbol: { contains: 'apple inc', mode: 'insensitive' } },
+          { name: { contains: 'apple inc', mode: 'insensitive' } },
+        ],
+        type: 'equity',
+        baseCurrency: 'USD',
+      },
+    })
+    expect(result).toEqual({
+      items: [],
+      total: 23,
+      page: 3,
+      take: 10,
+    })
+  })
+
+  it('returns default first-page pagination when no filters are provided', async () => {
+    const { service, prisma } = createHarness()
+    prisma.asset.findMany.mockResolvedValue([])
+    prisma.asset.count.mockResolvedValue(0)
+
+    const result = await service.findAll()
+
+    expect(prisma.asset.findMany).toHaveBeenCalledWith({
+      where: {},
+      orderBy: { symbol: 'asc' },
+      skip: 0,
+      take: 10,
+    })
+    expect(result).toEqual({
+      items: [],
+      total: 0,
+      page: 1,
+      take: 10,
     })
   })
 
