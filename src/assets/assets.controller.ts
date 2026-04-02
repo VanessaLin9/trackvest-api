@@ -4,6 +4,7 @@ import { ApiOkResponse, ApiCreatedResponse, ApiTags } from '@nestjs/swagger'
 import { AssetsService } from './assets.service'
 import { CreateAndUpdateAssetDto } from './dto/asset.createAndUpdate.dto'
 import { AssetResponseDto } from './dto/asset.response.dto'
+import { FindAssetsDto } from './dto/find-assets.dto'
 import { plainToInstance } from 'class-transformer'
 
 @ApiTags('assets')
@@ -20,8 +21,8 @@ export class AssetsController {
 
   @Get()
   @ApiOkResponse({ type: AssetResponseDto, isArray: true })
-  async findAll(): Promise<AssetResponseDto[]> {
-    const list = await this.svc.findAll()
+  async findAll(@Query() query: FindAssetsDto): Promise<AssetResponseDto[]> {
+    const list = await this.svc.findAll(query)
     return list.map(e => plainToInstance(AssetResponseDto, e, { excludeExtraneousValues: true }))
   }
 

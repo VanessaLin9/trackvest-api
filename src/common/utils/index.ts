@@ -6,4 +6,4 @@
 export * from './gl-validation.util'
 export * from './number.util'
 export * from './date.util'
-
+export * from './asset-input.util'
