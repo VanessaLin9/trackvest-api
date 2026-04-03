@@ -1,7 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { Expose } from 'class-transformer'
+import { Expose, Transform } from 'class-transformer'
 import { AssetType } from '@prisma/client'
-import { IsEnum, IsString, Length } from 'class-validator'
+import { IsEnum, IsIn, IsString, Length, Matches } from 'class-validator'
+import { SUPPORTED_CURRENCIES } from '../../common/constants/currency.constants'
+import {
+  ASSET_NAME_REGEX,
+  ASSET_SYMBOL_REGEX,
+  normalizeAssetCurrencyInput,
+  normalizeAssetNameInput,
+  normalizeAssetSymbolInput,
+} from '../../common/utils'
 
 export class AssetBaseDto {
 
@@ -10,8 +18,14 @@ export class AssetBaseDto {
         example: 'AAPL',
     })
     @Expose()
+    @Transform(({ value }) =>
+      typeof value === 'string' ? normalizeAssetSymbolInput(value) : value)
     @IsString()
     @Length(1, 20)
+    @Matches(ASSET_SYMBOL_REGEX, {
+      message:
+        'symbol may only contain uppercase letters, numbers, and . _ : / - without spaces',
+    })
     symbol!: string
 
     @ApiProperty({
@@ -19,8 +33,13 @@ export class AssetBaseDto {
         example: 'Apple Inc.',
     })
     @Expose()
+    @Transform(({ value }) =>
+      typeof value === 'string' ? normalizeAssetNameInput(value) : value)
     @IsString()
     @Length(1, 100)
+    @Matches(ASSET_NAME_REGEX, {
+      message: 'name contains unsupported characters',
+    })
     name!: string
 
     @ApiProperty({
@@ -35,9 +54,13 @@ export class AssetBaseDto {
     @ApiProperty({
         description: '基礎貨幣',
         example: 'USD',
+        enum: SUPPORTED_CURRENCIES,
     })
     @Expose()
+    @Transform(({ value }) =>
+      typeof value === 'string' ? normalizeAssetCurrencyInput(value) : value)
     @IsString()
+    @IsIn(SUPPORTED_CURRENCIES)
     @Length(3, 10)
     baseCurrency!: string
 }

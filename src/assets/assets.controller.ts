@@ -3,7 +3,8 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { ApiOkResponse, ApiCreatedResponse, ApiTags } from '@nestjs/swagger'
 import { AssetsService } from './assets.service'
 import { CreateAndUpdateAssetDto } from './dto/asset.createAndUpdate.dto'
-import { AssetResponseDto } from './dto/asset.response.dto'
+import { AssetListResponseDto, AssetResponseDto } from './dto/asset.response.dto'
+import { FindAssetsDto } from './dto/find-assets.dto'
 import { plainToInstance } from 'class-transformer'
 
 @ApiTags('assets')
@@ -19,10 +20,14 @@ export class AssetsController {
   }
 
   @Get()
-  @ApiOkResponse({ type: AssetResponseDto, isArray: true })
-  async findAll(): Promise<AssetResponseDto[]> {
-    const list = await this.svc.findAll()
-    return list.map(e => plainToInstance(AssetResponseDto, e, { excludeExtraneousValues: true }))
+  @ApiOkResponse({ type: AssetListResponseDto })
+  async findAll(@Query() query: FindAssetsDto): Promise<AssetListResponseDto> {
+    const result = await this.svc.findAll(query)
+    return {
+      ...result,
+      items: result.items.map((asset) =>
+        plainToInstance(AssetResponseDto, asset, { excludeExtraneousValues: true })),
+    }
   }
 
   @Get('symbol/:symbol')

@@ -1,8 +1,9 @@
 // src/gl/dto/ledger.dto.ts
 import { ApiProperty } from '@nestjs/swagger'
 import { IsUUID, IsString, IsNumber, IsPositive, IsOptional, IsIn } from 'class-validator'
+import { SUPPORTED_CURRENCIES } from '../../common/constants/currency.constants'
 
-const CURRENCIES = ['TWD', 'USD', 'JPY', 'EUR'] as const
+const CURRENCIES = SUPPORTED_CURRENCIES
 type Currency = typeof CURRENCIES[number]
 
 export class ExpenseBodyDto {
