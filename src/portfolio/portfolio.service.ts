@@ -1,10 +1,14 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, NotFoundException } from '@nestjs/common'
 import { AssetType, TxType } from '@prisma/client'
 import { OwnershipService } from '../common/services/ownership.service'
 import { roundTo, toNumber } from '../common/utils/number.util'
 import { PrismaService } from '../prisma.service'
 import { PortfolioHoldingsResponseDto } from './dto/portfolio-holdings.response.dto'
 import { PortfolioSummaryResponseDto } from './dto/portfolio-summary.response.dto'
+import {
+  PortfolioHoldingTrendResponseDto,
+  PortfolioTrendResponseDto,
+} from './dto/portfolio-trend.response.dto'
 
 type HoldingActivityRecord = {
   assetId: string | null
@@ -20,6 +24,42 @@ type HoldingsSnapshot = {
   baseCurrency: string | null
   items: HoldingOverviewItem[]
 }
+
+type HistoricalTransactionRecord = {
+  id: string
+  accountId: string
+  assetId: string
+  type: TxType
+  quantity: number
+  amount: number
+  price: number | null
+  tradeTime: Date
+}
+
+type HistoricalPriceRecord = {
+  assetId: string
+  price: number
+  asOf: Date
+}
+
+type OpenLot = {
+  remainingQuantity: number
+  unitCost: number
+}
+
+type TrendEvent =
+  | {
+      kind: 'transaction'
+      timestamp: Date
+      date: string
+      transaction: HistoricalTransactionRecord
+    }
+  | {
+      kind: 'price'
+      timestamp: Date
+      date: string
+      price: HistoricalPriceRecord
+    }
 
 @Injectable()
 export class PortfolioService {
@@ -63,6 +103,104 @@ export class PortfolioService {
           weight: totalMarketValue > 0 ? roundTo(marketValue / totalMarketValue, 8) : 0,
         }))
         .sort((left, right) => right.marketValue - left.marketValue || left.type.localeCompare(right.type)),
+    }
+  }
+
+  async getTrend(userId: string): Promise<PortfolioTrendResponseDto> {
+    await this.ownershipService.validateUserExists(userId)
+
+    const transactions = await this.prisma.transaction.findMany({
+      where: {
+        account: { userId },
+        assetId: { not: null },
+        type: { in: ['buy', 'sell'] },
+        isDeleted: false,
+      },
+      orderBy: [
+        { tradeTime: 'asc' },
+        { id: 'asc' },
+      ],
+      select: {
+        id: true,
+        accountId: true,
+        assetId: true,
+        type: true,
+        quantity: true,
+        amount: true,
+        price: true,
+        tradeTime: true,
+      },
+    })
+
+    if (transactions.length === 0) {
+      return { points: [] }
+    }
+
+    const normalizedTransactions = transactions.map((transaction) => ({
+      id: transaction.id,
+      accountId: transaction.accountId,
+      assetId: transaction.assetId!,
+      type: transaction.type,
+      quantity: toNumber(transaction.quantity),
+      amount: toNumber(transaction.amount),
+      price: transaction.price == null ? null : toNumber(transaction.price),
+      tradeTime: transaction.tradeTime,
+    }))
+
+    const assetIds = [...new Set(normalizedTransactions.map((transaction) => transaction.assetId))]
+    const prices = await this.loadHistoricalPrices(assetIds)
+
+    return {
+      points: this.buildPortfolioTrendPoints(normalizedTransactions, prices),
+    }
+  }
+
+  async getHoldingTrend(userId: string, assetId: string): Promise<PortfolioHoldingTrendResponseDto> {
+    await this.ownershipService.validateUserExists(userId)
+
+    const transactions = await this.prisma.transaction.findMany({
+      where: {
+        account: { userId },
+        assetId,
+        type: { in: ['buy', 'sell'] },
+        isDeleted: false,
+      },
+      orderBy: [
+        { tradeTime: 'asc' },
+        { id: 'asc' },
+      ],
+      select: {
+        id: true,
+        accountId: true,
+        assetId: true,
+        type: true,
+        quantity: true,
+        amount: true,
+        price: true,
+        tradeTime: true,
+      },
+    })
+
+    if (transactions.length === 0) {
+      throw new NotFoundException('Asset holding not found')
+    }
+
+    const normalizedTransactions = transactions.map((transaction) => ({
+      id: transaction.id,
+      accountId: transaction.accountId,
+      assetId: transaction.assetId!,
+      type: transaction.type,
+      quantity: toNumber(transaction.quantity),
+      amount: toNumber(transaction.amount),
+      price: transaction.price == null ? null : toNumber(transaction.price),
+      tradeTime: transaction.tradeTime,
+    }))
+
+    const prices = await this.loadHistoricalPrices([assetId])
+
+    return {
+      assetId,
+      points: this.buildHoldingTrendPoints(assetId, normalizedTransactions, prices),
     }
   }
 
@@ -236,6 +374,271 @@ export class PortfolioService {
       baseCurrency: this.getSingleCurrency(positions.map((position) => position.account.currency)),
       items: weightedItems,
     }
+  }
+
+  private async loadHistoricalPrices(assetIds: string[]): Promise<HistoricalPriceRecord[]> {
+    if (assetIds.length === 0) {
+      return []
+    }
+
+    const prices = await this.prisma.price.findMany({
+      where: {
+        assetId: { in: assetIds },
+      },
+      orderBy: [
+        { asOf: 'asc' },
+        { id: 'asc' },
+      ],
+      select: {
+        assetId: true,
+        price: true,
+        asOf: true,
+      },
+    })
+
+    return prices.map((price) => ({
+      assetId: price.assetId,
+      price: toNumber(price.price),
+      asOf: price.asOf,
+    }))
+  }
+
+  private buildPortfolioTrendPoints(
+    transactions: HistoricalTransactionRecord[],
+    prices: HistoricalPriceRecord[],
+  ): PortfolioTrendResponseDto['points'] {
+    const timeline = this.buildTimelineEvents(transactions, prices)
+    const openLotsByScope = new Map<string, OpenLot[]>()
+    const latestPriceByAsset = new Map<string, number>()
+    const points: PortfolioTrendResponseDto['points'] = []
+
+    for (const date of this.extractTimelineDates(timeline)) {
+      const dateEvents = timeline.filter((event) => event.date === date)
+
+      for (const event of dateEvents) {
+        if (event.kind === 'price') {
+          latestPriceByAsset.set(event.price.assetId, event.price.price)
+          continue
+        }
+
+        this.applyTransactionEvent(openLotsByScope, latestPriceByAsset, event.transaction)
+      }
+
+      const snapshot = this.snapshotPortfolio(openLotsByScope, latestPriceByAsset)
+      points.push({
+        label: date,
+        date,
+        investedCapital: roundTo(snapshot.investedCapital, 8),
+        marketValue: roundTo(snapshot.marketValue, 8),
+      })
+    }
+
+    return this.trimLeadingZeroPoints(points)
+  }
+
+  private buildHoldingTrendPoints(
+    assetId: string,
+    transactions: HistoricalTransactionRecord[],
+    prices: HistoricalPriceRecord[],
+  ): PortfolioHoldingTrendResponseDto['points'] {
+    const timeline = this.buildTimelineEvents(transactions, prices)
+    const openLotsByScope = new Map<string, OpenLot[]>()
+    const latestPriceByAsset = new Map<string, number>()
+    const points: PortfolioHoldingTrendResponseDto['points'] = []
+
+    for (const date of this.extractTimelineDates(timeline)) {
+      const dateEvents = timeline.filter((event) => event.date === date)
+
+      for (const event of dateEvents) {
+        if (event.kind === 'price') {
+          latestPriceByAsset.set(event.price.assetId, event.price.price)
+          continue
+        }
+
+        this.applyTransactionEvent(openLotsByScope, latestPriceByAsset, event.transaction)
+      }
+
+      const snapshot = this.snapshotAsset(assetId, openLotsByScope, latestPriceByAsset)
+      points.push({
+        label: date,
+        date,
+        investedAmount: roundTo(snapshot.investedAmount, 8),
+        marketValue: roundTo(snapshot.marketValue, 8),
+      })
+    }
+
+    return this.trimLeadingZeroPoints(points)
+  }
+
+  private buildTimelineEvents(
+    transactions: HistoricalTransactionRecord[],
+    prices: HistoricalPriceRecord[],
+  ): TrendEvent[] {
+    return [
+      ...transactions.map((transaction) => ({
+        kind: 'transaction' as const,
+        timestamp: transaction.tradeTime,
+        date: transaction.tradeTime.toISOString().slice(0, 10),
+        transaction,
+      })),
+      ...prices.map((price) => ({
+        kind: 'price' as const,
+        timestamp: price.asOf,
+        date: price.asOf.toISOString().slice(0, 10),
+        price,
+      })),
+    ].sort((left, right) => {
+      const timestampDiff = left.timestamp.getTime() - right.timestamp.getTime()
+      if (timestampDiff !== 0) {
+        return timestampDiff
+      }
+
+      if (left.kind === right.kind) {
+        if (left.kind === 'transaction' && right.kind === 'transaction') {
+          return left.transaction.id.localeCompare(right.transaction.id)
+        }
+        return 0
+      }
+
+      return left.kind === 'transaction' ? -1 : 1
+    })
+  }
+
+  private extractTimelineDates(timeline: TrendEvent[]): string[] {
+    return [...new Set(timeline.map((event) => event.date))]
+  }
+
+  private applyTransactionEvent(
+    openLotsByScope: Map<string, OpenLot[]>,
+    latestPriceByAsset: Map<string, number>,
+    transaction: HistoricalTransactionRecord,
+  ) {
+    const scopeKey = `${transaction.accountId}:${transaction.assetId}`
+    const scopeLots = openLotsByScope.get(scopeKey) ?? []
+
+    if (transaction.price != null && transaction.price > 0) {
+      latestPriceByAsset.set(transaction.assetId, transaction.price)
+    }
+
+    if (transaction.type === 'buy') {
+      if (transaction.quantity <= 0 || transaction.amount <= 0) {
+        return
+      }
+
+      scopeLots.push({
+        remainingQuantity: transaction.quantity,
+        unitCost: transaction.amount / transaction.quantity,
+      })
+      openLotsByScope.set(scopeKey, scopeLots)
+      return
+    }
+
+    if (transaction.type !== 'sell' || transaction.quantity <= 0) {
+      return
+    }
+
+    let remainingToSell = transaction.quantity
+    for (const lot of scopeLots) {
+      if (remainingToSell <= 1e-9) {
+        break
+      }
+
+      if (lot.remainingQuantity <= 1e-9) {
+        continue
+      }
+
+      const consumedQuantity = Math.min(lot.remainingQuantity, remainingToSell)
+      lot.remainingQuantity -= consumedQuantity
+      remainingToSell -= consumedQuantity
+    }
+
+    if (remainingToSell > 1e-9) {
+      throw new NotFoundException('Historical holding lots are inconsistent')
+    }
+
+    openLotsByScope.set(scopeKey, scopeLots)
+  }
+
+  private snapshotPortfolio(
+    openLotsByScope: Map<string, OpenLot[]>,
+    latestPriceByAsset: Map<string, number>,
+  ) {
+    const holdingsByAsset = new Map<string, { quantity: number; investedAmount: number }>()
+
+    for (const [scopeKey, lots] of openLotsByScope.entries()) {
+      const [, assetId] = scopeKey.split(':')
+      const holding = holdingsByAsset.get(assetId) ?? {
+        quantity: 0,
+        investedAmount: 0,
+      }
+
+      for (const lot of lots) {
+        if (lot.remainingQuantity <= 1e-9) {
+          continue
+        }
+
+        holding.quantity += lot.remainingQuantity
+        holding.investedAmount += lot.remainingQuantity * lot.unitCost
+      }
+
+      holdingsByAsset.set(assetId, holding)
+    }
+
+    let investedCapital = 0
+    let marketValue = 0
+
+    for (const [assetId, holding] of holdingsByAsset.entries()) {
+      investedCapital += holding.investedAmount
+      const latestPrice = latestPriceByAsset.get(assetId)
+      marketValue += latestPrice == null ? holding.investedAmount : holding.quantity * latestPrice
+    }
+
+    return { investedCapital, marketValue }
+  }
+
+  private snapshotAsset(
+    assetId: string,
+    openLotsByScope: Map<string, OpenLot[]>,
+    latestPriceByAsset: Map<string, number>,
+  ) {
+    let quantity = 0
+    let investedAmount = 0
+
+    for (const [scopeKey, lots] of openLotsByScope.entries()) {
+      const [, scopeAssetId] = scopeKey.split(':')
+      if (scopeAssetId !== assetId) {
+        continue
+      }
+
+      for (const lot of lots) {
+        if (lot.remainingQuantity <= 1e-9) {
+          continue
+        }
+
+        quantity += lot.remainingQuantity
+        investedAmount += lot.remainingQuantity * lot.unitCost
+      }
+    }
+
+    const latestPrice = latestPriceByAsset.get(assetId)
+    const marketValue = latestPrice == null ? investedAmount : quantity * latestPrice
+
+    return { investedAmount, marketValue }
+  }
+
+  private trimLeadingZeroPoints<T extends { investedCapital?: number; marketValue: number; investedAmount?: number }>(
+    points: T[],
+  ): T[] {
+    const firstMeaningfulIndex = points.findIndex((point) => {
+      const investedValue = point.investedCapital ?? point.investedAmount ?? 0
+      return investedValue > 1e-9 || point.marketValue > 1e-9
+    })
+
+    if (firstMeaningfulIndex === -1) {
+      return points
+    }
+
+    return points.slice(firstMeaningfulIndex)
   }
 
   private getSingleCurrency(values: Array<string | null | undefined>): string | null {

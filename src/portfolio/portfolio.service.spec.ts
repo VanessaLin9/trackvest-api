@@ -229,4 +229,140 @@ describe('PortfolioService', () => {
     expect(result.totalReturnRate).toBe(0)
     expect(result.holdingsCount).toBe(2)
   })
+
+  it('builds sparse portfolio trend points from transactions and price history', async () => {
+    const { service, prisma, ownershipService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        id: 'tx-1',
+        accountId: 'account-1',
+        assetId: 'asset-1',
+        type: 'buy',
+        quantity: 10,
+        amount: 1000,
+        price: 100,
+        tradeTime: new Date('2026-04-01T09:00:00.000Z'),
+      },
+      {
+        id: 'tx-2',
+        accountId: 'account-1',
+        assetId: 'asset-1',
+        type: 'sell',
+        quantity: 4,
+        amount: 480,
+        price: 120,
+        tradeTime: new Date('2026-04-03T09:00:00.000Z'),
+      },
+    ])
+    prisma.price.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        price: 110,
+        asOf: new Date('2026-04-02T00:00:00.000Z'),
+      },
+      {
+        assetId: 'asset-1',
+        price: 125,
+        asOf: new Date('2026-04-04T00:00:00.000Z'),
+      },
+    ])
+
+    const result = await service.getTrend('user-1')
+
+    expect(result).toEqual({
+      points: [
+        {
+          label: '2026-04-01',
+          date: '2026-04-01',
+          investedCapital: 1000,
+          marketValue: 1000,
+        },
+        {
+          label: '2026-04-02',
+          date: '2026-04-02',
+          investedCapital: 1000,
+          marketValue: 1100,
+        },
+        {
+          label: '2026-04-03',
+          date: '2026-04-03',
+          investedCapital: 600,
+          marketValue: 720,
+        },
+        {
+          label: '2026-04-04',
+          date: '2026-04-04',
+          investedCapital: 600,
+          marketValue: 750,
+        },
+      ],
+    })
+  })
+
+  it('builds asset trend points and throws when the asset is not held by the user', async () => {
+    const { service, prisma, ownershipService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.transaction.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: 'tx-1',
+          accountId: 'account-1',
+          assetId: 'asset-1',
+          type: 'buy',
+          quantity: 5,
+          amount: 500,
+          price: 100,
+          tradeTime: new Date('2026-04-01T09:00:00.000Z'),
+        },
+        {
+          id: 'tx-2',
+          accountId: 'account-1',
+          assetId: 'asset-1',
+          type: 'buy',
+          quantity: 5,
+          amount: 550,
+          price: 110,
+          tradeTime: new Date('2026-04-02T09:00:00.000Z'),
+        },
+      ])
+    prisma.price.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        price: 120,
+        asOf: new Date('2026-04-03T00:00:00.000Z'),
+      },
+    ])
+
+    await expect(service.getHoldingTrend('user-1', 'missing-asset')).rejects.toThrow(
+      'Asset holding not found',
+    )
+
+    const result = await service.getHoldingTrend('user-1', 'asset-1')
+
+    expect(result).toEqual({
+      assetId: 'asset-1',
+      points: [
+        {
+          label: '2026-04-01',
+          date: '2026-04-01',
+          investedAmount: 500,
+          marketValue: 500,
+        },
+        {
+          label: '2026-04-02',
+          date: '2026-04-02',
+          investedAmount: 1050,
+          marketValue: 1100,
+        },
+        {
+          label: '2026-04-03',
+          date: '2026-04-03',
+          investedAmount: 1050,
+          marketValue: 1200,
+        },
+      ],
+    })
+  })
 })

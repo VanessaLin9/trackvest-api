@@ -1,8 +1,12 @@
-import { Controller, Get } from '@nestjs/common'
+import { Controller, Get, Param } from '@nestjs/common'
 import { ApiHeader, ApiOkResponse, ApiTags } from '@nestjs/swagger'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
 import { PortfolioHoldingsResponseDto } from './dto/portfolio-holdings.response.dto'
 import { PortfolioSummaryResponseDto } from './dto/portfolio-summary.response.dto'
+import {
+  PortfolioHoldingTrendResponseDto,
+  PortfolioTrendResponseDto,
+} from './dto/portfolio-trend.response.dto'
 import { PortfolioService } from './portfolio.service'
 
 @ApiTags('portfolio')
@@ -21,5 +25,20 @@ export class PortfolioController {
   @ApiOkResponse({ type: PortfolioHoldingsResponseDto })
   async getHoldings(@CurrentUser() userId: string): Promise<PortfolioHoldingsResponseDto> {
     return this.portfolioService.getHoldings(userId)
+  }
+
+  @Get('trend')
+  @ApiOkResponse({ type: PortfolioTrendResponseDto })
+  async getTrend(@CurrentUser() userId: string): Promise<PortfolioTrendResponseDto> {
+    return this.portfolioService.getTrend(userId)
+  }
+
+  @Get('holdings/:assetId/trend')
+  @ApiOkResponse({ type: PortfolioHoldingTrendResponseDto })
+  async getHoldingTrend(
+    @CurrentUser() userId: string,
+    @Param('assetId') assetId: string,
+  ): Promise<PortfolioHoldingTrendResponseDto> {
+    return this.portfolioService.getHoldingTrend(userId, assetId)
   }
 }
