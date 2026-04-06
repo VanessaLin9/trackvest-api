@@ -179,27 +179,24 @@ export class PortfolioService {
       }),
     ])
     const portfolioBaseCurrency = this.getPortfolioBaseCurrency(accounts.map((account) => account.currency))
-    const fxContext = await this.buildFxContext({
+    const timeline = this.buildTimelineEvents(normalizedTransactions, prices)
+    const fxContextByDate = await this.buildFxContextsByDate({
+      dates: this.extractTimelineDates(timeline),
       portfolioBaseCurrency,
       sourceCurrencies: [
         ...accounts.map((account) => account.currency),
         ...assets.map((asset) => asset.baseCurrency),
       ],
-      asOf: this.getLatestDateFromHistory(
-        normalizedTransactions.map((transaction) => transaction.tradeTime),
-        prices.map((price) => price.asOf),
-      ),
     })
     const accountCurrencyById = new Map(accounts.map((account) => [account.id, account.currency]))
     const assetCurrencyById = new Map(assets.map((asset) => [asset.id, asset.baseCurrency]))
 
     return {
       points: this.buildPortfolioTrendPoints(
-        normalizedTransactions,
-        prices,
+        timeline,
         accountCurrencyById,
         assetCurrencyById,
-        fxContext,
+        fxContextByDate,
       ),
     }
   }
@@ -266,16 +263,14 @@ export class PortfolioService {
       }),
     ])
     const portfolioBaseCurrency = this.getPortfolioBaseCurrency(accounts.map((account) => account.currency))
-    const fxContext = await this.buildFxContext({
+    const timeline = this.buildTimelineEvents(normalizedTransactions, prices)
+    const fxContextByDate = await this.buildFxContextsByDate({
+      dates: this.extractTimelineDates(timeline),
       portfolioBaseCurrency,
       sourceCurrencies: [
         ...accounts.map((account) => account.currency),
         asset?.baseCurrency ?? portfolioBaseCurrency,
       ],
-      asOf: this.getLatestDateFromHistory(
-        normalizedTransactions.map((transaction) => transaction.tradeTime),
-        prices.map((price) => price.asOf),
-      ),
     })
     const accountCurrencyById = new Map(accounts.map((account) => [account.id, account.currency]))
 
@@ -283,11 +278,10 @@ export class PortfolioService {
       assetId,
       points: this.buildHoldingTrendPoints(
         assetId,
-        normalizedTransactions,
-        prices,
+        timeline,
         accountCurrencyById,
         asset?.baseCurrency ?? portfolioBaseCurrency,
-        fxContext,
+        fxContextByDate,
       ),
     }
   }
@@ -521,13 +515,11 @@ export class PortfolioService {
   }
 
   private buildPortfolioTrendPoints(
-    transactions: HistoricalTransactionRecord[],
-    prices: HistoricalPriceRecord[],
+    timeline: TrendEvent[],
     accountCurrencyById: Map<string, string>,
     assetCurrencyById: Map<string, string>,
-    fxContext: ValuationFxContext,
+    fxContextByDate: Map<string, ValuationFxContext>,
   ): PortfolioTrendResponseDto['points'] {
-    const timeline = this.buildTimelineEvents(transactions, prices)
     const openLotsByScope = new Map<string, OpenLot[]>()
     const latestPriceByAsset = new Map<string, number>()
     const points: PortfolioTrendResponseDto['points'] = []
@@ -542,6 +534,11 @@ export class PortfolioService {
         }
 
         this.applyTransactionEvent(openLotsByScope, latestPriceByAsset, event.transaction)
+      }
+
+      const fxContext = fxContextByDate.get(date)
+      if (!fxContext) {
+        throw new NotFoundException(`FX context not found for trend date ${date}`)
       }
 
       const snapshot = this.snapshotPortfolio(
@@ -564,13 +561,11 @@ export class PortfolioService {
 
   private buildHoldingTrendPoints(
     assetId: string,
-    transactions: HistoricalTransactionRecord[],
-    prices: HistoricalPriceRecord[],
+    timeline: TrendEvent[],
     accountCurrencyById: Map<string, string>,
     assetBaseCurrency: string,
-    fxContext: ValuationFxContext,
+    fxContextByDate: Map<string, ValuationFxContext>,
   ): PortfolioHoldingTrendResponseDto['points'] {
-    const timeline = this.buildTimelineEvents(transactions, prices)
     const openLotsByScope = new Map<string, OpenLot[]>()
     const latestPriceByAsset = new Map<string, number>()
     const points: PortfolioHoldingTrendResponseDto['points'] = []
@@ -585,6 +580,11 @@ export class PortfolioService {
         }
 
         this.applyTransactionEvent(openLotsByScope, latestPriceByAsset, event.transaction)
+      }
+
+      const fxContext = fxContextByDate.get(date)
+      if (!fxContext) {
+        throw new NotFoundException(`FX context not found for trend date ${date}`)
       }
 
       const snapshot = this.snapshotAsset(
@@ -811,6 +811,25 @@ export class PortfolioService {
     }
   }
 
+  private async buildFxContextsByDate(input: {
+    dates: string[]
+    portfolioBaseCurrency: string
+    sourceCurrencies: string[]
+  }): Promise<Map<string, ValuationFxContext>> {
+    const entries = await Promise.all(
+      input.dates.map(async (date) => [
+        date,
+        await this.buildFxContext({
+          portfolioBaseCurrency: input.portfolioBaseCurrency,
+          sourceCurrencies: input.sourceCurrencies,
+          asOf: new Date(`${date}T00:00:00.000Z`),
+        }),
+      ] as const),
+    )
+
+    return new Map(entries)
+  }
+
   private convertAmount(amount: number, sourceCurrency: string, fxContext: ValuationFxContext): number {
     const normalizedSourceCurrency = sourceCurrency.toUpperCase()
     if (normalizedSourceCurrency === fxContext.portfolioBaseCurrency) {
@@ -834,11 +853,6 @@ export class PortfolioService {
     }
 
     return APP_CURRENCIES.includes('USD') ? 'USD' : currencies[0] ?? 'USD'
-  }
-
-  private getLatestDateFromHistory(primaryDates: Date[], fallbackDates: Date[]): Date {
-    const allDates = [...primaryDates, ...fallbackDates]
-    return allDates.reduce<Date>((latest, current) => (current > latest ? current : latest), allDates[0])
   }
 
   private trimLeadingZeroPoints<T extends { investedCapital?: number; marketValue: number; investedAmount?: number }>(

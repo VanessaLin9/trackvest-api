@@ -346,6 +346,106 @@ describe('PortfolioService', () => {
     })
   })
 
+  it('uses point-in-time FX when building mixed-currency portfolio trend points', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        id: 'tx-twd-1',
+        accountId: 'account-twd',
+        assetId: 'asset-twd',
+        type: 'buy',
+        quantity: 10,
+        amount: 1000,
+        price: 100,
+        tradeTime: new Date('2026-04-01T09:00:00.000Z'),
+      },
+      {
+        id: 'tx-usd-1',
+        accountId: 'account-usd',
+        assetId: 'asset-usd',
+        type: 'buy',
+        quantity: 1,
+        amount: 200,
+        price: 200,
+        tradeTime: new Date('2026-04-01T09:30:00.000Z'),
+      },
+    ])
+    prisma.account.findMany.mockResolvedValue([
+      { id: 'account-twd', currency: 'TWD' },
+      { id: 'account-usd', currency: 'USD' },
+    ])
+    prisma.asset.findMany.mockResolvedValue([
+      { id: 'asset-twd', baseCurrency: 'TWD' },
+      { id: 'asset-usd', baseCurrency: 'USD' },
+    ])
+    prisma.price.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-twd',
+        price: 120,
+        asOf: new Date('2026-04-02T00:00:00.000Z'),
+      },
+      {
+        assetId: 'asset-twd',
+        price: 120,
+        asOf: new Date('2026-04-03T00:00:00.000Z'),
+      },
+    ])
+    fxRateService.getReferenceRate.mockImplementation(
+      async ({ base, quote, asOf }: { base: string; quote: string; asOf: Date }) => {
+        if (base === 'TWD' && quote === 'USD') {
+          const date = asOf.toISOString().slice(0, 10)
+          const rateByDate: Record<string, number> = {
+            '2026-04-01': 0.03,
+            '2026-04-02': 0.03,
+            '2026-04-03': 0.04,
+          }
+
+          return {
+            base,
+            quote,
+            rate: rateByDate[date],
+            date,
+            provider: 'frankfurter',
+          }
+        }
+
+        return {
+          base,
+          quote,
+          rate: 1,
+          date: asOf.toISOString().slice(0, 10),
+          provider: 'identity',
+        }
+      },
+    )
+
+    const result = await service.getTrend('user-1')
+
+    expect(result).toEqual({
+      points: [
+        {
+          label: '2026-04-01',
+          date: '2026-04-01',
+          investedCapital: 230,
+          marketValue: 230,
+        },
+        {
+          label: '2026-04-02',
+          date: '2026-04-02',
+          investedCapital: 230,
+          marketValue: 236,
+        },
+        {
+          label: '2026-04-03',
+          date: '2026-04-03',
+          investedCapital: 240,
+          marketValue: 248,
+        },
+      ],
+    })
+  })
+
   it('builds asset trend points and throws when the asset is not held by the user', async () => {
     const { service, prisma, ownershipService, fxRateService } = createHarness()
     ownershipService.validateUserExists.mockResolvedValue(undefined)
