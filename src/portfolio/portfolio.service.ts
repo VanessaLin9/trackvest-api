@@ -401,7 +401,6 @@ export class PortfolioService {
         symbol: string
         name: string
         type: AssetType
-        accountCurrency: string
         assetCurrency: string
         quantity: number
         investedAmount: number
@@ -411,7 +410,11 @@ export class PortfolioService {
     for (const position of positions) {
       const quantity = toNumber(position.quantity)
       const avgCost = toNumber(position.avgCost)
-      const investedAmount = quantity * avgCost
+      const convertedInvestedAmount = this.convertAmount(
+        quantity * avgCost,
+        position.account.currency,
+        fxContext,
+      )
       const existing = groupedHoldings.get(position.assetId)
 
       if (!existing) {
@@ -420,16 +423,15 @@ export class PortfolioService {
           symbol: position.asset.symbol,
           name: position.asset.name,
           type: position.asset.type,
-          accountCurrency: position.account.currency,
           assetCurrency: position.asset.baseCurrency,
           quantity,
-          investedAmount,
+          investedAmount: convertedInvestedAmount,
         })
         continue
       }
 
       existing.quantity += quantity
-      existing.investedAmount += investedAmount
+      existing.investedAmount += convertedInvestedAmount
     }
 
     const items = [...groupedHoldings.values()]
@@ -437,17 +439,12 @@ export class PortfolioService {
         const latestPriceRecord = latestPriceByAssetId.get(holding.assetId)
         const avgCost = holding.quantity > 0 ? holding.investedAmount / holding.quantity : 0
         const latestPrice = latestPriceRecord?.price ?? null
-        const sourceInvestedAmount = holding.investedAmount
-        const convertedInvestedAmount = this.convertAmount(
-          sourceInvestedAmount,
-          holding.accountCurrency,
-          fxContext,
-        )
+        const convertedInvestedAmount = holding.investedAmount
         const sourceMarketValue =
-          latestPrice == null ? sourceInvestedAmount : holding.quantity * latestPrice
+          latestPrice == null ? convertedInvestedAmount : holding.quantity * latestPrice
         const convertedMarketValue = this.convertAmount(
           sourceMarketValue,
-          holding.assetCurrency,
+          latestPrice == null ? fxContext.portfolioBaseCurrency : holding.assetCurrency,
           fxContext,
         )
         const pnl = convertedMarketValue - convertedInvestedAmount
@@ -458,7 +455,7 @@ export class PortfolioService {
           name: holding.name,
           type: holding.type,
           quantity: roundTo(holding.quantity, 8),
-          avgCost: roundTo(this.convertAmount(avgCost, holding.accountCurrency, fxContext), 8),
+          avgCost: roundTo(avgCost, 8),
           latestPrice: latestPrice == null ? null : roundTo(latestPrice, 8),
           latestPriceCurrency: latestPrice == null ? null : holding.assetCurrency,
           assetBaseCurrency: holding.assetCurrency,
