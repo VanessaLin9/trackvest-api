@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { AssetType, TxType } from '@prisma/client'
+import { APP_CURRENCIES } from '../common/constants/currency.constants'
 import { OwnershipService } from '../common/services/ownership.service'
 import { roundTo, toNumber } from '../common/utils/number.util'
+import { FxRateService } from '../fx/fx-rate.service'
 import { PrismaService } from '../prisma.service'
 import { PortfolioHoldingsResponseDto } from './dto/portfolio-holdings.response.dto'
 import { PortfolioSummaryResponseDto } from './dto/portfolio-summary.response.dto'
@@ -42,6 +44,11 @@ type HistoricalPriceRecord = {
   asOf: Date
 }
 
+type ValuationFxContext = {
+  portfolioBaseCurrency: string
+  rates: Map<string, number>
+}
+
 type OpenLot = {
   remainingQuantity: number
   unitCost: number
@@ -66,6 +73,7 @@ export class PortfolioService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ownershipService: OwnershipService,
+    private readonly fxRateService: FxRateService,
   ) {}
 
   async getSummary(userId: string): Promise<PortfolioSummaryResponseDto> {
@@ -148,10 +156,51 @@ export class PortfolioService {
     }))
 
     const assetIds = [...new Set(normalizedTransactions.map((transaction) => transaction.assetId))]
-    const prices = await this.loadHistoricalPrices(assetIds)
+    const [prices, accounts, assets] = await Promise.all([
+      this.loadHistoricalPrices(assetIds),
+      this.prisma.account.findMany({
+        where: {
+          userId,
+          id: { in: [...new Set(normalizedTransactions.map((transaction) => transaction.accountId))] },
+        },
+        select: {
+          id: true,
+          currency: true,
+        },
+      }),
+      this.prisma.asset.findMany({
+        where: {
+          id: { in: assetIds },
+        },
+        select: {
+          id: true,
+          baseCurrency: true,
+        },
+      }),
+    ])
+    const portfolioBaseCurrency = this.getPortfolioBaseCurrency(accounts.map((account) => account.currency))
+    const fxContext = await this.buildFxContext({
+      portfolioBaseCurrency,
+      sourceCurrencies: [
+        ...accounts.map((account) => account.currency),
+        ...assets.map((asset) => asset.baseCurrency),
+      ],
+      asOf: this.getLatestDateFromHistory(
+        normalizedTransactions.map((transaction) => transaction.tradeTime),
+        prices.map((price) => price.asOf),
+      ),
+    })
+    const accountCurrencyById = new Map(accounts.map((account) => [account.id, account.currency]))
+    const assetCurrencyById = new Map(assets.map((asset) => [asset.id, asset.baseCurrency]))
 
     return {
-      points: this.buildPortfolioTrendPoints(normalizedTransactions, prices),
+      points: this.buildPortfolioTrendPoints(
+        normalizedTransactions,
+        prices,
+        accountCurrencyById,
+        assetCurrencyById,
+        fxContext,
+      ),
     }
   }
 
@@ -196,11 +245,50 @@ export class PortfolioService {
       tradeTime: transaction.tradeTime,
     }))
 
-    const prices = await this.loadHistoricalPrices([assetId])
+    const [prices, accounts, asset] = await Promise.all([
+      this.loadHistoricalPrices([assetId]),
+      this.prisma.account.findMany({
+        where: {
+          userId,
+          id: { in: [...new Set(normalizedTransactions.map((transaction) => transaction.accountId))] },
+        },
+        select: {
+          id: true,
+          currency: true,
+        },
+      }),
+      this.prisma.asset.findUnique({
+        where: { id: assetId },
+        select: {
+          id: true,
+          baseCurrency: true,
+        },
+      }),
+    ])
+    const portfolioBaseCurrency = this.getPortfolioBaseCurrency(accounts.map((account) => account.currency))
+    const fxContext = await this.buildFxContext({
+      portfolioBaseCurrency,
+      sourceCurrencies: [
+        ...accounts.map((account) => account.currency),
+        asset?.baseCurrency ?? portfolioBaseCurrency,
+      ],
+      asOf: this.getLatestDateFromHistory(
+        normalizedTransactions.map((transaction) => transaction.tradeTime),
+        prices.map((price) => price.asOf),
+      ),
+    })
+    const accountCurrencyById = new Map(accounts.map((account) => [account.id, account.currency]))
 
     return {
       assetId,
-      points: this.buildHoldingTrendPoints(assetId, normalizedTransactions, prices),
+      points: this.buildHoldingTrendPoints(
+        assetId,
+        normalizedTransactions,
+        prices,
+        accountCurrencyById,
+        asset?.baseCurrency ?? portfolioBaseCurrency,
+        fxContext,
+      ),
     }
   }
 
@@ -244,6 +332,9 @@ export class PortfolioService {
     }
 
     const assetIds = [...new Set(positions.map((position) => position.assetId))]
+    const portfolioBaseCurrency = this.getPortfolioBaseCurrency(
+      positions.map((position) => position.account.currency),
+    )
     const [prices, activities] = await Promise.all([
       this.prisma.price.findMany({
         where: {
@@ -283,6 +374,25 @@ export class PortfolioService {
       }
     }
 
+    const latestAsOf = [...latestPriceByAssetId.values()].reduce<Date | null>(
+      (currentLatest, record) => {
+        if (!currentLatest || record.asOf > currentLatest) {
+          return record.asOf
+        }
+        return currentLatest
+      },
+      null,
+    )
+    const valuationAsOf = latestAsOf ?? new Date()
+    const fxContext = await this.buildFxContext({
+      portfolioBaseCurrency,
+      sourceCurrencies: [
+        ...positions.map((position) => position.account.currency),
+        ...positions.map((position) => position.asset.baseCurrency),
+      ],
+      asOf: valuationAsOf,
+    })
+
     const lastActivityByAssetId = new Map<string, HoldingActivityRecord>()
     for (const activity of activities) {
       if (activity.assetId && !lastActivityByAssetId.has(activity.assetId)) {
@@ -297,6 +407,8 @@ export class PortfolioService {
         symbol: string
         name: string
         type: AssetType
+        accountCurrency: string
+        assetCurrency: string
         quantity: number
         investedAmount: number
       }
@@ -314,6 +426,8 @@ export class PortfolioService {
           symbol: position.asset.symbol,
           name: position.asset.name,
           type: position.asset.type,
+          accountCurrency: position.account.currency,
+          assetCurrency: position.asset.baseCurrency,
           quantity,
           investedAmount,
         })
@@ -329,9 +443,20 @@ export class PortfolioService {
         const latestPriceRecord = latestPriceByAssetId.get(holding.assetId)
         const avgCost = holding.quantity > 0 ? holding.investedAmount / holding.quantity : 0
         const latestPrice = latestPriceRecord?.price ?? null
-        const marketValue =
-          latestPrice == null ? holding.investedAmount : holding.quantity * latestPrice
-        const pnl = marketValue - holding.investedAmount
+        const sourceInvestedAmount = holding.investedAmount
+        const convertedInvestedAmount = this.convertAmount(
+          sourceInvestedAmount,
+          holding.accountCurrency,
+          fxContext,
+        )
+        const sourceMarketValue =
+          latestPrice == null ? sourceInvestedAmount : holding.quantity * latestPrice
+        const convertedMarketValue = this.convertAmount(
+          sourceMarketValue,
+          holding.assetCurrency,
+          fxContext,
+        )
+        const pnl = convertedMarketValue - convertedInvestedAmount
 
         return {
           assetId: holding.assetId,
@@ -339,12 +464,12 @@ export class PortfolioService {
           name: holding.name,
           type: holding.type,
           quantity: roundTo(holding.quantity, 8),
-          avgCost: roundTo(avgCost, 8),
+          avgCost: roundTo(this.convertAmount(avgCost, holding.accountCurrency, fxContext), 8),
           latestPrice: latestPrice == null ? null : roundTo(latestPrice, 8),
-          investedAmount: roundTo(holding.investedAmount, 8),
-          marketValue: roundTo(marketValue, 8),
+          investedAmount: roundTo(convertedInvestedAmount, 8),
+          marketValue: roundTo(convertedMarketValue, 8),
           pnl: roundTo(pnl, 8),
-          returnRate: holding.investedAmount > 0 ? roundTo(pnl / holding.investedAmount, 8) : 0,
+          returnRate: convertedInvestedAmount > 0 ? roundTo(pnl / convertedInvestedAmount, 8) : 0,
           weight: 0,
           lastActivitySummary: this.formatLastActivitySummary(
             lastActivityByAssetId.get(holding.assetId) ?? null,
@@ -359,19 +484,9 @@ export class PortfolioService {
       weight: totalMarketValue > 0 ? roundTo(item.marketValue / totalMarketValue, 8) : 0,
     }))
 
-    const latestAsOf = [...latestPriceByAssetId.values()].reduce<Date | null>(
-      (currentLatest, record) => {
-        if (!currentLatest || record.asOf > currentLatest) {
-          return record.asOf
-        }
-        return currentLatest
-      },
-      null,
-    )
-
     return {
-      asOf: (latestAsOf ?? new Date()).toISOString(),
-      baseCurrency: this.getSingleCurrency(positions.map((position) => position.account.currency)),
+      asOf: valuationAsOf.toISOString(),
+      baseCurrency: portfolioBaseCurrency,
       items: weightedItems,
     }
   }
@@ -406,6 +521,9 @@ export class PortfolioService {
   private buildPortfolioTrendPoints(
     transactions: HistoricalTransactionRecord[],
     prices: HistoricalPriceRecord[],
+    accountCurrencyById: Map<string, string>,
+    assetCurrencyById: Map<string, string>,
+    fxContext: ValuationFxContext,
   ): PortfolioTrendResponseDto['points'] {
     const timeline = this.buildTimelineEvents(transactions, prices)
     const openLotsByScope = new Map<string, OpenLot[]>()
@@ -424,7 +542,13 @@ export class PortfolioService {
         this.applyTransactionEvent(openLotsByScope, latestPriceByAsset, event.transaction)
       }
 
-      const snapshot = this.snapshotPortfolio(openLotsByScope, latestPriceByAsset)
+      const snapshot = this.snapshotPortfolio(
+        openLotsByScope,
+        latestPriceByAsset,
+        accountCurrencyById,
+        assetCurrencyById,
+        fxContext,
+      )
       points.push({
         label: date,
         date,
@@ -440,6 +564,9 @@ export class PortfolioService {
     assetId: string,
     transactions: HistoricalTransactionRecord[],
     prices: HistoricalPriceRecord[],
+    accountCurrencyById: Map<string, string>,
+    assetBaseCurrency: string,
+    fxContext: ValuationFxContext,
   ): PortfolioHoldingTrendResponseDto['points'] {
     const timeline = this.buildTimelineEvents(transactions, prices)
     const openLotsByScope = new Map<string, OpenLot[]>()
@@ -458,7 +585,14 @@ export class PortfolioService {
         this.applyTransactionEvent(openLotsByScope, latestPriceByAsset, event.transaction)
       }
 
-      const snapshot = this.snapshotAsset(assetId, openLotsByScope, latestPriceByAsset)
+      const snapshot = this.snapshotAsset(
+        assetId,
+        openLotsByScope,
+        latestPriceByAsset,
+        accountCurrencyById,
+        assetBaseCurrency,
+        fxContext,
+      )
       points.push({
         label: date,
         date,
@@ -562,15 +696,19 @@ export class PortfolioService {
   private snapshotPortfolio(
     openLotsByScope: Map<string, OpenLot[]>,
     latestPriceByAsset: Map<string, number>,
+    accountCurrencyById: Map<string, string>,
+    assetCurrencyById: Map<string, string>,
+    fxContext: ValuationFxContext,
   ) {
     const holdingsByAsset = new Map<string, { quantity: number; investedAmount: number }>()
 
     for (const [scopeKey, lots] of openLotsByScope.entries()) {
-      const [, assetId] = scopeKey.split(':')
+      const [accountId, assetId] = scopeKey.split(':')
       const holding = holdingsByAsset.get(assetId) ?? {
         quantity: 0,
         investedAmount: 0,
       }
+      const accountCurrency = accountCurrencyById.get(accountId) ?? fxContext.portfolioBaseCurrency
 
       for (const lot of lots) {
         if (lot.remainingQuantity <= 1e-9) {
@@ -578,7 +716,11 @@ export class PortfolioService {
         }
 
         holding.quantity += lot.remainingQuantity
-        holding.investedAmount += lot.remainingQuantity * lot.unitCost
+        holding.investedAmount += this.convertAmount(
+          lot.remainingQuantity * lot.unitCost,
+          accountCurrency,
+          fxContext,
+        )
       }
 
       holdingsByAsset.set(assetId, holding)
@@ -590,7 +732,10 @@ export class PortfolioService {
     for (const [assetId, holding] of holdingsByAsset.entries()) {
       investedCapital += holding.investedAmount
       const latestPrice = latestPriceByAsset.get(assetId)
-      marketValue += latestPrice == null ? holding.investedAmount : holding.quantity * latestPrice
+      const assetCurrency = assetCurrencyById.get(assetId) ?? fxContext.portfolioBaseCurrency
+      marketValue += latestPrice == null
+        ? holding.investedAmount
+        : this.convertAmount(holding.quantity * latestPrice, assetCurrency, fxContext)
     }
 
     return { investedCapital, marketValue }
@@ -600,15 +745,19 @@ export class PortfolioService {
     assetId: string,
     openLotsByScope: Map<string, OpenLot[]>,
     latestPriceByAsset: Map<string, number>,
+    accountCurrencyById: Map<string, string>,
+    assetBaseCurrency: string,
+    fxContext: ValuationFxContext,
   ) {
     let quantity = 0
     let investedAmount = 0
 
     for (const [scopeKey, lots] of openLotsByScope.entries()) {
-      const [, scopeAssetId] = scopeKey.split(':')
+      const [accountId, scopeAssetId] = scopeKey.split(':')
       if (scopeAssetId !== assetId) {
         continue
       }
+      const accountCurrency = accountCurrencyById.get(accountId) ?? fxContext.portfolioBaseCurrency
 
       for (const lot of lots) {
         if (lot.remainingQuantity <= 1e-9) {
@@ -616,14 +765,78 @@ export class PortfolioService {
         }
 
         quantity += lot.remainingQuantity
-        investedAmount += lot.remainingQuantity * lot.unitCost
+        investedAmount += this.convertAmount(
+          lot.remainingQuantity * lot.unitCost,
+          accountCurrency,
+          fxContext,
+        )
       }
     }
 
     const latestPrice = latestPriceByAsset.get(assetId)
-    const marketValue = latestPrice == null ? investedAmount : quantity * latestPrice
+    const marketValue = latestPrice == null
+      ? investedAmount
+      : this.convertAmount(quantity * latestPrice, assetBaseCurrency, fxContext)
 
     return { investedAmount, marketValue }
+  }
+
+  private async buildFxContext(input: {
+    portfolioBaseCurrency: string
+    sourceCurrencies: string[]
+    asOf: Date
+  }): Promise<ValuationFxContext> {
+    const portfolioBaseCurrency = input.portfolioBaseCurrency.toUpperCase()
+    const sourceCurrencies = [...new Set(input.sourceCurrencies.map((currency) => currency.toUpperCase()))]
+    const rates = new Map<string, number>([[portfolioBaseCurrency, 1]])
+
+    for (const currency of sourceCurrencies) {
+      if (currency === portfolioBaseCurrency) {
+        continue
+      }
+
+      const fxRate = await this.fxRateService.getReferenceRate({
+        base: currency,
+        quote: portfolioBaseCurrency,
+        asOf: input.asOf,
+      })
+      rates.set(currency, fxRate.rate)
+    }
+
+    return {
+      portfolioBaseCurrency,
+      rates,
+    }
+  }
+
+  private convertAmount(amount: number, sourceCurrency: string, fxContext: ValuationFxContext): number {
+    const normalizedSourceCurrency = sourceCurrency.toUpperCase()
+    if (normalizedSourceCurrency === fxContext.portfolioBaseCurrency) {
+      return amount
+    }
+
+    const rate = fxContext.rates.get(normalizedSourceCurrency)
+    if (rate == null) {
+      throw new NotFoundException(
+        `FX rate not found for ${normalizedSourceCurrency}/${fxContext.portfolioBaseCurrency}`,
+      )
+    }
+
+    return amount * rate
+  }
+
+  private getPortfolioBaseCurrency(currencies: string[]): string {
+    const singleCurrency = this.getSingleCurrency(currencies)
+    if (singleCurrency && singleCurrency !== 'MIXED') {
+      return singleCurrency
+    }
+
+    return APP_CURRENCIES.includes('USD') ? 'USD' : currencies[0] ?? 'USD'
+  }
+
+  private getLatestDateFromHistory(primaryDates: Date[], fallbackDates: Date[]): Date {
+    const allDates = [...primaryDates, ...fallbackDates]
+    return allDates.reduce<Date>((latest, current) => (current > latest ? current : latest), allDates[0])
   }
 
   private trimLeadingZeroPoints<T extends { investedCapital?: number; marketValue: number; investedAmount?: number }>(
