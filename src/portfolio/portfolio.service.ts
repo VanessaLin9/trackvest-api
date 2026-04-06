@@ -466,6 +466,8 @@ export class PortfolioService {
           quantity: roundTo(holding.quantity, 8),
           avgCost: roundTo(this.convertAmount(avgCost, holding.accountCurrency, fxContext), 8),
           latestPrice: latestPrice == null ? null : roundTo(latestPrice, 8),
+          latestPriceCurrency: latestPrice == null ? null : holding.assetCurrency,
+          assetBaseCurrency: holding.assetCurrency,
           investedAmount: roundTo(convertedInvestedAmount, 8),
           marketValue: roundTo(convertedMarketValue, 8),
           pnl: roundTo(pnl, 8),

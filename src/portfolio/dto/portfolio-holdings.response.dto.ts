@@ -23,6 +23,12 @@ export class PortfolioHoldingItemResponseDto {
   @ApiProperty({ example: 118.2, nullable: true })
   latestPrice!: number | null
 
+  @ApiProperty({ example: 'USD', nullable: true })
+  latestPriceCurrency!: string | null
+
+  @ApiProperty({ example: 'USD' })
+  assetBaseCurrency!: string
+
   @ApiProperty({ example: 1279.375 })
   investedAmount!: number
 
