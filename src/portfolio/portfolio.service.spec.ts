@@ -437,6 +437,52 @@ describe('PortfolioService', () => {
     })
   })
 
+  it('uses same-day price snapshots as end-of-day values in portfolio trend points', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        id: 'tx-1',
+        accountId: 'account-1',
+        assetId: 'asset-1',
+        type: 'buy',
+        quantity: 10,
+        amount: 1000,
+        price: 100,
+        tradeTime: new Date('2026-04-01T09:00:00.000Z'),
+      },
+    ])
+    prisma.account.findMany.mockResolvedValue([{ id: 'account-1', currency: 'USD' }])
+    prisma.asset.findMany.mockResolvedValue([{ id: 'asset-1', baseCurrency: 'USD' }])
+    prisma.price.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        price: 110,
+        asOf: new Date('2026-04-01T00:00:00.000Z'),
+      },
+    ])
+    fxRateService.getReferenceRate.mockResolvedValue({
+      base: 'USD',
+      quote: 'USD',
+      rate: 1,
+      date: '2026-04-01',
+      provider: 'identity',
+    })
+
+    const result = await service.getTrend('user-1')
+
+    expect(result).toEqual({
+      points: [
+        {
+          label: '2026-04-01',
+          date: '2026-04-01',
+          investedCapital: 1000,
+          marketValue: 1100,
+        },
+      ],
+    })
+  })
+
   it('uses point-in-time FX when building mixed-currency portfolio trend points', async () => {
     const { service, prisma, ownershipService, fxRateService } = createHarness()
     ownershipService.validateUserExists.mockResolvedValue(undefined)
@@ -612,6 +658,56 @@ describe('PortfolioService', () => {
           date: '2026-04-03',
           investedAmount: 1050,
           marketValue: 1200,
+        },
+      ],
+    })
+  })
+
+  it('uses same-day price snapshots as end-of-day values in holding trend points', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        id: 'tx-1',
+        accountId: 'account-1',
+        assetId: 'asset-1',
+        type: 'buy',
+        quantity: 5,
+        amount: 500,
+        price: 100,
+        tradeTime: new Date('2026-04-01T09:00:00.000Z'),
+      },
+    ])
+    prisma.account.findMany.mockResolvedValue([{ id: 'account-1', currency: 'USD' }])
+    prisma.asset.findUnique.mockResolvedValue({
+      id: 'asset-1',
+      baseCurrency: 'USD',
+    })
+    prisma.price.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        price: 110,
+        asOf: new Date('2026-04-01T00:00:00.000Z'),
+      },
+    ])
+    fxRateService.getReferenceRate.mockResolvedValue({
+      base: 'USD',
+      quote: 'USD',
+      rate: 1,
+      date: '2026-04-01',
+      provider: 'identity',
+    })
+
+    const result = await service.getHoldingTrend('user-1', 'asset-1')
+
+    expect(result).toEqual({
+      assetId: 'asset-1',
+      points: [
+        {
+          label: '2026-04-01',
+          date: '2026-04-01',
+          investedAmount: 500,
+          marketValue: 550,
         },
       ],
     })

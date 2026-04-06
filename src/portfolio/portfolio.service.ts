@@ -621,19 +621,29 @@ export class PortfolioService {
         price,
       })),
     ].sort((left, right) => {
+      const dateDiff = left.date.localeCompare(right.date)
+      if (dateDiff !== 0) {
+        return dateDiff
+      }
+
+      if (left.kind !== right.kind) {
+        return left.kind === 'transaction' ? -1 : 1
+      }
+
       const timestampDiff = left.timestamp.getTime() - right.timestamp.getTime()
       if (timestampDiff !== 0) {
         return timestampDiff
       }
 
-      if (left.kind === right.kind) {
-        if (left.kind === 'transaction' && right.kind === 'transaction') {
-          return left.transaction.id.localeCompare(right.transaction.id)
-        }
-        return 0
+      if (left.kind === 'transaction' && right.kind === 'transaction') {
+        return left.transaction.id.localeCompare(right.transaction.id)
       }
 
-      return left.kind === 'transaction' ? -1 : 1
+      if (left.kind === 'price' && right.kind === 'price') {
+        return left.price.assetId.localeCompare(right.price.assetId)
+      }
+
+      return 0
     })
   }
 
