@@ -22,7 +22,7 @@ export class PortfolioController {
     @CurrentUser() userId: string,
     @Query() query: GetPortfolioDisplayCurrencyDto,
   ): Promise<PortfolioSummaryResponseDto> {
-    return this.portfolioService.getSummary(userId, query.displayCurrency)
+    return this.portfolioService.getSummary(userId, query)
   }
 
   @Get('holdings')
@@ -31,7 +31,7 @@ export class PortfolioController {
     @CurrentUser() userId: string,
     @Query() query: GetPortfolioDisplayCurrencyDto,
   ): Promise<PortfolioHoldingsResponseDto> {
-    return this.portfolioService.getHoldings(userId, query.displayCurrency)
+    return this.portfolioService.getHoldings(userId, query)
   }
 
   @Get('trend')
@@ -40,7 +40,7 @@ export class PortfolioController {
     @CurrentUser() userId: string,
     @Query() query: GetPortfolioDisplayCurrencyDto,
   ): Promise<PortfolioTrendResponseDto> {
-    return this.portfolioService.getTrend(userId, query.displayCurrency)
+    return this.portfolioService.getTrend(userId, query)
   }
 
   @Get('holdings/:assetId/trend')
@@ -50,6 +50,6 @@ export class PortfolioController {
     @Param('assetId') assetId: string,
     @Query() query: GetPortfolioDisplayCurrencyDto,
   ): Promise<PortfolioHoldingTrendResponseDto> {
-    return this.portfolioService.getHoldingTrend(userId, assetId, query.displayCurrency)
+    return this.portfolioService.getHoldingTrend(userId, assetId, query)
   }
 }

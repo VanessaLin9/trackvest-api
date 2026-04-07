@@ -18,6 +18,7 @@ describe('PortfolioController', () => {
     const { controller, portfolioService } = createHarness()
     portfolioService.getSummary.mockResolvedValue({
       asOf: '2026-04-05T00:00:00.000Z',
+      displayCurrencyMode: 'preferred-base',
       requestedDisplayCurrency: 'TWD',
       effectiveDisplayCurrency: 'TWD',
       baseCurrency: 'TWD',
@@ -28,11 +29,12 @@ describe('PortfolioController', () => {
       holdingsCount: 2,
     })
 
-    const result = await controller.getSummary('user-1', { displayCurrency: 'TWD' })
+    const result = await controller.getSummary('user-1', { preferredBaseCurrency: 'TWD' })
 
-    expect(portfolioService.getSummary).toHaveBeenCalledWith('user-1', 'TWD')
+    expect(portfolioService.getSummary).toHaveBeenCalledWith('user-1', { preferredBaseCurrency: 'TWD' })
     expect(result).toEqual({
       asOf: '2026-04-05T00:00:00.000Z',
+      displayCurrencyMode: 'preferred-base',
       requestedDisplayCurrency: 'TWD',
       effectiveDisplayCurrency: 'TWD',
       baseCurrency: 'TWD',
@@ -47,6 +49,7 @@ describe('PortfolioController', () => {
   it('returns portfolio holdings from the service', async () => {
     const { controller, portfolioService } = createHarness()
     portfolioService.getHoldings.mockResolvedValue({
+      displayCurrencyMode: 'preferred-base',
       requestedDisplayCurrency: 'TWD',
       effectiveDisplayCurrency: 'TWD',
       items: [
@@ -77,10 +80,11 @@ describe('PortfolioController', () => {
       ],
     })
 
-    const result = await controller.getHoldings('user-1', { displayCurrency: 'TWD' })
+    const result = await controller.getHoldings('user-1', { preferredBaseCurrency: 'TWD' })
 
-    expect(portfolioService.getHoldings).toHaveBeenCalledWith('user-1', 'TWD')
+    expect(portfolioService.getHoldings).toHaveBeenCalledWith('user-1', { preferredBaseCurrency: 'TWD' })
     expect(result).toEqual({
+      displayCurrencyMode: 'preferred-base',
       requestedDisplayCurrency: 'TWD',
       effectiveDisplayCurrency: 'TWD',
       items: [
@@ -115,6 +119,7 @@ describe('PortfolioController', () => {
   it('returns portfolio trend from the service', async () => {
     const { controller, portfolioService } = createHarness()
     portfolioService.getTrend.mockResolvedValue({
+      displayCurrencyMode: 'preferred-base',
       requestedDisplayCurrency: 'TWD',
       effectiveDisplayCurrency: 'TWD',
       points: [
@@ -127,10 +132,11 @@ describe('PortfolioController', () => {
       ],
     })
 
-    const result = await controller.getTrend('user-1', { displayCurrency: 'TWD' })
+    const result = await controller.getTrend('user-1', { preferredBaseCurrency: 'TWD' })
 
-    expect(portfolioService.getTrend).toHaveBeenCalledWith('user-1', 'TWD')
+    expect(portfolioService.getTrend).toHaveBeenCalledWith('user-1', { preferredBaseCurrency: 'TWD' })
     expect(result).toEqual({
+      displayCurrencyMode: 'preferred-base',
       requestedDisplayCurrency: 'TWD',
       effectiveDisplayCurrency: 'TWD',
       points: [
@@ -148,6 +154,7 @@ describe('PortfolioController', () => {
     const { controller, portfolioService } = createHarness()
     portfolioService.getHoldingTrend.mockResolvedValue({
       assetId: 'asset-1',
+      displayCurrencyMode: 'preferred-base',
       requestedDisplayCurrency: 'TWD',
       effectiveDisplayCurrency: 'TWD',
       points: [
@@ -160,11 +167,12 @@ describe('PortfolioController', () => {
       ],
     })
 
-    const result = await controller.getHoldingTrend('user-1', 'asset-1', { displayCurrency: 'TWD' })
+    const result = await controller.getHoldingTrend('user-1', 'asset-1', { preferredBaseCurrency: 'TWD' })
 
-    expect(portfolioService.getHoldingTrend).toHaveBeenCalledWith('user-1', 'asset-1', 'TWD')
+    expect(portfolioService.getHoldingTrend).toHaveBeenCalledWith('user-1', 'asset-1', { preferredBaseCurrency: 'TWD' })
     expect(result).toEqual({
       assetId: 'asset-1',
+      displayCurrencyMode: 'preferred-base',
       requestedDisplayCurrency: 'TWD',
       effectiveDisplayCurrency: 'TWD',
       points: [

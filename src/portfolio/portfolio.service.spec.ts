@@ -47,6 +47,7 @@ describe('PortfolioService', () => {
     expect(prisma.price.findMany).not.toHaveBeenCalled()
     expect(prisma.transaction.findMany).not.toHaveBeenCalled()
     expect(fxRateService.getReferenceRate).not.toHaveBeenCalled()
+    expect(result.displayCurrencyMode).toBe('portfolio-default')
     expect(result.requestedDisplayCurrency).toBeNull()
     expect(result.effectiveDisplayCurrency).toBeNull()
     expect(result.baseCurrency).toBeNull()
@@ -140,6 +141,7 @@ describe('PortfolioService', () => {
 
     const result = await service.getHoldings('user-1')
 
+    expect(result.displayCurrencyMode).toBe('portfolio-default')
     expect(result.requestedDisplayCurrency).toBeNull()
     expect(result.effectiveDisplayCurrency).toBe('USD')
     expect(prisma.position.findMany).toHaveBeenCalledWith({
@@ -259,6 +261,7 @@ describe('PortfolioService', () => {
 
     const result = await service.getSummary('user-1')
 
+    expect(result.displayCurrencyMode).toBe('portfolio-default')
     expect(result.requestedDisplayCurrency).toBeNull()
     expect(result.effectiveDisplayCurrency).toBe('USD')
     expect(result.baseCurrency).toBe('USD')
@@ -332,6 +335,7 @@ describe('PortfolioService', () => {
 
     const result = await service.getHoldings('user-1')
 
+    expect(result.displayCurrencyMode).toBe('portfolio-default')
     expect(result.requestedDisplayCurrency).toBeNull()
     expect(result.effectiveDisplayCurrency).toBe('USD')
     expect(result.items).toEqual([
@@ -416,6 +420,7 @@ describe('PortfolioService', () => {
     const result = await service.getTrend('user-1')
 
     expect(result).toEqual({
+      displayCurrencyMode: 'portfolio-default',
       requestedDisplayCurrency: null,
       effectiveDisplayCurrency: 'USD',
       points: [
@@ -482,6 +487,7 @@ describe('PortfolioService', () => {
     const result = await service.getTrend('user-1')
 
     expect(result).toEqual({
+      displayCurrencyMode: 'portfolio-default',
       requestedDisplayCurrency: null,
       effectiveDisplayCurrency: 'USD',
       points: [
@@ -572,6 +578,7 @@ describe('PortfolioService', () => {
     const result = await service.getTrend('user-1')
 
     expect(result).toEqual({
+      displayCurrencyMode: 'portfolio-default',
       requestedDisplayCurrency: null,
       effectiveDisplayCurrency: 'USD',
       points: [
@@ -654,6 +661,7 @@ describe('PortfolioService', () => {
 
     expect(result).toEqual({
       assetId: 'asset-1',
+      displayCurrencyMode: 'portfolio-default',
       requestedDisplayCurrency: null,
       effectiveDisplayCurrency: 'USD',
       points: [
@@ -718,6 +726,7 @@ describe('PortfolioService', () => {
 
     expect(result).toEqual({
       assetId: 'asset-1',
+      displayCurrencyMode: 'portfolio-default',
       requestedDisplayCurrency: null,
       effectiveDisplayCurrency: 'USD',
       points: [
@@ -787,6 +796,7 @@ describe('PortfolioService', () => {
 
     const result = await service.getHoldings('user-1')
 
+    expect(result.displayCurrencyMode).toBe('portfolio-default')
     expect(result.requestedDisplayCurrency).toBeNull()
     expect(result.effectiveDisplayCurrency).toBe('USD')
     expect(result.items).toEqual([
@@ -886,11 +896,12 @@ describe('PortfolioService', () => {
       }
     })
 
-    const summary = await service.getSummary('user-1', 'twd')
-    const holdings = await service.getHoldings('user-1', 'twd')
+    const summary = await service.getSummary('user-1', { preferredBaseCurrency: 'twd' })
+    const holdings = await service.getHoldings('user-1', { preferredBaseCurrency: 'twd' })
 
     expect(summary).toEqual({
       asOf: '2026-04-05T00:00:00.000Z',
+      displayCurrencyMode: 'preferred-base',
       requestedDisplayCurrency: 'TWD',
       effectiveDisplayCurrency: 'TWD',
       baseCurrency: 'TWD',
@@ -901,6 +912,7 @@ describe('PortfolioService', () => {
       holdingsCount: 1,
     })
     expect(holdings).toEqual({
+      displayCurrencyMode: 'preferred-base',
       requestedDisplayCurrency: 'TWD',
       effectiveDisplayCurrency: 'TWD',
       items: [
@@ -976,9 +988,10 @@ describe('PortfolioService', () => {
       }
     })
 
-    const result = await service.getTrend('user-1', 'TWD')
+    const result = await service.getTrend('user-1', { preferredBaseCurrency: 'TWD' })
 
     expect(result).toEqual({
+      displayCurrencyMode: 'preferred-base',
       requestedDisplayCurrency: 'TWD',
       effectiveDisplayCurrency: 'TWD',
       points: [

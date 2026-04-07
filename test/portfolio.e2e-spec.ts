@@ -219,6 +219,7 @@ describe('Portfolio overview (e2e)', () => {
 
     expect(summaryResponse.body).toEqual({
       asOf: '2026-04-05T00:00:00.000Z',
+      displayCurrencyMode: 'portfolio-default',
       requestedDisplayCurrency: null,
       effectiveDisplayCurrency: 'USD',
       baseCurrency: 'USD',
@@ -235,6 +236,7 @@ describe('Portfolio overview (e2e)', () => {
       .expect(200)
 
     expect(holdingsResponse.body).toEqual({
+      displayCurrencyMode: 'portfolio-default',
       requestedDisplayCurrency: null,
       effectiveDisplayCurrency: 'USD',
       items: [
@@ -302,12 +304,13 @@ describe('Portfolio overview (e2e)', () => {
 
     const summaryResponse = await request(app.getHttpServer())
       .get('/portfolio/summary')
-      .query({ displayCurrency: 'TWD' })
+      .query({ preferredBaseCurrency: 'TWD' })
       .set(auth(user.id))
       .expect(200)
 
     expect(summaryResponse.body).toEqual({
       asOf: '2026-04-05T00:00:00.000Z',
+      displayCurrencyMode: 'preferred-base',
       requestedDisplayCurrency: 'TWD',
       effectiveDisplayCurrency: 'TWD',
       baseCurrency: 'TWD',
@@ -320,11 +323,12 @@ describe('Portfolio overview (e2e)', () => {
 
     const holdingsResponse = await request(app.getHttpServer())
       .get('/portfolio/holdings')
-      .query({ displayCurrency: 'TWD' })
+      .query({ preferredBaseCurrency: 'TWD' })
       .set(auth(user.id))
       .expect(200)
 
     expect(holdingsResponse.body).toEqual({
+      displayCurrencyMode: 'preferred-base',
       requestedDisplayCurrency: 'TWD',
       effectiveDisplayCurrency: 'TWD',
       items: [

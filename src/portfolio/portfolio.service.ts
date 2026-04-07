@@ -6,6 +6,8 @@ import { OwnershipService } from '../common/services/ownership.service'
 import { roundTo, toNumber } from '../common/utils/number.util'
 import { FxRateService } from '../fx/fx-rate.service'
 import { PrismaService } from '../prisma.service'
+import { GetPortfolioDisplayCurrencyDto } from './dto/get-portfolio-display-currency.dto'
+import { PortfolioDisplayCurrencyMode } from './dto/portfolio-display-currency.types'
 import { PortfolioHoldingsResponseDto } from './dto/portfolio-holdings.response.dto'
 import { PortfolioSummaryResponseDto } from './dto/portfolio-summary.response.dto'
 import {
@@ -24,10 +26,17 @@ type HoldingOverviewItem = PortfolioHoldingsResponseDto['items'][number]
 
 type HoldingsSnapshot = {
   asOf: string
+  displayCurrencyMode: PortfolioDisplayCurrencyMode
   requestedDisplayCurrency: string | null
   effectiveDisplayCurrency: string | null
   baseCurrency: string | null
   items: HoldingOverviewItem[]
+}
+
+type PortfolioDisplayCurrencyContext = {
+  displayCurrencyMode: PortfolioDisplayCurrencyMode
+  requestedDisplayCurrency: string | null
+  effectiveDisplayCurrency: string
 }
 
 type HistoricalTransactionRecord = {
@@ -79,14 +88,18 @@ export class PortfolioService {
     private readonly fxRateService: FxRateService,
   ) {}
 
-  async getSummary(userId: string, displayCurrency?: string): Promise<PortfolioSummaryResponseDto> {
-    const snapshot = await this.buildHoldingsSnapshot(userId, displayCurrency)
+  async getSummary(
+    userId: string,
+    query?: GetPortfolioDisplayCurrencyDto,
+  ): Promise<PortfolioSummaryResponseDto> {
+    const snapshot = await this.buildHoldingsSnapshot(userId, query)
     const investedCapital = snapshot.items.reduce((sum, item) => sum + item.investedAmount, 0)
     const marketValue = snapshot.items.reduce((sum, item) => sum + item.marketValue, 0)
     const totalPnl = marketValue - investedCapital
 
     return {
       asOf: snapshot.asOf,
+      displayCurrencyMode: snapshot.displayCurrencyMode,
       requestedDisplayCurrency: snapshot.requestedDisplayCurrency,
       effectiveDisplayCurrency: snapshot.effectiveDisplayCurrency,
       baseCurrency: snapshot.baseCurrency,
@@ -98,8 +111,11 @@ export class PortfolioService {
     }
   }
 
-  async getHoldings(userId: string, displayCurrency?: string): Promise<PortfolioHoldingsResponseDto> {
-    const snapshot = await this.buildHoldingsSnapshot(userId, displayCurrency)
+  async getHoldings(
+    userId: string,
+    query?: GetPortfolioDisplayCurrencyDto,
+  ): Promise<PortfolioHoldingsResponseDto> {
+    const snapshot = await this.buildHoldingsSnapshot(userId, query)
     const totalMarketValue = snapshot.items.reduce((sum, item) => sum + item.marketValue, 0)
     const allocationByTypeMap = new Map<AssetType, number>()
 
@@ -108,6 +124,7 @@ export class PortfolioService {
     }
 
     return {
+      displayCurrencyMode: snapshot.displayCurrencyMode,
       requestedDisplayCurrency: snapshot.requestedDisplayCurrency,
       effectiveDisplayCurrency: snapshot.effectiveDisplayCurrency,
       items: snapshot.items,
@@ -121,9 +138,13 @@ export class PortfolioService {
     }
   }
 
-  async getTrend(userId: string, displayCurrency?: string): Promise<PortfolioTrendResponseDto> {
+  async getTrend(
+    userId: string,
+    query?: GetPortfolioDisplayCurrencyDto,
+  ): Promise<PortfolioTrendResponseDto> {
     await this.ownershipService.validateUserExists(userId)
-    const requestedDisplayCurrency = this.normalizeDisplayCurrency(displayCurrency)
+    const requestedDisplayCurrency = this.getRequestedDisplayCurrency(query)
+    const displayCurrencyMode = this.getDisplayCurrencyMode(query)
 
     const transactions = await this.prisma.transaction.findMany({
       where: {
@@ -150,6 +171,7 @@ export class PortfolioService {
 
     if (transactions.length === 0) {
       return {
+        displayCurrencyMode,
         requestedDisplayCurrency,
         effectiveDisplayCurrency: requestedDisplayCurrency,
         points: [],
@@ -190,14 +212,14 @@ export class PortfolioService {
         },
       }),
     ])
-    const portfolioBaseCurrency = this.resolveDisplayCurrency(
+    const displayCurrencyContext = this.resolveDisplayCurrencyContext(
       accounts.map((account) => account.currency),
-      requestedDisplayCurrency,
+      query,
     )
     const timeline = this.buildTimelineEvents(normalizedTransactions, prices)
     const fxContextByDate = await this.buildFxContextsByDate({
       dates: this.extractTimelineDates(timeline),
-      portfolioBaseCurrency,
+      portfolioBaseCurrency: displayCurrencyContext.effectiveDisplayCurrency,
       sourceCurrencies: [
         ...accounts.map((account) => account.currency),
         ...assets.map((asset) => asset.baseCurrency),
@@ -207,8 +229,9 @@ export class PortfolioService {
     const assetCurrencyById = new Map(assets.map((asset) => [asset.id, asset.baseCurrency]))
 
     return {
-      requestedDisplayCurrency,
-      effectiveDisplayCurrency: portfolioBaseCurrency,
+      displayCurrencyMode: displayCurrencyContext.displayCurrencyMode,
+      requestedDisplayCurrency: displayCurrencyContext.requestedDisplayCurrency,
+      effectiveDisplayCurrency: displayCurrencyContext.effectiveDisplayCurrency,
       points: this.buildPortfolioTrendPoints(
         timeline,
         accountCurrencyById,
@@ -221,10 +244,11 @@ export class PortfolioService {
   async getHoldingTrend(
     userId: string,
     assetId: string,
-    displayCurrency?: string,
+    query?: GetPortfolioDisplayCurrencyDto,
   ): Promise<PortfolioHoldingTrendResponseDto> {
     await this.ownershipService.validateUserExists(userId)
-    const requestedDisplayCurrency = this.normalizeDisplayCurrency(displayCurrency)
+    const requestedDisplayCurrency = this.getRequestedDisplayCurrency(query)
+    const displayCurrencyMode = this.getDisplayCurrencyMode(query)
 
     const transactions = await this.prisma.transaction.findMany({
       where: {
@@ -284,30 +308,31 @@ export class PortfolioService {
         },
       }),
     ])
-    const portfolioBaseCurrency = this.resolveDisplayCurrency(
+    const displayCurrencyContext = this.resolveDisplayCurrencyContext(
       accounts.map((account) => account.currency),
-      requestedDisplayCurrency,
+      query,
     )
     const timeline = this.buildTimelineEvents(normalizedTransactions, prices)
     const fxContextByDate = await this.buildFxContextsByDate({
       dates: this.extractTimelineDates(timeline),
-      portfolioBaseCurrency,
+      portfolioBaseCurrency: displayCurrencyContext.effectiveDisplayCurrency,
       sourceCurrencies: [
         ...accounts.map((account) => account.currency),
-        asset?.baseCurrency ?? portfolioBaseCurrency,
+        asset?.baseCurrency ?? displayCurrencyContext.effectiveDisplayCurrency,
       ],
     })
     const accountCurrencyById = new Map(accounts.map((account) => [account.id, account.currency]))
 
     return {
       assetId,
+      displayCurrencyMode: requestedDisplayCurrency ? 'preferred-base' : displayCurrencyMode,
       requestedDisplayCurrency,
-      effectiveDisplayCurrency: portfolioBaseCurrency,
+      effectiveDisplayCurrency: displayCurrencyContext.effectiveDisplayCurrency,
       points: this.buildHoldingTrendPoints(
         assetId,
         timeline,
         accountCurrencyById,
-        asset?.baseCurrency ?? portfolioBaseCurrency,
+        asset?.baseCurrency ?? displayCurrencyContext.effectiveDisplayCurrency,
         fxContextByDate,
       ),
     }
@@ -315,10 +340,11 @@ export class PortfolioService {
 
   private async buildHoldingsSnapshot(
     userId: string,
-    displayCurrency?: string,
+    query?: GetPortfolioDisplayCurrencyDto,
   ): Promise<HoldingsSnapshot> {
     await this.ownershipService.validateUserExists(userId)
-    const requestedDisplayCurrency = this.normalizeDisplayCurrency(displayCurrency)
+    const requestedDisplayCurrency = this.getRequestedDisplayCurrency(query)
+    const displayCurrencyMode = this.getDisplayCurrencyMode(query)
 
     const positions = await this.prisma.position.findMany({
       where: {
@@ -351,6 +377,7 @@ export class PortfolioService {
     if (positions.length === 0) {
       return {
         asOf: new Date().toISOString(),
+        displayCurrencyMode,
         requestedDisplayCurrency,
         effectiveDisplayCurrency: requestedDisplayCurrency,
         baseCurrency: requestedDisplayCurrency,
@@ -359,9 +386,9 @@ export class PortfolioService {
     }
 
     const assetIds = [...new Set(positions.map((position) => position.assetId))]
-    const effectiveDisplayCurrency = this.resolveDisplayCurrency(
+    const displayCurrencyContext = this.resolveDisplayCurrencyContext(
       positions.map((position) => position.account.currency),
-      requestedDisplayCurrency,
+      query,
     )
     const [prices, activities] = await Promise.all([
       this.prisma.price.findMany({
@@ -413,7 +440,7 @@ export class PortfolioService {
     )
     const valuationAsOf = latestAsOf ?? new Date()
     const fxContext = await this.buildFxContext({
-      portfolioBaseCurrency: effectiveDisplayCurrency,
+      portfolioBaseCurrency: displayCurrencyContext.effectiveDisplayCurrency,
       sourceCurrencies: [
         ...positions.map((position) => position.account.currency),
         ...positions.map((position) => position.asset.baseCurrency),
@@ -513,9 +540,10 @@ export class PortfolioService {
 
     return {
       asOf: valuationAsOf.toISOString(),
-      requestedDisplayCurrency,
-      effectiveDisplayCurrency,
-      baseCurrency: effectiveDisplayCurrency,
+      displayCurrencyMode: displayCurrencyContext.displayCurrencyMode,
+      requestedDisplayCurrency: displayCurrencyContext.requestedDisplayCurrency,
+      effectiveDisplayCurrency: displayCurrencyContext.effectiveDisplayCurrency,
+      baseCurrency: displayCurrencyContext.effectiveDisplayCurrency,
       items: weightedItems,
     }
   }
@@ -889,15 +917,26 @@ export class PortfolioService {
     return amount * rate
   }
 
-  private resolveDisplayCurrency(
+  private resolveDisplayCurrencyContext(
     currencies: string[],
-    requestedDisplayCurrency?: string | null,
-  ): string {
+    query?: GetPortfolioDisplayCurrencyDto,
+  ): PortfolioDisplayCurrencyContext {
+    const requestedDisplayCurrency = this.getRequestedDisplayCurrency(query)
+
     if (requestedDisplayCurrency) {
-      return requestedDisplayCurrency
+      return {
+        displayCurrencyMode: 'preferred-base',
+        requestedDisplayCurrency,
+        effectiveDisplayCurrency: requestedDisplayCurrency,
+      }
     }
 
-    return this.getPortfolioBaseCurrency(currencies)
+    const effectiveDisplayCurrency = this.getPortfolioBaseCurrency(currencies)
+    return {
+      displayCurrencyMode: 'portfolio-default',
+      requestedDisplayCurrency: null,
+      effectiveDisplayCurrency,
+    }
   }
 
   private getPortfolioBaseCurrency(currencies: string[]): string {
@@ -932,6 +971,14 @@ export class PortfolioService {
     }
 
     return unique.length === 0 ? null : 'MIXED'
+  }
+
+  private getRequestedDisplayCurrency(query?: GetPortfolioDisplayCurrencyDto): string | null {
+    return this.normalizeDisplayCurrency(query?.preferredBaseCurrency ?? query?.displayCurrency)
+  }
+
+  private getDisplayCurrencyMode(query?: GetPortfolioDisplayCurrencyDto): PortfolioDisplayCurrencyMode {
+    return this.getRequestedDisplayCurrency(query) ? 'preferred-base' : 'portfolio-default'
   }
 
   private normalizeDisplayCurrency(value?: string | null): string | null {
