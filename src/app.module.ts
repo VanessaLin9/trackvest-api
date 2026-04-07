@@ -16,11 +16,33 @@ import { OwnershipService } from './common/services/ownership.service'
 import { GlService } from './gl/services/gl.service'
 import { DashboardController } from './dashboard/dashboard.controller'
 import { DashboardService } from './dashboard/dashboard.service'
+import { PortfolioController } from './portfolio/portfolio.controller'
+import { PortfolioService } from './portfolio/portfolio.service'
+import { FX_RATE_PROVIDER } from './fx/fx-rate.types'
+import { FrankfurterFxRateProvider } from './fx/providers/frankfurter-fx-rate.provider'
+import { FxRateService } from './fx/fx-rate.service'
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
-  controllers: [HealthController, DashboardController, TransactionsController, AccountsController, UsersController, AssetsController, GlController],
-  providers: [PrismaService, DashboardService, TransactionsService, AccountsService, UsersService, AssetsService, PostingService, OwnershipService, GlService],
+  controllers: [HealthController, DashboardController, PortfolioController, TransactionsController, AccountsController, UsersController, AssetsController, GlController],
+  providers: [
+    PrismaService,
+    DashboardService,
+    PortfolioService,
+    FxRateService,
+    FrankfurterFxRateProvider,
+    {
+      provide: FX_RATE_PROVIDER,
+      useExisting: FrankfurterFxRateProvider,
+    },
+    TransactionsService,
+    AccountsService,
+    UsersService,
+    AssetsService,
+    PostingService,
+    OwnershipService,
+    GlService,
+  ],
   exports: [OwnershipService], // Export so it can be used in other modules if needed
 })
 export class AppModule {}
