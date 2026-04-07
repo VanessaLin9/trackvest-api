@@ -1,6 +1,7 @@
-import { Controller, Get, Param } from '@nestjs/common'
+import { Controller, Get, Param, Query } from '@nestjs/common'
 import { ApiHeader, ApiOkResponse, ApiTags } from '@nestjs/swagger'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
+import { GetPortfolioDisplayCurrencyDto } from './dto/get-portfolio-display-currency.dto'
 import { PortfolioHoldingsResponseDto } from './dto/portfolio-holdings.response.dto'
 import { PortfolioSummaryResponseDto } from './dto/portfolio-summary.response.dto'
 import {
@@ -17,20 +18,29 @@ export class PortfolioController {
 
   @Get('summary')
   @ApiOkResponse({ type: PortfolioSummaryResponseDto })
-  async getSummary(@CurrentUser() userId: string): Promise<PortfolioSummaryResponseDto> {
-    return this.portfolioService.getSummary(userId)
+  async getSummary(
+    @CurrentUser() userId: string,
+    @Query() query: GetPortfolioDisplayCurrencyDto,
+  ): Promise<PortfolioSummaryResponseDto> {
+    return this.portfolioService.getSummary(userId, query.displayCurrency)
   }
 
   @Get('holdings')
   @ApiOkResponse({ type: PortfolioHoldingsResponseDto })
-  async getHoldings(@CurrentUser() userId: string): Promise<PortfolioHoldingsResponseDto> {
-    return this.portfolioService.getHoldings(userId)
+  async getHoldings(
+    @CurrentUser() userId: string,
+    @Query() query: GetPortfolioDisplayCurrencyDto,
+  ): Promise<PortfolioHoldingsResponseDto> {
+    return this.portfolioService.getHoldings(userId, query.displayCurrency)
   }
 
   @Get('trend')
   @ApiOkResponse({ type: PortfolioTrendResponseDto })
-  async getTrend(@CurrentUser() userId: string): Promise<PortfolioTrendResponseDto> {
-    return this.portfolioService.getTrend(userId)
+  async getTrend(
+    @CurrentUser() userId: string,
+    @Query() query: GetPortfolioDisplayCurrencyDto,
+  ): Promise<PortfolioTrendResponseDto> {
+    return this.portfolioService.getTrend(userId, query.displayCurrency)
   }
 
   @Get('holdings/:assetId/trend')
@@ -38,7 +48,8 @@ export class PortfolioController {
   async getHoldingTrend(
     @CurrentUser() userId: string,
     @Param('assetId') assetId: string,
+    @Query() query: GetPortfolioDisplayCurrencyDto,
   ): Promise<PortfolioHoldingTrendResponseDto> {
-    return this.portfolioService.getHoldingTrend(userId, assetId)
+    return this.portfolioService.getHoldingTrend(userId, assetId, query.displayCurrency)
   }
 }

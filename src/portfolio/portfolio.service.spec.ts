@@ -47,6 +47,8 @@ describe('PortfolioService', () => {
     expect(prisma.price.findMany).not.toHaveBeenCalled()
     expect(prisma.transaction.findMany).not.toHaveBeenCalled()
     expect(fxRateService.getReferenceRate).not.toHaveBeenCalled()
+    expect(result.requestedDisplayCurrency).toBeNull()
+    expect(result.effectiveDisplayCurrency).toBeNull()
     expect(result.baseCurrency).toBeNull()
     expect(result.investedCapital).toBe(0)
     expect(result.marketValue).toBe(0)
@@ -138,6 +140,8 @@ describe('PortfolioService', () => {
 
     const result = await service.getHoldings('user-1')
 
+    expect(result.requestedDisplayCurrency).toBeNull()
+    expect(result.effectiveDisplayCurrency).toBe('USD')
     expect(prisma.position.findMany).toHaveBeenCalledWith({
       where: {
         account: { userId: 'user-1' },
@@ -255,6 +259,8 @@ describe('PortfolioService', () => {
 
     const result = await service.getSummary('user-1')
 
+    expect(result.requestedDisplayCurrency).toBeNull()
+    expect(result.effectiveDisplayCurrency).toBe('USD')
     expect(result.baseCurrency).toBe('USD')
     expect(result.investedCapital).toBe(193.75)
     expect(result.marketValue).toBe(193.75)
@@ -326,6 +332,8 @@ describe('PortfolioService', () => {
 
     const result = await service.getHoldings('user-1')
 
+    expect(result.requestedDisplayCurrency).toBeNull()
+    expect(result.effectiveDisplayCurrency).toBe('USD')
     expect(result.items).toEqual([
       {
         assetId: 'asset-1',
@@ -408,6 +416,8 @@ describe('PortfolioService', () => {
     const result = await service.getTrend('user-1')
 
     expect(result).toEqual({
+      requestedDisplayCurrency: null,
+      effectiveDisplayCurrency: 'USD',
       points: [
         {
           label: '2026-04-01',
@@ -472,6 +482,8 @@ describe('PortfolioService', () => {
     const result = await service.getTrend('user-1')
 
     expect(result).toEqual({
+      requestedDisplayCurrency: null,
+      effectiveDisplayCurrency: 'USD',
       points: [
         {
           label: '2026-04-01',
@@ -560,6 +572,8 @@ describe('PortfolioService', () => {
     const result = await service.getTrend('user-1')
 
     expect(result).toEqual({
+      requestedDisplayCurrency: null,
+      effectiveDisplayCurrency: 'USD',
       points: [
         {
           label: '2026-04-01',
@@ -640,6 +654,8 @@ describe('PortfolioService', () => {
 
     expect(result).toEqual({
       assetId: 'asset-1',
+      requestedDisplayCurrency: null,
+      effectiveDisplayCurrency: 'USD',
       points: [
         {
           label: '2026-04-01',
@@ -702,6 +718,8 @@ describe('PortfolioService', () => {
 
     expect(result).toEqual({
       assetId: 'asset-1',
+      requestedDisplayCurrency: null,
+      effectiveDisplayCurrency: 'USD',
       points: [
         {
           label: '2026-04-01',
@@ -769,6 +787,8 @@ describe('PortfolioService', () => {
 
     const result = await service.getHoldings('user-1')
 
+    expect(result.requestedDisplayCurrency).toBeNull()
+    expect(result.effectiveDisplayCurrency).toBe('USD')
     expect(result.items).toEqual([
       {
         assetId: 'asset-2',
@@ -817,5 +837,164 @@ describe('PortfolioService', () => {
         weight: 0.13043478,
       },
     ])
+  })
+
+  it('uses requested display currency for normalized summary and holdings values', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.position.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        quantity: 2,
+        avgCost: 100,
+        openedAt: new Date('2026-03-01T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-1',
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          type: 'equity',
+          baseCurrency: 'USD',
+        },
+      },
+    ])
+    prisma.price.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        price: 120,
+        asOf: new Date('2026-04-05T00:00:00.000Z'),
+      },
+    ])
+    prisma.transaction.findMany.mockResolvedValue([])
+    fxRateService.getReferenceRate.mockImplementation(async ({ base, quote }: { base: string; quote: string }) => {
+      if (base === 'USD' && quote === 'TWD') {
+        return {
+          base,
+          quote,
+          rate: 32,
+          date: '2026-04-05',
+          provider: 'frankfurter',
+        }
+      }
+
+      return {
+        base,
+        quote,
+        rate: 1,
+        date: '2026-04-05',
+        provider: 'identity',
+      }
+    })
+
+    const summary = await service.getSummary('user-1', 'twd')
+    const holdings = await service.getHoldings('user-1', 'twd')
+
+    expect(summary).toEqual({
+      asOf: '2026-04-05T00:00:00.000Z',
+      requestedDisplayCurrency: 'TWD',
+      effectiveDisplayCurrency: 'TWD',
+      baseCurrency: 'TWD',
+      investedCapital: 6400,
+      marketValue: 7680,
+      totalPnl: 1280,
+      totalReturnRate: 0.2,
+      holdingsCount: 1,
+    })
+    expect(holdings).toEqual({
+      requestedDisplayCurrency: 'TWD',
+      effectiveDisplayCurrency: 'TWD',
+      items: [
+        {
+          assetId: 'asset-1',
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          type: 'equity',
+          quantity: 2,
+          avgCost: 3200,
+          latestPrice: 120,
+          latestPriceCurrency: 'USD',
+          assetBaseCurrency: 'USD',
+          investedAmount: 6400,
+          marketValue: 7680,
+          pnl: 1280,
+          returnRate: 0.2,
+          weight: 1,
+          lastActivitySummary: null,
+        },
+      ],
+      allocationByType: [
+        {
+          type: 'equity',
+          marketValue: 7680,
+          weight: 1,
+        },
+      ],
+    })
+  })
+
+  it('uses requested display currency for portfolio trend points', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        id: 'tx-1',
+        accountId: 'account-1',
+        assetId: 'asset-1',
+        type: 'buy',
+        quantity: 1,
+        amount: 100,
+        price: 100,
+        tradeTime: new Date('2026-04-01T09:00:00.000Z'),
+      },
+    ])
+    prisma.account.findMany.mockResolvedValue([{ id: 'account-1', currency: 'USD' }])
+    prisma.asset.findMany.mockResolvedValue([{ id: 'asset-1', baseCurrency: 'USD' }])
+    prisma.price.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        price: 110,
+        asOf: new Date('2026-04-02T00:00:00.000Z'),
+      },
+    ])
+    fxRateService.getReferenceRate.mockImplementation(async ({ base, quote }: { base: string; quote: string }) => {
+      if (base === 'USD' && quote === 'TWD') {
+        return {
+          base,
+          quote,
+          rate: 32,
+          date: '2026-04-02',
+          provider: 'frankfurter',
+        }
+      }
+
+      return {
+        base,
+        quote,
+        rate: 1,
+        date: '2026-04-02',
+        provider: 'identity',
+      }
+    })
+
+    const result = await service.getTrend('user-1', 'TWD')
+
+    expect(result).toEqual({
+      requestedDisplayCurrency: 'TWD',
+      effectiveDisplayCurrency: 'TWD',
+      points: [
+        {
+          label: '2026-04-01',
+          date: '2026-04-01',
+          investedCapital: 3200,
+          marketValue: 3200,
+        },
+        {
+          label: '2026-04-02',
+          date: '2026-04-02',
+          investedCapital: 3200,
+          marketValue: 3520,
+        },
+      ],
+    })
   })
 })
