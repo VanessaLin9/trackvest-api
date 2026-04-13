@@ -20,11 +20,12 @@ import { PortfolioController } from './portfolio/portfolio.controller'
 import { PortfolioService } from './portfolio/portfolio.service'
 import { FX_RATE_PROVIDER } from './fx/fx-rate.types'
 import { FrankfurterFxRateProvider } from './fx/providers/frankfurter-fx-rate.provider'
+import { FxRateController } from './fx/fx-rate.controller'
 import { FxRateService } from './fx/fx-rate.service'
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
-  controllers: [HealthController, DashboardController, PortfolioController, TransactionsController, AccountsController, UsersController, AssetsController, GlController],
+  controllers: [HealthController, DashboardController, PortfolioController, FxRateController, TransactionsController, AccountsController, UsersController, AssetsController, GlController],
   providers: [
     PrismaService,
     DashboardService,
