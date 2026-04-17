@@ -219,6 +219,9 @@ describe('Portfolio overview (e2e)', () => {
 
     expect(summaryResponse.body).toEqual({
       asOf: '2026-04-05T00:00:00.000Z',
+      displayCurrencyMode: 'portfolio-default',
+      requestedDisplayCurrency: null,
+      effectiveDisplayCurrency: 'USD',
       baseCurrency: 'USD',
       investedCapital: 231.25,
       marketValue: 287.5,
@@ -233,6 +236,9 @@ describe('Portfolio overview (e2e)', () => {
       .expect(200)
 
     expect(holdingsResponse.body).toEqual({
+      displayCurrencyMode: 'portfolio-default',
+      requestedDisplayCurrency: null,
+      effectiveDisplayCurrency: 'USD',
       items: [
         {
           assetId: usdAsset.id,
@@ -278,6 +284,98 @@ describe('Portfolio overview (e2e)', () => {
         {
           type: 'etf',
           marketValue: 37.5,
+          weight: 0.13043478,
+        },
+      ],
+    })
+  })
+
+  it('returns requested display currency metadata and normalized values', async () => {
+    const { user, twdAsset, usdAsset } = await createFixture()
+
+    await prisma.fxRate.create({
+      data: {
+        base: 'USD',
+        quote: 'TWD',
+        rate: 32,
+        asOf: new Date('2026-04-05T00:00:00.000Z'),
+      },
+    })
+
+    const summaryResponse = await request(app.getHttpServer())
+      .get('/portfolio/summary')
+      .query({ preferredBaseCurrency: 'TWD' })
+      .set(auth(user.id))
+      .expect(200)
+
+    expect(summaryResponse.body).toEqual({
+      asOf: '2026-04-05T00:00:00.000Z',
+      displayCurrencyMode: 'preferred-base',
+      requestedDisplayCurrency: 'TWD',
+      effectiveDisplayCurrency: 'TWD',
+      baseCurrency: 'TWD',
+      investedCapital: 7400,
+      marketValue: 9200,
+      totalPnl: 1800,
+      totalReturnRate: 0.24324324,
+      holdingsCount: 2,
+    })
+
+    const holdingsResponse = await request(app.getHttpServer())
+      .get('/portfolio/holdings')
+      .query({ preferredBaseCurrency: 'TWD' })
+      .set(auth(user.id))
+      .expect(200)
+
+    expect(holdingsResponse.body).toEqual({
+      displayCurrencyMode: 'preferred-base',
+      requestedDisplayCurrency: 'TWD',
+      effectiveDisplayCurrency: 'TWD',
+      items: [
+        {
+          assetId: usdAsset.id,
+          symbol: 'E2E-AAPL',
+          name: 'E2E Apple Inc.',
+          type: 'equity',
+          quantity: 1,
+          avgCost: 6400,
+          latestPrice: 250,
+          latestPriceCurrency: 'USD',
+          assetBaseCurrency: 'USD',
+          investedAmount: 6400,
+          marketValue: 8000,
+          pnl: 1600,
+          returnRate: 0.25,
+          weight: 0.86956522,
+          lastActivitySummary: 'buy usd asset',
+        },
+        {
+          assetId: twdAsset.id,
+          symbol: 'E2E-0050',
+          name: 'E2E Taiwan 50',
+          type: 'etf',
+          quantity: 10,
+          avgCost: 100,
+          latestPrice: 120,
+          latestPriceCurrency: 'TWD',
+          assetBaseCurrency: 'TWD',
+          investedAmount: 1000,
+          marketValue: 1200,
+          pnl: 200,
+          returnRate: 0.2,
+          weight: 0.13043478,
+          lastActivitySummary: 'buy twd asset',
+        },
+      ],
+      allocationByType: [
+        {
+          type: 'equity',
+          marketValue: 8000,
+          weight: 0.86956522,
+        },
+        {
+          type: 'etf',
+          marketValue: 1200,
           weight: 0.13043478,
         },
       ],

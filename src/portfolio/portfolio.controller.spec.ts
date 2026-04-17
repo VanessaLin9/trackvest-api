@@ -18,7 +18,10 @@ describe('PortfolioController', () => {
     const { controller, portfolioService } = createHarness()
     portfolioService.getSummary.mockResolvedValue({
       asOf: '2026-04-05T00:00:00.000Z',
-      baseCurrency: 'USD',
+      displayCurrencyMode: 'preferred-base',
+      requestedDisplayCurrency: 'TWD',
+      effectiveDisplayCurrency: 'TWD',
+      baseCurrency: 'TWD',
       investedCapital: 1000,
       marketValue: 1200,
       totalPnl: 200,
@@ -26,12 +29,15 @@ describe('PortfolioController', () => {
       holdingsCount: 2,
     })
 
-    const result = await controller.getSummary('user-1')
+    const result = await controller.getSummary('user-1', { preferredBaseCurrency: 'TWD' })
 
-    expect(portfolioService.getSummary).toHaveBeenCalledWith('user-1')
+    expect(portfolioService.getSummary).toHaveBeenCalledWith('user-1', { preferredBaseCurrency: 'TWD' })
     expect(result).toEqual({
       asOf: '2026-04-05T00:00:00.000Z',
-      baseCurrency: 'USD',
+      displayCurrencyMode: 'preferred-base',
+      requestedDisplayCurrency: 'TWD',
+      effectiveDisplayCurrency: 'TWD',
+      baseCurrency: 'TWD',
       investedCapital: 1000,
       marketValue: 1200,
       totalPnl: 200,
@@ -43,6 +49,9 @@ describe('PortfolioController', () => {
   it('returns portfolio holdings from the service', async () => {
     const { controller, portfolioService } = createHarness()
     portfolioService.getHoldings.mockResolvedValue({
+      displayCurrencyMode: 'preferred-base',
+      requestedDisplayCurrency: 'TWD',
+      effectiveDisplayCurrency: 'TWD',
       items: [
         {
           assetId: 'asset-1',
@@ -71,10 +80,13 @@ describe('PortfolioController', () => {
       ],
     })
 
-    const result = await controller.getHoldings('user-1')
+    const result = await controller.getHoldings('user-1', { preferredBaseCurrency: 'TWD' })
 
-    expect(portfolioService.getHoldings).toHaveBeenCalledWith('user-1')
+    expect(portfolioService.getHoldings).toHaveBeenCalledWith('user-1', { preferredBaseCurrency: 'TWD' })
     expect(result).toEqual({
+      displayCurrencyMode: 'preferred-base',
+      requestedDisplayCurrency: 'TWD',
+      effectiveDisplayCurrency: 'TWD',
       items: [
         {
           assetId: 'asset-1',
@@ -107,6 +119,9 @@ describe('PortfolioController', () => {
   it('returns portfolio trend from the service', async () => {
     const { controller, portfolioService } = createHarness()
     portfolioService.getTrend.mockResolvedValue({
+      displayCurrencyMode: 'preferred-base',
+      requestedDisplayCurrency: 'TWD',
+      effectiveDisplayCurrency: 'TWD',
       points: [
         {
           label: '2026-04-05',
@@ -117,10 +132,13 @@ describe('PortfolioController', () => {
       ],
     })
 
-    const result = await controller.getTrend('user-1')
+    const result = await controller.getTrend('user-1', { preferredBaseCurrency: 'TWD' })
 
-    expect(portfolioService.getTrend).toHaveBeenCalledWith('user-1')
+    expect(portfolioService.getTrend).toHaveBeenCalledWith('user-1', { preferredBaseCurrency: 'TWD' })
     expect(result).toEqual({
+      displayCurrencyMode: 'preferred-base',
+      requestedDisplayCurrency: 'TWD',
+      effectiveDisplayCurrency: 'TWD',
       points: [
         {
           label: '2026-04-05',
@@ -136,6 +154,9 @@ describe('PortfolioController', () => {
     const { controller, portfolioService } = createHarness()
     portfolioService.getHoldingTrend.mockResolvedValue({
       assetId: 'asset-1',
+      displayCurrencyMode: 'preferred-base',
+      requestedDisplayCurrency: 'TWD',
+      effectiveDisplayCurrency: 'TWD',
       points: [
         {
           label: '2026-04-05',
@@ -146,11 +167,14 @@ describe('PortfolioController', () => {
       ],
     })
 
-    const result = await controller.getHoldingTrend('user-1', 'asset-1')
+    const result = await controller.getHoldingTrend('user-1', 'asset-1', { preferredBaseCurrency: 'TWD' })
 
-    expect(portfolioService.getHoldingTrend).toHaveBeenCalledWith('user-1', 'asset-1')
+    expect(portfolioService.getHoldingTrend).toHaveBeenCalledWith('user-1', 'asset-1', { preferredBaseCurrency: 'TWD' })
     expect(result).toEqual({
       assetId: 'asset-1',
+      displayCurrencyMode: 'preferred-base',
+      requestedDisplayCurrency: 'TWD',
+      effectiveDisplayCurrency: 'TWD',
       points: [
         {
           label: '2026-04-05',

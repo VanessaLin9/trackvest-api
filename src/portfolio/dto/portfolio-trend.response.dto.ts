@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger'
+import { PortfolioDisplayCurrencyResponseDto } from './portfolio-display-currency.response.dto'
 
 export class PortfolioTrendPointResponseDto {
   @ApiProperty({ example: '2026-04-05' })
@@ -14,7 +15,7 @@ export class PortfolioTrendPointResponseDto {
   marketValue!: number
 }
 
-export class PortfolioTrendResponseDto {
+export class PortfolioTrendResponseDto extends PortfolioDisplayCurrencyResponseDto {
   @ApiProperty({ type: PortfolioTrendPointResponseDto, isArray: true })
   points!: PortfolioTrendPointResponseDto[]
 }
@@ -33,7 +34,7 @@ export class PortfolioHoldingTrendPointResponseDto {
   marketValue!: number
 }
 
-export class PortfolioHoldingTrendResponseDto {
+export class PortfolioHoldingTrendResponseDto extends PortfolioDisplayCurrencyResponseDto {
   @ApiProperty({ example: 'asset-1' })
   assetId!: string
 

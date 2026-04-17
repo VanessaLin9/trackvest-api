@@ -117,9 +117,12 @@ The local seed creates:
 - seeded accounts:
   - `Bank TWD`
   - `Broker TWD` with broker `cathay`
+  - `Broker USD` with broker `ib`
 - seeded assets:
   - `2330` 台積電
   - `0050` 元大台灣50
+  - `AAPL` Apple Inc.
+  - `SGOV` iShares 0-3 Month Treasury Bond ETF
   - `006208` 富邦台50
   - `2337` 旺宏
   - `3711` 日月光投控

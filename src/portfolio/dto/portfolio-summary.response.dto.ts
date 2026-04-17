@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger'
+import { PortfolioDisplayCurrencyResponseDto } from './portfolio-display-currency.response.dto'
 
-export class PortfolioSummaryResponseDto {
+export class PortfolioSummaryResponseDto extends PortfolioDisplayCurrencyResponseDto {
   @ApiProperty({ example: '2026-04-05T00:00:00.000Z' })
   asOf!: string
 
