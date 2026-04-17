@@ -17,13 +17,4 @@ export class FxRateController {
       quote: query.quote,
     })
   }
-
-  @Get('rates/current')
-  @ApiOkResponse({ type: FxRateResponseDto })
-  async getCurrentRate(@Query() query: GetFxRateDto): Promise<FxRateResponseDto> {
-    return this.fxRateService.getTodayReferenceRate({
-      base: query.base,
-      quote: query.quote,
-    })
-  }
 }

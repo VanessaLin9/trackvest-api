@@ -38,26 +38,4 @@ describe('FxRateController', () => {
       provider: 'db',
     })
   })
-
-  it('keeps /rates/current as a compatibility alias for today rate', async () => {
-    const { controller, fxRateService } = createHarness()
-    fxRateService.getTodayReferenceRate.mockResolvedValue({
-      base: 'USD',
-      quote: 'TWD',
-      rate: 32.4,
-      date: '2026-04-18',
-      provider: 'frankfurter',
-    })
-
-    const result = await controller.getCurrentRate({
-      base: 'USD',
-      quote: 'TWD',
-    })
-
-    expect(fxRateService.getTodayReferenceRate).toHaveBeenCalledWith({
-      base: 'USD',
-      quote: 'TWD',
-    })
-    expect(result.date).toBe('2026-04-18')
-  })
 })
