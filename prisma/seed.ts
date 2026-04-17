@@ -7,6 +7,7 @@ const DEMO_USER_EMAIL = 'demo@trackvest.local'
 
 const BANK_ACCOUNT_ID = '497f9b9a-7788-4fb5-93a2-4c8d3f0d5e01'
 const BROKER_ACCOUNT_ID = 'f0a6c5d2-4f9d-4d4d-b7fb-3c5ef0ddc201'
+const BROKER_USD_ACCOUNT_ID = 'd2d28e54-19e1-42d8-b6f2-9c1e5f8de202'
 
 const ASSET_IDS = {
   tsmc: '0dc4b8a9-5f72-4bbf-a02d-1c1dd7a9f101',
@@ -14,6 +15,8 @@ const ASSET_IDS = {
   fubon50: 'adfc4a1c-6886-4c17-a4cf-f6d67346f103',
   aseh: '0f1b0eb7-4e4a-4279-8c5b-4f7f4c5bf104',
   mxic: 'd7c74ef1-2fb4-4bcb-82d5-7ac0ab1e7105',
+  aapl: '0ef08fef-11d0-4e32-a9ea-07b8b6d8f106',
+  sgov: '5f933c3d-fab8-4d3e-86f7-a2e7f6c4f107',
 } as const
 
 const GL_ACCOUNT_IDS = {
@@ -36,17 +39,23 @@ const TRANSACTION_IDS = {
   sellYuanta50: 'e6f7ecf7-bf11-4f48-b80f-af6c7d1f3004',
   buyTsmc: '97efded6-3c65-4247-a8c9-31d4aaed3005',
   dividendTsmc: 'c8d77c1e-e276-4ae9-8ed6-c2f359f43006',
+  buySgov: 'a92f36f1-0455-4c8f-8b29-0b6a31623007',
+  buyAapl: '4bd7c6f0-d257-4f9c-8cd9-8d5cbde83008',
 } as const
 
 const POSITION_IDS = {
   yuanta50: '1791f0ad-7fc5-4d38-b6b0-30225d3c4001',
   tsmc: '5b153bb1-2fed-4a52-9435-df5b389c4002',
+  sgov: '6f4f6f43-729d-47d4-9f86-b5bc5e72c403',
+  aapl: 'e6a67a2b-2933-4d57-9ce4-d3db3155c404',
 } as const
 
 const LOT_IDS = {
   yuanta50Lot1: '62955b50-bcb6-4707-bb83-12e195a55001',
   yuanta50Lot2: 'a758bf8b-f4d1-4d6f-a29c-2a7f17765002',
   tsmcLot1: 'f8f2cf31-a8bc-4ef7-8d5d-85b6dc6d5003',
+  sgovLot1: '9b9b2eef-7cc6-4fd3-a6de-a74506a65004',
+  aaplLot1: '1b86f70b-c782-4b1b-97d1-d546f43d5005',
 } as const
 
 const SELL_MATCH_IDS = {
@@ -109,6 +118,14 @@ async function main() {
         currency: 'TWD',
         broker: 'cathay',
       },
+      {
+        id: BROKER_USD_ACCOUNT_ID,
+        userId: demoUser.id,
+        name: 'Broker USD',
+        type: 'broker',
+        currency: 'USD',
+        broker: 'ib',
+      },
     ],
   })
 
@@ -119,6 +136,14 @@ async function main() {
       { id: ASSET_IDS.fubon50, symbol: '006208', name: '富邦台50', type: 'etf', baseCurrency: 'TWD' },
       { id: ASSET_IDS.aseh, symbol: '3711', name: '日月光投控', type: 'equity', baseCurrency: 'TWD' },
       { id: ASSET_IDS.mxic, symbol: '2337', name: '旺宏', type: 'equity', baseCurrency: 'TWD' },
+      { id: ASSET_IDS.aapl, symbol: 'AAPL', name: 'Apple Inc.', type: 'equity', baseCurrency: 'USD' },
+      {
+        id: ASSET_IDS.sgov,
+        symbol: 'SGOV',
+        name: 'iShares 0-3 Month Treasury Bond ETF',
+        type: 'etf',
+        baseCurrency: 'USD',
+      },
     ],
   })
 
@@ -131,6 +156,9 @@ async function main() {
       { assetId: ASSET_IDS.aseh, alias: '日月光投控', broker: '' },
       { assetId: ASSET_IDS.mxic, alias: '旺宏', broker: '' },
       { assetId: ASSET_IDS.yuanta50, alias: '國泰台灣領袖50', broker: 'cathay' },
+      { assetId: ASSET_IDS.aapl, alias: 'Apple', broker: '' },
+      { assetId: ASSET_IDS.sgov, alias: '美債 ETF', broker: '' },
+      { assetId: ASSET_IDS.sgov, alias: '短天期美債', broker: '' },
     ],
   })
 
@@ -290,6 +318,34 @@ async function main() {
         tradeTime: new Date('2026-03-25T09:00:00.000Z'),
         note: '台積電股利入帳',
       },
+      {
+        id: TRANSACTION_IDS.buySgov,
+        accountId: BROKER_USD_ACCOUNT_ID,
+        assetId: ASSET_IDS.sgov,
+        type: 'buy',
+        amount: 2004,
+        quantity: 20,
+        price: 100.1,
+        fee: 2,
+        tax: 0,
+        brokerOrderNo: 'US202603120001',
+        tradeTime: new Date('2026-03-12T13:30:00.000Z'),
+        note: '美債 ETF 停泊資金',
+      },
+      {
+        id: TRANSACTION_IDS.buyAapl,
+        accountId: BROKER_USD_ACCOUNT_ID,
+        assetId: ASSET_IDS.aapl,
+        type: 'buy',
+        amount: 1588,
+        quantity: 8,
+        price: 198.5,
+        fee: 0,
+        tax: 0,
+        brokerOrderNo: 'US202603210001',
+        tradeTime: new Date('2026-03-21T13:30:00.000Z'),
+        note: 'Apple 長期配置',
+      },
     ],
   })
 
@@ -310,6 +366,22 @@ async function main() {
         quantity: 20,
         avgCost: 901,
         openedAt: new Date('2026-03-20T09:00:00.000Z'),
+      },
+      {
+        id: POSITION_IDS.sgov,
+        accountId: BROKER_USD_ACCOUNT_ID,
+        assetId: ASSET_IDS.sgov,
+        quantity: 20,
+        avgCost: 100.2,
+        openedAt: new Date('2026-03-12T13:30:00.000Z'),
+      },
+      {
+        id: POSITION_IDS.aapl,
+        accountId: BROKER_USD_ACCOUNT_ID,
+        assetId: ASSET_IDS.aapl,
+        quantity: 8,
+        avgCost: 198.5,
+        openedAt: new Date('2026-03-21T13:30:00.000Z'),
       },
     ],
   })
@@ -346,6 +418,26 @@ async function main() {
         remainingQuantity: 20,
         unitCost: 901,
         openedAt: new Date('2026-03-20T09:00:00.000Z'),
+      },
+      {
+        id: LOT_IDS.sgovLot1,
+        accountId: BROKER_USD_ACCOUNT_ID,
+        assetId: ASSET_IDS.sgov,
+        sourceTransactionId: TRANSACTION_IDS.buySgov,
+        originalQuantity: 20,
+        remainingQuantity: 20,
+        unitCost: 100.2,
+        openedAt: new Date('2026-03-12T13:30:00.000Z'),
+      },
+      {
+        id: LOT_IDS.aaplLot1,
+        accountId: BROKER_USD_ACCOUNT_ID,
+        assetId: ASSET_IDS.aapl,
+        sourceTransactionId: TRANSACTION_IDS.buyAapl,
+        originalQuantity: 8,
+        remainingQuantity: 8,
+        unitCost: 198.5,
+        openedAt: new Date('2026-03-21T13:30:00.000Z'),
       },
     ],
   })
@@ -388,6 +480,35 @@ async function main() {
         price: 112,
         asOf: new Date('2026-03-27T09:00:00.000Z'),
         source: 'seed',
+      },
+      {
+        assetId: ASSET_IDS.sgov,
+        price: 100.45,
+        asOf: new Date('2026-03-27T09:00:00.000Z'),
+        source: 'seed',
+      },
+      {
+        assetId: ASSET_IDS.aapl,
+        price: 212.3,
+        asOf: new Date('2026-03-27T09:00:00.000Z'),
+        source: 'seed',
+      },
+    ],
+  })
+
+  await prisma.fxRate.createMany({
+    data: [
+      {
+        base: 'USD',
+        quote: 'TWD',
+        rate: 32.15,
+        asOf: new Date('2026-03-27T00:00:00.000Z'),
+      },
+      {
+        base: 'TWD',
+        quote: 'USD',
+        rate: 0.0311042,
+        asOf: new Date('2026-03-27T00:00:00.000Z'),
       },
     ],
   })
