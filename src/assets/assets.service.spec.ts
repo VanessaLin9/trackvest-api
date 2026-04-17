@@ -33,6 +33,7 @@ describe('AssetsService', () => {
       symbol: '  aapl ',
       name: ' Apple   Inc. ',
       type: 'equity',
+      assetClass: 'equity',
       baseCurrency: ' usd ',
     })
 
@@ -44,6 +45,7 @@ describe('AssetsService', () => {
         symbol: 'AAPL',
         name: 'Apple Inc.',
         type: 'equity',
+        assetClass: 'equity',
         baseCurrency: 'USD',
       },
     })
@@ -58,6 +60,7 @@ describe('AssetsService', () => {
         symbol: ' aapl ',
         name: 'Apple Inc.',
         type: 'equity',
+        assetClass: 'equity',
         baseCurrency: 'usd',
       }),
     ).rejects.toThrow(
@@ -163,6 +166,7 @@ describe('AssetsService', () => {
         symbol: ' aapl ',
         name: 'Apple Inc.',
         type: 'equity',
+        assetClass: 'equity',
         baseCurrency: ' usd ',
       }),
     ).rejects.toThrow(
@@ -180,6 +184,7 @@ describe('AssetsService', () => {
       symbol: ' msft ',
       name: ' Microsoft   Corp ',
       type: 'equity',
+      assetClass: 'equity',
       baseCurrency: ' usd ',
     })
 
@@ -189,6 +194,7 @@ describe('AssetsService', () => {
         symbol: 'MSFT',
         name: 'Microsoft Corp',
         type: 'equity',
+        assetClass: 'equity',
         baseCurrency: 'USD',
       },
     })

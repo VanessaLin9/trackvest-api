@@ -59,6 +59,7 @@ model Asset {
   symbol       String        @unique
   name         String
   type         AssetType
+  assetClass   AssetClass
   baseCurrency String
   prices       Price[]
   positions    Position[]
@@ -72,6 +73,14 @@ enum AssetType {
   etf
   crypto
   cash
+}
+
+enum AssetClass {
+  equity
+  bond
+  cash
+  crypto
+  precious_metal
 }
 
 model Transaction {

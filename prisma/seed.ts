@@ -131,17 +131,18 @@ async function main() {
 
   await prisma.asset.createMany({
     data: [
-      { id: ASSET_IDS.tsmc, symbol: '2330', name: '台積電', type: 'equity', baseCurrency: 'TWD' },
-      { id: ASSET_IDS.yuanta50, symbol: '0050', name: '元大台灣50', type: 'etf', baseCurrency: 'TWD' },
-      { id: ASSET_IDS.fubon50, symbol: '006208', name: '富邦台50', type: 'etf', baseCurrency: 'TWD' },
-      { id: ASSET_IDS.aseh, symbol: '3711', name: '日月光投控', type: 'equity', baseCurrency: 'TWD' },
-      { id: ASSET_IDS.mxic, symbol: '2337', name: '旺宏', type: 'equity', baseCurrency: 'TWD' },
-      { id: ASSET_IDS.aapl, symbol: 'AAPL', name: 'Apple Inc.', type: 'equity', baseCurrency: 'USD' },
+      { id: ASSET_IDS.tsmc, symbol: '2330', name: '台積電', type: 'equity', assetClass: 'equity', baseCurrency: 'TWD' },
+      { id: ASSET_IDS.yuanta50, symbol: '0050', name: '元大台灣50', type: 'etf', assetClass: 'equity', baseCurrency: 'TWD' },
+      { id: ASSET_IDS.fubon50, symbol: '006208', name: '富邦台50', type: 'etf', assetClass: 'equity', baseCurrency: 'TWD' },
+      { id: ASSET_IDS.aseh, symbol: '3711', name: '日月光投控', type: 'equity', assetClass: 'equity', baseCurrency: 'TWD' },
+      { id: ASSET_IDS.mxic, symbol: '2337', name: '旺宏', type: 'equity', assetClass: 'equity', baseCurrency: 'TWD' },
+      { id: ASSET_IDS.aapl, symbol: 'AAPL', name: 'Apple Inc.', type: 'equity', assetClass: 'equity', baseCurrency: 'USD' },
       {
         id: ASSET_IDS.sgov,
         symbol: 'SGOV',
         name: 'iShares 0-3 Month Treasury Bond ETF',
         type: 'etf',
+        assetClass: 'bond',
         baseCurrency: 'USD',
       },
     ],

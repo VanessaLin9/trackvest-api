@@ -68,6 +68,7 @@ describe('Transactions sell FIFO (e2e)', () => {
         symbol: 'E2E-0050',
         name: 'E2E Taiwan 50',
         type: AssetType.etf,
+        assetClass: 'equity',
         baseCurrency: 'TWD',
       },
     })

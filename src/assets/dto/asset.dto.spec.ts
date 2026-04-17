@@ -10,6 +10,7 @@ describe('Asset DTOs', () => {
       symbol: '  aapl  ',
       name: '  Apple   Inc.  ',
       type: 'equity',
+      assetClass: 'equity',
       baseCurrency: ' usd ',
     })
 
@@ -26,6 +27,7 @@ describe('Asset DTOs', () => {
       symbol: 'AAPL<script>',
       name: 'Apple Inc.',
       type: 'equity',
+      assetClass: 'equity',
       baseCurrency: 'USD',
     })
 

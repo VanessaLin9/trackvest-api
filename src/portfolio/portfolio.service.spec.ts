@@ -73,6 +73,7 @@ describe('PortfolioService', () => {
           symbol: 'AAPL',
           name: 'Apple Inc.',
           type: 'equity',
+          assetClass: 'equity',
           baseCurrency: 'USD',
         },
       },
@@ -87,6 +88,7 @@ describe('PortfolioService', () => {
           symbol: 'AAPL',
           name: 'Apple Inc.',
           type: 'equity',
+          assetClass: 'equity',
           baseCurrency: 'USD',
         },
       },
@@ -101,6 +103,7 @@ describe('PortfolioService', () => {
           symbol: 'TSLA',
           name: 'Tesla Inc.',
           type: 'equity',
+          assetClass: 'equity',
           baseCurrency: 'USD',
         },
       },
@@ -158,6 +161,7 @@ describe('PortfolioService', () => {
         },
         asset: {
           select: {
+            assetClass: true,
             id: true,
             symbol: true,
             name: true,
@@ -177,6 +181,7 @@ describe('PortfolioService', () => {
         symbol: 'AAPL',
         name: 'Apple Inc.',
         type: 'equity',
+        assetClass: 'equity',
         quantity: 5,
         avgCost: 106,
         latestPrice: 130,
@@ -194,6 +199,7 @@ describe('PortfolioService', () => {
         symbol: 'TSLA',
         name: 'Tesla Inc.',
         type: 'equity',
+        assetClass: 'equity',
         quantity: 4,
         avgCost: 50,
         latestPrice: null,
@@ -210,6 +216,13 @@ describe('PortfolioService', () => {
     expect(result.allocationByType).toEqual([
       {
         type: 'equity',
+        marketValue: 850,
+        weight: 1,
+      },
+    ])
+    expect(result.allocationByAssetClass).toEqual([
+      {
+        assetClass: 'equity',
         marketValue: 850,
         weight: 1,
       },
@@ -231,6 +244,7 @@ describe('PortfolioService', () => {
           symbol: 'AAPL',
           name: 'Apple Inc.',
           type: 'equity',
+          assetClass: 'equity',
           baseCurrency: 'USD',
         },
       },
@@ -245,6 +259,7 @@ describe('PortfolioService', () => {
           symbol: '0050',
           name: 'Taiwan 50',
           type: 'etf',
+          assetClass: 'equity',
           baseCurrency: 'TWD',
         },
       },
@@ -287,6 +302,7 @@ describe('PortfolioService', () => {
           symbol: 'AAPL',
           name: 'Apple Inc.',
           type: 'equity',
+          assetClass: 'equity',
           baseCurrency: 'USD',
         },
       },
@@ -301,6 +317,7 @@ describe('PortfolioService', () => {
           symbol: 'AAPL',
           name: 'Apple Inc.',
           type: 'equity',
+          assetClass: 'equity',
           baseCurrency: 'USD',
         },
       },
@@ -344,6 +361,7 @@ describe('PortfolioService', () => {
         symbol: 'AAPL',
         name: 'Apple Inc.',
         type: 'equity',
+        assetClass: 'equity',
         quantity: 2,
         avgCost: 95,
         latestPrice: 120,
@@ -755,6 +773,7 @@ describe('PortfolioService', () => {
           symbol: '0050',
           name: 'Taiwan 50',
           type: 'etf',
+          assetClass: 'equity',
           baseCurrency: 'TWD',
         },
       },
@@ -769,6 +788,7 @@ describe('PortfolioService', () => {
           symbol: 'AAPL',
           name: 'Apple Inc.',
           type: 'equity',
+          assetClass: 'equity',
           baseCurrency: 'USD',
         },
       },
@@ -805,6 +825,7 @@ describe('PortfolioService', () => {
         symbol: 'AAPL',
         name: 'Apple Inc.',
         type: 'equity',
+        assetClass: 'equity',
         quantity: 1,
         avgCost: 200,
         latestPrice: 250,
@@ -822,6 +843,7 @@ describe('PortfolioService', () => {
         symbol: '0050',
         name: 'Taiwan 50',
         type: 'etf',
+        assetClass: 'equity',
         quantity: 10,
         avgCost: 3.125,
         latestPrice: 120,
@@ -847,6 +869,13 @@ describe('PortfolioService', () => {
         weight: 0.13043478,
       },
     ])
+    expect(result.allocationByAssetClass).toEqual([
+      {
+        assetClass: 'equity',
+        marketValue: 287.5,
+        weight: 1,
+      },
+    ])
   })
 
   it('uses requested display currency for normalized summary and holdings values', async () => {
@@ -864,6 +893,7 @@ describe('PortfolioService', () => {
           symbol: 'AAPL',
           name: 'Apple Inc.',
           type: 'equity',
+          assetClass: 'equity',
           baseCurrency: 'USD',
         },
       },
@@ -921,6 +951,7 @@ describe('PortfolioService', () => {
           symbol: 'AAPL',
           name: 'Apple Inc.',
           type: 'equity',
+          assetClass: 'equity',
           quantity: 2,
           avgCost: 3200,
           latestPrice: 120,
@@ -937,6 +968,13 @@ describe('PortfolioService', () => {
       allocationByType: [
         {
           type: 'equity',
+          marketValue: 7680,
+          weight: 1,
+        },
+      ],
+      allocationByAssetClass: [
+        {
+          assetClass: 'equity',
           marketValue: 7680,
           weight: 1,
         },
