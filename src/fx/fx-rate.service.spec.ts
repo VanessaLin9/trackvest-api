@@ -112,9 +112,9 @@ describe('FxRateService', () => {
     })
   })
 
-  it('fetches today rate when only an older cached db rate exists', async () => {
+  it('fetches today rate using Asia/Taipei calendar day when only an older cached db rate exists', async () => {
     const RealDate = Date
-    const mockedNow = new RealDate('2026-04-18T08:00:00.000Z')
+    const mockedNow = new RealDate('2026-04-17T16:30:00.000Z')
 
     global.Date = class extends RealDate {
       constructor(value?: string | number | Date) {
