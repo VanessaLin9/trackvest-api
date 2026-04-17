@@ -112,6 +112,85 @@ describe('FxRateService', () => {
     })
   })
 
+  it('fetches today rate when only an older cached db rate exists', async () => {
+    const RealDate = Date
+    const mockedNow = new RealDate('2026-04-18T08:00:00.000Z')
+
+    global.Date = class extends RealDate {
+      constructor(value?: string | number | Date) {
+        if (value !== undefined) {
+          super(value)
+          return
+        }
+
+        super(mockedNow)
+      }
+
+      static now() {
+        return mockedNow.getTime()
+      }
+    } as DateConstructor
+
+    try {
+      const { service, prisma, fxRateProvider } = createHarness()
+      prisma.fxRate.findFirst
+        .mockResolvedValueOnce({
+          base: 'USD',
+          quote: 'TWD',
+          rate: 32.15,
+          asOf: new Date('2026-03-27T00:00:00.000Z'),
+        })
+        .mockResolvedValueOnce(null)
+      fxRateProvider.getDailyReferenceRates.mockResolvedValue([
+        {
+          base: 'USD',
+          quote: 'TWD',
+          rate: 32.52,
+          date: '2026-04-18',
+          provider: 'frankfurter',
+        },
+      ])
+
+      const latestAvailable = await service.getReferenceRate({
+        base: 'USD',
+        quote: 'TWD',
+      })
+      const todayRate = await service.getTodayReferenceRate({
+        base: 'USD',
+        quote: 'TWD',
+      })
+
+      expect(latestAvailable).toEqual({
+        base: 'USD',
+        quote: 'TWD',
+        rate: 32.15,
+        date: '2026-03-27',
+        provider: 'db',
+      })
+      expect(prisma.fxRate.findFirst).toHaveBeenNthCalledWith(2, {
+        where: {
+          base: 'USD',
+          quote: 'TWD',
+          asOf: new Date('2026-04-18T00:00:00.000Z'),
+        },
+      })
+      expect(fxRateProvider.getDailyReferenceRates).toHaveBeenCalledWith({
+        base: 'USD',
+        quotes: ['TWD'],
+        date: '2026-04-18',
+      })
+      expect(todayRate).toEqual({
+        base: 'USD',
+        quote: 'TWD',
+        rate: 32.52,
+        date: '2026-04-18',
+        provider: 'frankfurter',
+      })
+    } finally {
+      global.Date = RealDate
+    }
+  })
+
   it('throws when neither db nor provider returns a rate', async () => {
     const { service, prisma, fxRateProvider } = createHarness()
     prisma.fxRate.findFirst.mockResolvedValue(null)

@@ -39,42 +39,56 @@ export class FxRateService {
     }
 
     if (!input.refresh) {
-      const storedRate = await this.prisma.fxRate.findFirst({
-        where: {
-          base,
-          quote,
-          asOf: {
-            lte: this.toUtcDate(targetDate),
-          },
-        },
-        orderBy: {
-          asOf: 'desc',
-        },
+      const storedRate = await this.findStoredRateOnOrBefore({
+        base,
+        quote,
+        targetDate,
       })
 
       if (storedRate) {
-        return {
-          base: storedRate.base,
-          quote: storedRate.quote,
-          rate: Number(storedRate.rate),
-          date: storedRate.asOf.toISOString().slice(0, 10),
-          provider: 'db',
-        }
+        return this.toStoredRatePoint(storedRate)
       }
     }
 
-    const [fetchedRate] = await this.fxRateProvider.getDailyReferenceRates({
+    return this.fetchAndStoreRate({
       base,
-      quotes: [quote],
-      date: targetDate,
+      quote,
+      targetDate,
     })
+  }
 
-    if (!fetchedRate) {
-      throw new NotFoundException(`FX rate not found for ${base}/${quote} on ${targetDate}`)
+  async getTodayReferenceRate(input: Omit<GetReferenceRateInput, 'asOf'>): Promise<FxRatePoint> {
+    const base = input.base.toUpperCase()
+    const quote = input.quote.toUpperCase()
+    const targetDate = this.toIsoDate(new Date())
+
+    if (base === quote) {
+      return {
+        base,
+        quote,
+        rate: 1,
+        date: targetDate,
+        provider: 'identity',
+      }
     }
 
-    await this.replaceStoredRates([fetchedRate])
-    return fetchedRate
+    if (!input.refresh) {
+      const storedRate = await this.findStoredRateExact({
+        base,
+        quote,
+        targetDate,
+      })
+
+      if (storedRate) {
+        return this.toStoredRatePoint(storedRate)
+      }
+    }
+
+    return this.fetchAndStoreRate({
+      base,
+      quote,
+      targetDate,
+    })
   }
 
   async syncReferenceRates(input: SyncReferenceRatesInput): Promise<FxRatePoint[]> {
@@ -116,6 +130,71 @@ export class FxRateService {
           asOf: this.toUtcDate(rate.date),
         },
       })
+    }
+  }
+
+  private async fetchAndStoreRate(input: {
+    base: string
+    quote: string
+    targetDate: string
+  }): Promise<FxRatePoint> {
+    const [fetchedRate] = await this.fxRateProvider.getDailyReferenceRates({
+      base: input.base,
+      quotes: [input.quote],
+      date: input.targetDate,
+    })
+
+    if (!fetchedRate) {
+      throw new NotFoundException(
+        `FX rate not found for ${input.base}/${input.quote} on ${input.targetDate}`,
+      )
+    }
+
+    await this.replaceStoredRates([fetchedRate])
+    return fetchedRate
+  }
+
+  private findStoredRateOnOrBefore(input: {
+    base: string
+    quote: string
+    targetDate: string
+  }) {
+    return this.prisma.fxRate.findFirst({
+      where: {
+        base: input.base,
+        quote: input.quote,
+        asOf: {
+          lte: this.toUtcDate(input.targetDate),
+        },
+      },
+      orderBy: {
+        asOf: 'desc',
+      },
+    })
+  }
+
+  private findStoredRateExact(input: { base: string; quote: string; targetDate: string }) {
+    return this.prisma.fxRate.findFirst({
+      where: {
+        base: input.base,
+        quote: input.quote,
+        asOf: this.toUtcDate(input.targetDate),
+      },
+    })
+  }
+
+  private toStoredRatePoint(storedRate: {
+    base: string
+    quote: string
+    rate: number | { toString(): string }
+    asOf: Date
+  }): FxRatePoint {
+    return {
+      base: storedRate.base,
+      quote: storedRate.quote,
+      rate: Number(storedRate.rate),
+      date: storedRate.asOf.toISOString().slice(0, 10),
+      provider: 'db',
     }
   }
 
