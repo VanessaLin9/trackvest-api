@@ -287,6 +287,127 @@ describe('PortfolioService', () => {
     expect(result.holdingsCount).toBe(2)
   })
 
+  it('builds rebalance metrics from equity and bond holdings only', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.position.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        quantity: 1,
+        avgCost: 700,
+        openedAt: new Date('2026-03-01T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-1',
+          symbol: 'VTI',
+          name: 'Vanguard Total Stock Market ETF',
+          type: 'etf',
+          assetClass: 'equity',
+          baseCurrency: 'USD',
+        },
+      },
+      {
+        assetId: 'asset-2',
+        quantity: 1,
+        avgCost: 300,
+        openedAt: new Date('2026-03-02T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-2',
+          symbol: 'BND',
+          name: 'Vanguard Total Bond Market ETF',
+          type: 'etf',
+          assetClass: 'bond',
+          baseCurrency: 'USD',
+        },
+      },
+      {
+        assetId: 'asset-3',
+        quantity: 1,
+        avgCost: 50,
+        openedAt: new Date('2026-03-03T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-3',
+          symbol: 'GLD',
+          name: 'SPDR Gold Shares',
+          type: 'etf',
+          assetClass: 'precious_metal',
+          baseCurrency: 'USD',
+        },
+      },
+    ])
+    prisma.price.findMany.mockResolvedValue([])
+    prisma.transaction.findMany.mockResolvedValue([])
+    fxRateService.getReferenceRate.mockResolvedValue({
+      base: 'USD',
+      quote: 'USD',
+      rate: 1,
+      date: '2026-04-05',
+      provider: 'identity',
+    })
+
+    const result = await service.getRebalance('user-1')
+
+    expect(result.displayCurrencyMode).toBe('portfolio-default')
+    expect(result.requestedDisplayCurrency).toBeNull()
+    expect(result.effectiveDisplayCurrency).toBe('USD')
+    expect(result.targets).toEqual({ equity: 0.8, bond: 0.2 })
+    expect(result.current).toEqual({ equity: 0.7, bond: 0.3 })
+    expect(result.gaps).toEqual({ equity: 0.1, bond: -0.1 })
+    expect(result.marketValueByAssetClass).toEqual({ equity: 700, bond: 300 })
+    expect(result.recommendedBuyAmountByAssetClass).toEqual({ equity: 500, bond: 0 })
+    expect(result.trackedMarketValue).toBe(1000)
+    expect(result.notes).toEqual([
+      'Current ratios are calculated from equity and bond holdings only. Excluded asset classes: precious_metal.',
+      'Recommended buy amounts assume a buy-only rebalance and do not suggest selling.',
+    ])
+  })
+
+  it('returns empty rebalance metrics when there are no equity or bond holdings', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.position.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        quantity: 1,
+        avgCost: 100,
+        openedAt: new Date('2026-03-01T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-1',
+          symbol: 'GLD',
+          name: 'SPDR Gold Shares',
+          type: 'etf',
+          assetClass: 'precious_metal',
+          baseCurrency: 'USD',
+        },
+      },
+    ])
+    prisma.price.findMany.mockResolvedValue([])
+    prisma.transaction.findMany.mockResolvedValue([])
+    fxRateService.getReferenceRate.mockResolvedValue({
+      base: 'USD',
+      quote: 'USD',
+      rate: 1,
+      date: '2026-04-05',
+      provider: 'identity',
+    })
+
+    const result = await service.getRebalance('user-1')
+
+    expect(result.current).toEqual({ equity: 0, bond: 0 })
+    expect(result.gaps).toEqual({ equity: 0.8, bond: 0.2 })
+    expect(result.marketValueByAssetClass).toEqual({ equity: 0, bond: 0 })
+    expect(result.recommendedBuyAmountByAssetClass).toEqual({ equity: 0, bond: 0 })
+    expect(result.trackedMarketValue).toBe(0)
+    expect(result.notes).toEqual([
+      'No equity or bond holdings are available for rebalance calculations yet.',
+      'Current ratios are calculated from equity and bond holdings only. Excluded asset classes: precious_metal.',
+      'Recommended buy amounts assume a buy-only rebalance and do not suggest selling.',
+    ])
+  })
+
   it('converts each position before aggregating the same asset across mixed account currencies', async () => {
     const { service, prisma, ownershipService, fxRateService } = createHarness()
     ownershipService.validateUserExists.mockResolvedValue(undefined)

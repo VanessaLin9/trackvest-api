@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma.service'
 import { GetPortfolioDisplayCurrencyDto } from './dto/get-portfolio-display-currency.dto'
 import { PortfolioDisplayCurrencyMode } from './dto/portfolio-display-currency.types'
 import { PortfolioHoldingsResponseDto } from './dto/portfolio-holdings.response.dto'
+import { PortfolioRebalanceResponseDto } from './dto/portfolio-rebalance.response.dto'
 import { PortfolioSummaryResponseDto } from './dto/portfolio-summary.response.dto'
 import {
   PortfolioHoldingTrendResponseDto,
@@ -33,10 +34,17 @@ type HoldingsSnapshot = {
   items: HoldingOverviewItem[]
 }
 
+type RebalanceTrackedAssetClass = 'equity' | 'bond'
+
 type PortfolioDisplayCurrencyContext = {
   displayCurrencyMode: PortfolioDisplayCurrencyMode
   requestedDisplayCurrency: string | null
   effectiveDisplayCurrency: string
+}
+
+const REBALANCE_TARGETS: Record<RebalanceTrackedAssetClass, number> = {
+  equity: 0.8,
+  bond: 0.2,
 }
 
 type HistoricalTransactionRecord = {
@@ -150,6 +158,73 @@ export class PortfolioService {
           (left, right) =>
             right.marketValue - left.marketValue || left.assetClass.localeCompare(right.assetClass),
         ),
+    }
+  }
+
+  async getRebalance(
+    userId: string,
+    query?: GetPortfolioDisplayCurrencyDto,
+  ): Promise<PortfolioRebalanceResponseDto> {
+    const snapshot = await this.buildHoldingsSnapshot(userId, query)
+    const marketValueByAssetClass = this.sumTrackedAssetClassMarketValues(snapshot.items)
+    const trackedMarketValue = marketValueByAssetClass.equity + marketValueByAssetClass.bond
+    const current = trackedMarketValue > 0
+      ? {
+          equity: roundTo(marketValueByAssetClass.equity / trackedMarketValue, 8),
+          bond: roundTo(marketValueByAssetClass.bond / trackedMarketValue, 8),
+        }
+      : {
+          equity: 0,
+          bond: 0,
+        }
+
+    const gaps = {
+      equity: roundTo(REBALANCE_TARGETS.equity - current.equity, 8),
+      bond: roundTo(REBALANCE_TARGETS.bond - current.bond, 8),
+    }
+
+    const recommendedBuyAmountByAssetClass = trackedMarketValue > 0
+      ? {
+          equity: roundTo(
+            this.calculateRecommendedBuyAmount({
+              targetWeight: REBALANCE_TARGETS.equity,
+              currentWeight: current.equity,
+              currentMarketValue: marketValueByAssetClass.equity,
+              trackedMarketValue,
+            }),
+            8,
+          ),
+          bond: roundTo(
+            this.calculateRecommendedBuyAmount({
+              targetWeight: REBALANCE_TARGETS.bond,
+              currentWeight: current.bond,
+              currentMarketValue: marketValueByAssetClass.bond,
+              trackedMarketValue,
+            }),
+            8,
+          ),
+        }
+      : {
+          equity: 0,
+          bond: 0,
+        }
+
+    return {
+      asOf: snapshot.asOf,
+      displayCurrencyMode: snapshot.displayCurrencyMode,
+      requestedDisplayCurrency: snapshot.requestedDisplayCurrency,
+      effectiveDisplayCurrency: snapshot.effectiveDisplayCurrency,
+      baseCurrency: snapshot.baseCurrency,
+      targets: REBALANCE_TARGETS,
+      current,
+      gaps,
+      marketValueByAssetClass: {
+        equity: roundTo(marketValueByAssetClass.equity, 8),
+        bond: roundTo(marketValueByAssetClass.bond, 8),
+      },
+      recommendedBuyAmountByAssetClass,
+      trackedMarketValue: roundTo(trackedMarketValue, 8),
+      notes: this.buildRebalanceNotes(snapshot.items, trackedMarketValue),
     }
   }
 
@@ -592,6 +667,58 @@ export class PortfolioService {
       price: toNumber(price.price),
       asOf: price.asOf,
     }))
+  }
+
+  private sumTrackedAssetClassMarketValues(items: HoldingOverviewItem[]) {
+    return items.reduce(
+      (totals, item) => {
+        if (item.assetClass === 'equity' || item.assetClass === 'bond') {
+          totals[item.assetClass] += item.marketValue
+        }
+
+        return totals
+      },
+      { equity: 0, bond: 0 },
+    )
+  }
+
+  private calculateRecommendedBuyAmount(input: {
+    targetWeight: number
+    currentWeight: number
+    currentMarketValue: number
+    trackedMarketValue: number
+  }) {
+    if (input.currentWeight >= input.targetWeight || input.targetWeight >= 1) {
+      return 0
+    }
+
+    return Math.max(
+      0,
+      (input.targetWeight * input.trackedMarketValue - input.currentMarketValue) / (1 - input.targetWeight),
+    )
+  }
+
+  private buildRebalanceNotes(items: HoldingOverviewItem[], trackedMarketValue: number): string[] {
+    const notes: string[] = []
+    const excludedAssetClasses = [...new Set(
+      items
+        .map((item) => item.assetClass)
+        .filter((assetClass) => assetClass !== 'equity' && assetClass !== 'bond'),
+    )]
+
+    if (trackedMarketValue <= 0) {
+      notes.push('No equity or bond holdings are available for rebalance calculations yet.')
+    }
+
+    if (excludedAssetClasses.length > 0) {
+      notes.push(
+        `Current ratios are calculated from equity and bond holdings only. Excluded asset classes: ${excludedAssetClasses.join(', ')}.`,
+      )
+    }
+
+    notes.push('Recommended buy amounts assume a buy-only rebalance and do not suggest selling.')
+
+    return notes
   }
 
   private buildPortfolioTrendPoints(
