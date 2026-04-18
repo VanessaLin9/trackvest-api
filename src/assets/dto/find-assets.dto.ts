@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger'
 import { Transform, Type } from 'class-transformer'
-import { AssetType } from '@prisma/client'
+import { AssetClass, AssetType } from '@prisma/client'
 import {
   IsEnum,
   IsIn,
@@ -42,6 +42,15 @@ export class FindAssetsDto {
   @IsOptional()
   @IsEnum(AssetType)
   type?: AssetType
+
+  @ApiPropertyOptional({
+    description: 'Asset class filter',
+    example: 'bond',
+    enum: AssetClass,
+  })
+  @IsOptional()
+  @IsEnum(AssetClass)
+  assetClass?: AssetClass
 
   @ApiPropertyOptional({
     description: 'Base currency filter',

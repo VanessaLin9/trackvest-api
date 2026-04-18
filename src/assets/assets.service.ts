@@ -1,6 +1,6 @@
 // src/assets/assets.service.ts
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common'
-import { Prisma } from '@prisma/client'
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
+import { AssetClass, AssetType, Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma.service'
 import { CreateAndUpdateAssetDto } from './dto/asset.createAndUpdate.dto'
 import { FindAssetsDto } from './dto/find-assets.dto'
@@ -11,16 +11,107 @@ import {
   normalizeAssetSymbolInput,
 } from '../common/utils'
 
+const EQUITY_ETF_SYMBOLS = new Set(['0050', '006208'])
+const BOND_ETF_SYMBOLS = new Set(['SGOV', 'BNDW'])
+const BOND_ETF_KEYWORDS = ['bond', 'treasury']
+const PRECIOUS_METAL_KEYWORDS = ['gold', 'silver', 'precious']
+
+type NormalizedAssetPayload = Omit<CreateAndUpdateAssetDto, 'assetClass'> & {
+  assetClass: AssetClass
+}
+
 @Injectable()
 export class AssetsService {
   constructor(private prisma: PrismaService) {}
 
-  private normalizeAssetPayload(dto: CreateAndUpdateAssetDto): CreateAndUpdateAssetDto {
-    return {
+  private normalizeAssetPayload(
+    dto: CreateAndUpdateAssetDto,
+    options?: { fallbackAssetClass?: AssetClass },
+  ): NormalizedAssetPayload {
+    const normalizedDto = {
       ...dto,
       symbol: normalizeAssetSymbolInput(dto.symbol),
       name: normalizeAssetNameInput(dto.name),
       baseCurrency: normalizeAssetCurrencyInput(dto.baseCurrency),
+    }
+
+    return {
+      ...normalizedDto,
+      assetClass: this.resolveAssetClass(normalizedDto, options?.fallbackAssetClass),
+    }
+  }
+
+  private resolveAssetClass(
+    dto: CreateAndUpdateAssetDto,
+    fallbackAssetClass?: AssetClass,
+  ): AssetClass {
+    if (dto.assetClass) {
+      this.assertCompatibleAssetClass(dto.type, dto.assetClass)
+      return dto.assetClass
+    }
+
+    if (fallbackAssetClass) {
+      this.assertCompatibleAssetClass(dto.type, fallbackAssetClass)
+      return fallbackAssetClass
+    }
+
+    const inferredAssetClass = this.inferAssetClass(dto)
+
+    if (inferredAssetClass) {
+      return inferredAssetClass
+    }
+
+    throw new BadRequestException(
+      `assetClass is required for ${dto.type} assets when it cannot be inferred automatically`,
+    )
+  }
+
+  private inferAssetClass(dto: Pick<CreateAndUpdateAssetDto, 'symbol' | 'name' | 'type'>): AssetClass | null {
+    switch (dto.type) {
+      case AssetType.equity:
+        return AssetClass.equity
+      case AssetType.crypto:
+        return AssetClass.crypto
+      case AssetType.cash:
+        return AssetClass.cash
+      case AssetType.etf: {
+        if (EQUITY_ETF_SYMBOLS.has(dto.symbol)) {
+          return AssetClass.equity
+        }
+
+        const normalizedName = dto.name.toLowerCase()
+
+        if (
+          BOND_ETF_SYMBOLS.has(dto.symbol)
+          || BOND_ETF_KEYWORDS.some((keyword) => normalizedName.includes(keyword))
+        ) {
+          return AssetClass.bond
+        }
+
+        if (PRECIOUS_METAL_KEYWORDS.some((keyword) => normalizedName.includes(keyword))) {
+          return AssetClass.precious_metal
+        }
+
+        return null
+      }
+      default:
+        return null
+    }
+  }
+
+  private assertCompatibleAssetClass(type: AssetType, assetClass: AssetClass) {
+    const expectedAssetClassByType: Partial<Record<AssetType, AssetClass>> = {
+      [AssetType.equity]: AssetClass.equity,
+      [AssetType.crypto]: AssetClass.crypto,
+      [AssetType.cash]: AssetClass.cash,
+    }
+
+    const expectedAssetClass = expectedAssetClassByType[type]
+
+    if (expectedAssetClass && assetClass !== expectedAssetClass) {
+      throw new BadRequestException(
+        `${type} assets must use assetClass "${expectedAssetClass}"`,
+      )
     }
   }
 
@@ -61,6 +152,10 @@ export class AssetsService {
       where.type = query.type
     }
 
+    if (query.assetClass) {
+      where.assetClass = query.assetClass
+    }
+
     if (baseCurrency) {
       where.baseCurrency = baseCurrency
     }
@@ -99,17 +194,19 @@ export class AssetsService {
   }
 
   async update(id: string, dto: CreateAndUpdateAssetDto) {
-    await this.findOne(id)
-    const normalizedDto = this.normalizeAssetPayload(dto)
+    const existingAsset = await this.findOne(id)
+    const normalizedDto = this.normalizeAssetPayload(dto, {
+      fallbackAssetClass: existingAsset.assetClass,
+    })
     
     // Check if another asset with same symbol exists (excluding current one)
-    const existingAsset = await this.prisma.asset.findFirst({ 
+    const conflictingAsset = await this.prisma.asset.findFirst({ 
       where: { 
         symbol: normalizedDto.symbol,
         id: { not: id }
       } 
     })
-    if (existingAsset) {
+    if (conflictingAsset) {
       throw new ConflictException('Asset with this symbol already exists')
     }
     

@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common'
 import { AssetsService } from './assets.service'
 
 describe('AssetsService', () => {
@@ -33,6 +33,7 @@ describe('AssetsService', () => {
       symbol: '  aapl ',
       name: ' Apple   Inc. ',
       type: 'equity',
+      assetClass: 'equity',
       baseCurrency: ' usd ',
     })
 
@@ -44,9 +45,91 @@ describe('AssetsService', () => {
         symbol: 'AAPL',
         name: 'Apple Inc.',
         type: 'equity',
+        assetClass: 'equity',
         baseCurrency: 'USD',
       },
     })
+  })
+
+  it('infers assetClass for non-etf assets when it is omitted', async () => {
+    const { service, prisma } = createHarness()
+    prisma.asset.findUnique.mockResolvedValue(null)
+    prisma.asset.create.mockResolvedValue({ id: 'asset-1' })
+
+    await service.create({
+      symbol: '  aapl ',
+      name: ' Apple   Inc. ',
+      type: 'equity',
+      baseCurrency: ' usd ',
+    })
+
+    expect(prisma.asset.create).toHaveBeenCalledWith({
+      data: {
+        symbol: 'AAPL',
+        name: 'Apple Inc.',
+        type: 'equity',
+        assetClass: 'equity',
+        baseCurrency: 'USD',
+      },
+    })
+  })
+
+  it('infers assetClass for known bond etfs when it is omitted', async () => {
+    const { service, prisma } = createHarness()
+    prisma.asset.findUnique.mockResolvedValue(null)
+    prisma.asset.create.mockResolvedValue({ id: 'asset-1' })
+
+    await service.create({
+      symbol: ' bndw ',
+      name: ' Vanguard   Total  World Bond ETF ',
+      type: 'etf',
+      baseCurrency: ' usd ',
+    })
+
+    expect(prisma.asset.create).toHaveBeenCalledWith({
+      data: {
+        symbol: 'BNDW',
+        name: 'Vanguard Total World Bond ETF',
+        type: 'etf',
+        assetClass: 'bond',
+        baseCurrency: 'USD',
+      },
+    })
+  })
+
+  it('rejects ambiguous etfs when assetClass is omitted', async () => {
+    const { service, prisma } = createHarness()
+    prisma.asset.findUnique.mockResolvedValue(null)
+
+    await expect(
+      service.create({
+        symbol: 'vtip',
+        name: 'Vanguard Short-Term Inflation-Protected Securities ETF',
+        type: 'etf',
+        baseCurrency: 'usd',
+      }),
+    ).rejects.toThrow(
+      new BadRequestException(
+        'assetClass is required for etf assets when it cannot be inferred automatically',
+      ),
+    )
+  })
+
+  it('rejects incompatible assetClass values for non-etf assets', async () => {
+    const { service, prisma } = createHarness()
+    prisma.asset.findUnique.mockResolvedValue(null)
+
+    await expect(
+      service.create({
+        symbol: 'aapl',
+        name: 'Apple Inc.',
+        type: 'equity',
+        assetClass: 'bond',
+        baseCurrency: 'usd',
+      }),
+    ).rejects.toThrow(
+      new BadRequestException('equity assets must use assetClass "equity"'),
+    )
   })
 
   it('throws conflict when a normalized create symbol already exists', async () => {
@@ -58,6 +141,7 @@ describe('AssetsService', () => {
         symbol: ' aapl ',
         name: 'Apple Inc.',
         type: 'equity',
+        assetClass: 'equity',
         baseCurrency: 'usd',
       }),
     ).rejects.toThrow(
@@ -73,6 +157,7 @@ describe('AssetsService', () => {
     const result = await service.findAll({
       q: '  apple   inc ',
       type: 'equity',
+      assetClass: 'equity',
       baseCurrency: ' usd ',
       page: 3,
       take: 10,
@@ -85,6 +170,7 @@ describe('AssetsService', () => {
           { name: { contains: 'apple inc', mode: 'insensitive' } },
         ],
         type: 'equity',
+        assetClass: 'equity',
         baseCurrency: 'USD',
       },
       orderBy: { symbol: 'asc' },
@@ -98,6 +184,7 @@ describe('AssetsService', () => {
           { name: { contains: 'apple inc', mode: 'insensitive' } },
         ],
         type: 'equity',
+        assetClass: 'equity',
         baseCurrency: 'USD',
       },
     })
@@ -163,6 +250,7 @@ describe('AssetsService', () => {
         symbol: ' aapl ',
         name: 'Apple Inc.',
         type: 'equity',
+        assetClass: 'equity',
         baseCurrency: ' usd ',
       }),
     ).rejects.toThrow(
@@ -180,6 +268,7 @@ describe('AssetsService', () => {
       symbol: ' msft ',
       name: ' Microsoft   Corp ',
       type: 'equity',
+      assetClass: 'equity',
       baseCurrency: ' usd ',
     })
 
@@ -189,6 +278,60 @@ describe('AssetsService', () => {
         symbol: 'MSFT',
         name: 'Microsoft Corp',
         type: 'equity',
+        assetClass: 'equity',
+        baseCurrency: 'USD',
+      },
+    })
+  })
+
+  it('reuses the stored assetClass on update when an etf omits assetClass', async () => {
+    const { service, prisma } = createHarness()
+    prisma.asset.findUnique.mockResolvedValue({
+      id: 'asset-1',
+      assetClass: 'bond',
+    })
+    prisma.asset.findFirst.mockResolvedValue(null)
+    prisma.asset.update.mockResolvedValue({ id: 'asset-1', symbol: 'VTIP' })
+
+    await service.update('asset-1', {
+      symbol: ' vtip ',
+      name: ' Vanguard Short-Term Inflation-Protected Securities ETF ',
+      type: 'etf',
+      baseCurrency: ' usd ',
+    })
+
+    expect(prisma.asset.update).toHaveBeenCalledWith({
+      where: { id: 'asset-1' },
+      data: {
+        symbol: 'VTIP',
+        name: 'Vanguard Short-Term Inflation-Protected Securities ETF',
+        type: 'etf',
+        assetClass: 'bond',
+        baseCurrency: 'USD',
+      },
+    })
+  })
+
+  it('infers assetClass during update when it is omitted', async () => {
+    const { service, prisma } = createHarness()
+    prisma.asset.findUnique.mockResolvedValue({ id: 'asset-1' })
+    prisma.asset.findFirst.mockResolvedValue(null)
+    prisma.asset.update.mockResolvedValue({ id: 'asset-1', symbol: 'SGOV' })
+
+    await service.update('asset-1', {
+      symbol: ' sgov ',
+      name: ' iShares  0-3 Month Treasury Bond ETF ',
+      type: 'etf',
+      baseCurrency: ' usd ',
+    })
+
+    expect(prisma.asset.update).toHaveBeenCalledWith({
+      where: { id: 'asset-1' },
+      data: {
+        symbol: 'SGOV',
+        name: 'iShares 0-3 Month Treasury Bond ETF',
+        type: 'etf',
+        assetClass: 'bond',
         baseCurrency: 'USD',
       },
     })

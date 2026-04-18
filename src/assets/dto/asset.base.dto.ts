@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { Expose, Transform } from 'class-transformer'
-import { AssetType } from '@prisma/client'
+import { AssetClass, AssetType } from '@prisma/client'
 import { IsEnum, IsIn, IsString, Length, Matches } from 'class-validator'
 import { SUPPORTED_CURRENCIES } from '../../common/constants/currency.constants'
 import {
@@ -50,6 +50,15 @@ export class AssetBaseDto {
     @Expose()
     @IsEnum(AssetType)
     type!: AssetType
+
+    @ApiProperty({
+        description: '資產本質分類',
+        example: 'equity',
+        enum: AssetClass,
+    })
+    @Expose()
+    @IsEnum(AssetClass)
+    assetClass!: AssetClass
 
     @ApiProperty({
         description: '基礎貨幣',

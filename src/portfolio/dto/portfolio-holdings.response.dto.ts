@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { AssetType } from '@prisma/client'
+import { AssetClass, AssetType } from '@prisma/client'
 import { PortfolioDisplayCurrencyResponseDto } from './portfolio-display-currency.response.dto'
 
 export class PortfolioHoldingItemResponseDto {
@@ -14,6 +14,9 @@ export class PortfolioHoldingItemResponseDto {
 
   @ApiProperty({ enum: AssetType, example: AssetType.equity })
   type!: AssetType
+
+  @ApiProperty({ enum: AssetClass, example: AssetClass.equity })
+  assetClass!: AssetClass
 
   @ApiProperty({ example: 12.5 })
   quantity!: number
@@ -60,10 +63,24 @@ export class PortfolioAllocationByTypeItemResponseDto {
   weight!: number
 }
 
+export class PortfolioAllocationByAssetClassItemResponseDto {
+  @ApiProperty({ enum: AssetClass, example: AssetClass.equity })
+  assetClass!: AssetClass
+
+  @ApiProperty({ example: 48600 })
+  marketValue!: number
+
+  @ApiProperty({ example: 0.35 })
+  weight!: number
+}
+
 export class PortfolioHoldingsResponseDto extends PortfolioDisplayCurrencyResponseDto {
   @ApiProperty({ type: PortfolioHoldingItemResponseDto, isArray: true })
   items!: PortfolioHoldingItemResponseDto[]
 
   @ApiProperty({ type: PortfolioAllocationByTypeItemResponseDto, isArray: true })
   allocationByType!: PortfolioAllocationByTypeItemResponseDto[]
+
+  @ApiProperty({ type: PortfolioAllocationByAssetClassItemResponseDto, isArray: true })
+  allocationByAssetClass!: PortfolioAllocationByAssetClassItemResponseDto[]
 }

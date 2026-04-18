@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
-import { AssetType, TxType } from '@prisma/client'
+import { AssetClass, AssetType, TxType } from '@prisma/client'
 import { APP_CURRENCIES } from '../common/constants/currency.constants'
 import { normalizeAssetCurrencyInput } from '../common/utils'
 import { OwnershipService } from '../common/services/ownership.service'
@@ -118,9 +118,14 @@ export class PortfolioService {
     const snapshot = await this.buildHoldingsSnapshot(userId, query)
     const totalMarketValue = snapshot.items.reduce((sum, item) => sum + item.marketValue, 0)
     const allocationByTypeMap = new Map<AssetType, number>()
+    const allocationByAssetClassMap = new Map<AssetClass, number>()
 
     for (const item of snapshot.items) {
       allocationByTypeMap.set(item.type, (allocationByTypeMap.get(item.type) ?? 0) + item.marketValue)
+      allocationByAssetClassMap.set(
+        item.assetClass,
+        (allocationByAssetClassMap.get(item.assetClass) ?? 0) + item.marketValue,
+      )
     }
 
     return {
@@ -135,6 +140,16 @@ export class PortfolioService {
           weight: totalMarketValue > 0 ? roundTo(marketValue / totalMarketValue, 8) : 0,
         }))
         .sort((left, right) => right.marketValue - left.marketValue || left.type.localeCompare(right.type)),
+      allocationByAssetClass: [...allocationByAssetClassMap.entries()]
+        .map(([assetClass, marketValue]) => ({
+          assetClass,
+          marketValue: roundTo(marketValue, 8),
+          weight: totalMarketValue > 0 ? roundTo(marketValue / totalMarketValue, 8) : 0,
+        }))
+        .sort(
+          (left, right) =>
+            right.marketValue - left.marketValue || left.assetClass.localeCompare(right.assetClass),
+        ),
     }
   }
 
@@ -364,6 +379,7 @@ export class PortfolioService {
             symbol: true,
             name: true,
             type: true,
+            assetClass: true,
             baseCurrency: true,
           },
         },
@@ -462,6 +478,7 @@ export class PortfolioService {
         symbol: string
         name: string
         type: AssetType
+        assetClass: AssetClass
         assetCurrency: string
         quantity: number
         investedAmount: number
@@ -484,6 +501,7 @@ export class PortfolioService {
           symbol: position.asset.symbol,
           name: position.asset.name,
           type: position.asset.type,
+          assetClass: position.asset.assetClass,
           assetCurrency: position.asset.baseCurrency,
           quantity,
           investedAmount: convertedInvestedAmount,
@@ -515,6 +533,7 @@ export class PortfolioService {
           symbol: holding.symbol,
           name: holding.name,
           type: holding.type,
+          assetClass: holding.assetClass,
           quantity: roundTo(holding.quantity, 8),
           avgCost: roundTo(avgCost, 8),
           latestPrice: latestPrice == null ? null : roundTo(latestPrice, 8),

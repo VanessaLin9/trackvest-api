@@ -17,6 +17,7 @@ const ASSET_IDS = {
   mxic: 'd7c74ef1-2fb4-4bcb-82d5-7ac0ab1e7105',
   aapl: '0ef08fef-11d0-4e32-a9ea-07b8b6d8f106',
   sgov: '5f933c3d-fab8-4d3e-86f7-a2e7f6c4f107',
+  bndw: '7a0d2e9a-4aa2-4a8f-a730-1f9f6f21f108',
 } as const
 
 const GL_ACCOUNT_IDS = {
@@ -41,6 +42,7 @@ const TRANSACTION_IDS = {
   dividendTsmc: 'c8d77c1e-e276-4ae9-8ed6-c2f359f43006',
   buySgov: 'a92f36f1-0455-4c8f-8b29-0b6a31623007',
   buyAapl: '4bd7c6f0-d257-4f9c-8cd9-8d5cbde83008',
+  buyBndw: '6abf7284-4fd7-483b-b5a4-8712f75d3009',
 } as const
 
 const POSITION_IDS = {
@@ -48,6 +50,7 @@ const POSITION_IDS = {
   tsmc: '5b153bb1-2fed-4a52-9435-df5b389c4002',
   sgov: '6f4f6f43-729d-47d4-9f86-b5bc5e72c403',
   aapl: 'e6a67a2b-2933-4d57-9ce4-d3db3155c404',
+  bndw: '6f3ed5ef-9a10-4fc7-9fd8-2f6c3155c405',
 } as const
 
 const LOT_IDS = {
@@ -56,6 +59,7 @@ const LOT_IDS = {
   tsmcLot1: 'f8f2cf31-a8bc-4ef7-8d5d-85b6dc6d5003',
   sgovLot1: '9b9b2eef-7cc6-4fd3-a6de-a74506a65004',
   aaplLot1: '1b86f70b-c782-4b1b-97d1-d546f43d5005',
+  bndwLot1: '2e96f70b-c782-4b1b-97d1-d546f43d5006',
 } as const
 
 const SELL_MATCH_IDS = {
@@ -131,17 +135,26 @@ async function main() {
 
   await prisma.asset.createMany({
     data: [
-      { id: ASSET_IDS.tsmc, symbol: '2330', name: '台積電', type: 'equity', baseCurrency: 'TWD' },
-      { id: ASSET_IDS.yuanta50, symbol: '0050', name: '元大台灣50', type: 'etf', baseCurrency: 'TWD' },
-      { id: ASSET_IDS.fubon50, symbol: '006208', name: '富邦台50', type: 'etf', baseCurrency: 'TWD' },
-      { id: ASSET_IDS.aseh, symbol: '3711', name: '日月光投控', type: 'equity', baseCurrency: 'TWD' },
-      { id: ASSET_IDS.mxic, symbol: '2337', name: '旺宏', type: 'equity', baseCurrency: 'TWD' },
-      { id: ASSET_IDS.aapl, symbol: 'AAPL', name: 'Apple Inc.', type: 'equity', baseCurrency: 'USD' },
+      { id: ASSET_IDS.tsmc, symbol: '2330', name: '台積電', type: 'equity', assetClass: 'equity', baseCurrency: 'TWD' },
+      { id: ASSET_IDS.yuanta50, symbol: '0050', name: '元大台灣50', type: 'etf', assetClass: 'equity', baseCurrency: 'TWD' },
+      { id: ASSET_IDS.fubon50, symbol: '006208', name: '富邦台50', type: 'etf', assetClass: 'equity', baseCurrency: 'TWD' },
+      { id: ASSET_IDS.aseh, symbol: '3711', name: '日月光投控', type: 'equity', assetClass: 'equity', baseCurrency: 'TWD' },
+      { id: ASSET_IDS.mxic, symbol: '2337', name: '旺宏', type: 'equity', assetClass: 'equity', baseCurrency: 'TWD' },
+      { id: ASSET_IDS.aapl, symbol: 'AAPL', name: 'Apple Inc.', type: 'equity', assetClass: 'equity', baseCurrency: 'USD' },
       {
         id: ASSET_IDS.sgov,
         symbol: 'SGOV',
         name: 'iShares 0-3 Month Treasury Bond ETF',
         type: 'etf',
+        assetClass: 'bond',
+        baseCurrency: 'USD',
+      },
+      {
+        id: ASSET_IDS.bndw,
+        symbol: 'BNDW',
+        name: 'Vanguard Total World Bond ETF',
+        type: 'etf',
+        assetClass: 'bond',
         baseCurrency: 'USD',
       },
     ],
@@ -159,6 +172,8 @@ async function main() {
       { assetId: ASSET_IDS.aapl, alias: 'Apple', broker: '' },
       { assetId: ASSET_IDS.sgov, alias: '美債 ETF', broker: '' },
       { assetId: ASSET_IDS.sgov, alias: '短天期美債', broker: '' },
+      { assetId: ASSET_IDS.bndw, alias: '全球債券 ETF', broker: '' },
+      { assetId: ASSET_IDS.bndw, alias: '全球債券', broker: '' },
     ],
   })
 
@@ -346,6 +361,20 @@ async function main() {
         tradeTime: new Date('2026-03-21T13:30:00.000Z'),
         note: 'Apple 長期配置',
       },
+      {
+        id: TRANSACTION_IDS.buyBndw,
+        accountId: BROKER_USD_ACCOUNT_ID,
+        assetId: ASSET_IDS.bndw,
+        type: 'buy',
+        amount: 1026,
+        quantity: 15,
+        price: 68.4,
+        fee: 0,
+        tax: 0,
+        brokerOrderNo: 'US202603240001',
+        tradeTime: new Date('2026-03-24T13:30:00.000Z'),
+        note: '全球債券配置',
+      },
     ],
   })
 
@@ -382,6 +411,14 @@ async function main() {
         quantity: 8,
         avgCost: 198.5,
         openedAt: new Date('2026-03-21T13:30:00.000Z'),
+      },
+      {
+        id: POSITION_IDS.bndw,
+        accountId: BROKER_USD_ACCOUNT_ID,
+        assetId: ASSET_IDS.bndw,
+        quantity: 15,
+        avgCost: 68.4,
+        openedAt: new Date('2026-03-24T13:30:00.000Z'),
       },
     ],
   })
@@ -439,6 +476,16 @@ async function main() {
         unitCost: 198.5,
         openedAt: new Date('2026-03-21T13:30:00.000Z'),
       },
+      {
+        id: LOT_IDS.bndwLot1,
+        accountId: BROKER_USD_ACCOUNT_ID,
+        assetId: ASSET_IDS.bndw,
+        sourceTransactionId: TRANSACTION_IDS.buyBndw,
+        originalQuantity: 15,
+        remainingQuantity: 15,
+        unitCost: 68.4,
+        openedAt: new Date('2026-03-24T13:30:00.000Z'),
+      },
     ],
   })
 
@@ -490,6 +537,12 @@ async function main() {
       {
         assetId: ASSET_IDS.aapl,
         price: 212.3,
+        asOf: new Date('2026-03-27T09:00:00.000Z'),
+        source: 'seed',
+      },
+      {
+        assetId: ASSET_IDS.bndw,
+        price: 68.9,
         asOf: new Date('2026-03-27T09:00:00.000Z'),
         source: 'seed',
       },

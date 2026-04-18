@@ -58,6 +58,7 @@ describe('PortfolioController', () => {
           symbol: 'AAPL',
           name: 'Apple Inc.',
           type: 'equity',
+          assetClass: 'equity',
           quantity: 5,
           avgCost: 100,
           latestPrice: 120,
@@ -74,6 +75,13 @@ describe('PortfolioController', () => {
       allocationByType: [
         {
           type: 'equity',
+          marketValue: 600,
+          weight: 1,
+        },
+      ],
+      allocationByAssetClass: [
+        {
+          assetClass: 'equity',
           marketValue: 600,
           weight: 1,
         },
@@ -93,6 +101,7 @@ describe('PortfolioController', () => {
           symbol: 'AAPL',
           name: 'Apple Inc.',
           type: 'equity',
+          assetClass: 'equity',
           quantity: 5,
           avgCost: 100,
           latestPrice: 120,
@@ -109,6 +118,13 @@ describe('PortfolioController', () => {
       allocationByType: [
         {
           type: 'equity',
+          marketValue: 600,
+          weight: 1,
+        },
+      ],
+      allocationByAssetClass: [
+        {
+          assetClass: 'equity',
           marketValue: 600,
           weight: 1,
         },

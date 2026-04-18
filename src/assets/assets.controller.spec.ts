@@ -1,4 +1,4 @@
-import { AssetType } from '@prisma/client'
+import { AssetClass, AssetType } from '@prisma/client'
 import { AssetsController } from './assets.controller'
 
 describe('AssetsController', () => {
@@ -22,6 +22,7 @@ describe('AssetsController', () => {
     symbol: 'AAPL',
     name: 'Apple Inc.',
     type: AssetType.equity,
+    assetClass: AssetClass.equity,
     baseCurrency: 'USD',
   }
 
@@ -33,6 +34,7 @@ describe('AssetsController', () => {
       symbol: 'AAPL',
       name: 'Apple Inc.',
       type: AssetType.equity,
+      assetClass: AssetClass.equity,
       baseCurrency: 'USD',
     })
 
@@ -40,6 +42,7 @@ describe('AssetsController', () => {
       symbol: 'AAPL',
       name: 'Apple Inc.',
       type: AssetType.equity,
+      assetClass: AssetClass.equity,
       baseCurrency: 'USD',
     })
     expect(result).toEqual(asset)
@@ -57,6 +60,7 @@ describe('AssetsController', () => {
     const query = {
       q: 'apple',
       type: AssetType.equity,
+      assetClass: AssetClass.equity,
       baseCurrency: 'USD',
       page: 2,
       take: 10,
@@ -100,6 +104,7 @@ describe('AssetsController', () => {
       symbol: 'AAPL',
       name: 'Apple Inc.',
       type: AssetType.equity,
+      assetClass: AssetClass.equity,
       baseCurrency: 'USD',
     }
     const result = await controller.update('asset-1', payload)

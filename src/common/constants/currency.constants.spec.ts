@@ -19,7 +19,11 @@ describe('currency constants', () => {
 
   it.each([
     ['account', AccountBaseDto, { name: 'Broker', type: AccountType.broker, currency: 'JPY' }],
-    ['asset', AssetBaseDto, { symbol: '7203', name: 'Toyota', type: 'equity', baseCurrency: 'EUR' }],
+    [
+      'asset',
+      AssetBaseDto,
+      { symbol: '7203', name: 'Toyota', type: 'equity', assetClass: 'equity', baseCurrency: 'EUR' },
+    ],
     [
       'gl command',
       PostExpenseCommand,
