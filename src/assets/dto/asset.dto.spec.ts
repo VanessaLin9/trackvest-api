@@ -2,6 +2,7 @@ import 'reflect-metadata'
 import { plainToInstance } from 'class-transformer'
 import { validate } from 'class-validator'
 import { AssetBaseDto } from './asset.base.dto'
+import { CreateAndUpdateAssetDto } from './asset.createAndUpdate.dto'
 import { FindAssetsDto } from './find-assets.dto'
 
 describe('Asset DTOs', () => {
@@ -34,6 +35,22 @@ describe('Asset DTOs', () => {
     const errors = await validate(dto)
 
     expect(errors.some((error) => error.property === 'symbol')).toBe(true)
+  })
+
+  it('allows create/update input to omit assetClass so the backend can infer it', async () => {
+    const dto = plainToInstance(CreateAndUpdateAssetDto, {
+      symbol: '  aapl  ',
+      name: '  Apple   Inc.  ',
+      type: 'equity',
+      baseCurrency: ' usd ',
+    })
+
+    const errors = await validate(dto)
+
+    expect(errors).toHaveLength(0)
+    expect(dto.symbol).toBe('AAPL')
+    expect(dto.name).toBe('Apple Inc.')
+    expect(dto.baseCurrency).toBe('USD')
   })
 
   it('normalizes asset list query filters', async () => {
