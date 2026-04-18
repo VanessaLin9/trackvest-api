@@ -39,6 +39,7 @@ describe('Asset DTOs', () => {
   it('normalizes asset list query filters', async () => {
     const dto = plainToInstance(FindAssetsDto, {
       q: '  apple   inc  ',
+      assetClass: 'equity',
       baseCurrency: ' usd ',
       page: '2',
       take: '10',
@@ -48,6 +49,7 @@ describe('Asset DTOs', () => {
 
     expect(errors).toHaveLength(0)
     expect(dto.q).toBe('apple inc')
+    expect(dto.assetClass).toBe('equity')
     expect(dto.baseCurrency).toBe('USD')
     expect(dto.page).toBe(2)
     expect(dto.take).toBe(10)

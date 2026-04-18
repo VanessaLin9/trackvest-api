@@ -60,6 +60,7 @@ describe('AssetsController', () => {
     const query = {
       q: 'apple',
       type: AssetType.equity,
+      assetClass: AssetClass.equity,
       baseCurrency: 'USD',
       page: 2,
       take: 10,

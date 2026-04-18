@@ -76,6 +76,7 @@ describe('AssetsService', () => {
     const result = await service.findAll({
       q: '  apple   inc ',
       type: 'equity',
+      assetClass: 'equity',
       baseCurrency: ' usd ',
       page: 3,
       take: 10,
@@ -88,6 +89,7 @@ describe('AssetsService', () => {
           { name: { contains: 'apple inc', mode: 'insensitive' } },
         ],
         type: 'equity',
+        assetClass: 'equity',
         baseCurrency: 'USD',
       },
       orderBy: { symbol: 'asc' },
@@ -101,6 +103,7 @@ describe('AssetsService', () => {
           { name: { contains: 'apple inc', mode: 'insensitive' } },
         ],
         type: 'equity',
+        assetClass: 'equity',
         baseCurrency: 'USD',
       },
     })

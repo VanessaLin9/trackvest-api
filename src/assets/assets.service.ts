@@ -61,6 +61,10 @@ export class AssetsService {
       where.type = query.type
     }
 
+    if (query.assetClass) {
+      where.assetClass = query.assetClass
+    }
+
     if (baseCurrency) {
       where.baseCurrency = baseCurrency
     }
