@@ -24,7 +24,10 @@ type NormalizedAssetPayload = Omit<CreateAndUpdateAssetDto, 'assetClass'> & {
 export class AssetsService {
   constructor(private prisma: PrismaService) {}
 
-  private normalizeAssetPayload(dto: CreateAndUpdateAssetDto): NormalizedAssetPayload {
+  private normalizeAssetPayload(
+    dto: CreateAndUpdateAssetDto,
+    options?: { fallbackAssetClass?: AssetClass },
+  ): NormalizedAssetPayload {
     const normalizedDto = {
       ...dto,
       symbol: normalizeAssetSymbolInput(dto.symbol),
@@ -34,14 +37,22 @@ export class AssetsService {
 
     return {
       ...normalizedDto,
-      assetClass: this.resolveAssetClass(normalizedDto),
+      assetClass: this.resolveAssetClass(normalizedDto, options?.fallbackAssetClass),
     }
   }
 
-  private resolveAssetClass(dto: CreateAndUpdateAssetDto): AssetClass {
+  private resolveAssetClass(
+    dto: CreateAndUpdateAssetDto,
+    fallbackAssetClass?: AssetClass,
+  ): AssetClass {
     if (dto.assetClass) {
       this.assertCompatibleAssetClass(dto.type, dto.assetClass)
       return dto.assetClass
+    }
+
+    if (fallbackAssetClass) {
+      this.assertCompatibleAssetClass(dto.type, fallbackAssetClass)
+      return fallbackAssetClass
     }
 
     const inferredAssetClass = this.inferAssetClass(dto)
@@ -183,17 +194,19 @@ export class AssetsService {
   }
 
   async update(id: string, dto: CreateAndUpdateAssetDto) {
-    await this.findOne(id)
-    const normalizedDto = this.normalizeAssetPayload(dto)
+    const existingAsset = await this.findOne(id)
+    const normalizedDto = this.normalizeAssetPayload(dto, {
+      fallbackAssetClass: existingAsset.assetClass,
+    })
     
     // Check if another asset with same symbol exists (excluding current one)
-    const existingAsset = await this.prisma.asset.findFirst({ 
+    const conflictingAsset = await this.prisma.asset.findFirst({ 
       where: { 
         symbol: normalizedDto.symbol,
         id: { not: id }
       } 
     })
-    if (existingAsset) {
+    if (conflictingAsset) {
       throw new ConflictException('Asset with this symbol already exists')
     }
     

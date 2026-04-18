@@ -284,6 +284,34 @@ describe('AssetsService', () => {
     })
   })
 
+  it('reuses the stored assetClass on update when an etf omits assetClass', async () => {
+    const { service, prisma } = createHarness()
+    prisma.asset.findUnique.mockResolvedValue({
+      id: 'asset-1',
+      assetClass: 'bond',
+    })
+    prisma.asset.findFirst.mockResolvedValue(null)
+    prisma.asset.update.mockResolvedValue({ id: 'asset-1', symbol: 'VTIP' })
+
+    await service.update('asset-1', {
+      symbol: ' vtip ',
+      name: ' Vanguard Short-Term Inflation-Protected Securities ETF ',
+      type: 'etf',
+      baseCurrency: ' usd ',
+    })
+
+    expect(prisma.asset.update).toHaveBeenCalledWith({
+      where: { id: 'asset-1' },
+      data: {
+        symbol: 'VTIP',
+        name: 'Vanguard Short-Term Inflation-Protected Securities ETF',
+        type: 'etf',
+        assetClass: 'bond',
+        baseCurrency: 'USD',
+      },
+    })
+  })
+
   it('infers assetClass during update when it is omitted', async () => {
     const { service, prisma } = createHarness()
     prisma.asset.findUnique.mockResolvedValue({ id: 'asset-1' })
