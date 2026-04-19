@@ -359,9 +359,25 @@ describe('PortfolioService', () => {
     expect(result.marketValueByAssetClass).toEqual({ equity: 700, bond: 300 })
     expect(result.recommendedBuyAmountByAssetClass).toEqual({ equity: 500, bond: 0 })
     expect(result.trackedMarketValue).toBe(1000)
+    expect(result.suggestions).toEqual([
+      {
+        assetClass: 'equity',
+        assetId: 'asset-1',
+        symbol: 'VTI',
+        name: 'Vanguard Total Stock Market ETF',
+        currentMarketValue: 700,
+        currentWeightWithinAssetClass: 1,
+        suggestedBuyAmount: 500,
+        estimatedQuantity: null,
+        latestPrice: null,
+        latestPriceCurrency: null,
+      },
+    ])
     expect(result.notes).toEqual([
       'Current ratios are calculated from equity and bond holdings only. Excluded asset classes: precious_metal.',
       'Recommended buy amounts assume a buy-only rebalance and do not suggest selling.',
+      'Suggestions are distributed across existing holdings based on current market value within each asset class.',
+      'Estimated quantities are approximate and do not account for broker lot-size constraints.',
     ])
   })
 
@@ -419,6 +435,20 @@ describe('PortfolioService', () => {
       equity: 0,
       bond: 166.66666667,
     })
+    expect(result.suggestions).toEqual([
+      {
+        assetClass: 'bond',
+        assetId: 'asset-2',
+        symbol: 'BND',
+        name: 'Vanguard Total Bond ETF',
+        currentMarketValue: 300,
+        currentWeightWithinAssetClass: 1,
+        suggestedBuyAmount: 166.66666667,
+        estimatedQuantity: null,
+        latestPrice: null,
+        latestPriceCurrency: null,
+      },
+    ])
   })
 
   it('rejects invalid rebalance targets when the provided ratios do not sum to one', async () => {
@@ -475,6 +505,7 @@ describe('PortfolioService', () => {
     expect(result.marketValueByAssetClass).toEqual({ equity: 0, bond: 0 })
     expect(result.recommendedBuyAmountByAssetClass).toEqual({ equity: 0, bond: 0 })
     expect(result.trackedMarketValue).toBe(0)
+    expect(result.suggestions).toEqual([])
     expect(result.notes).toEqual([
       'No equity or bond holdings are available for rebalance calculations yet.',
       'Current ratios are calculated from equity and bond holdings only. Excluded asset classes: precious_metal.',

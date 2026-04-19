@@ -211,6 +211,8 @@ export class PortfolioService {
           bond: 0,
         }
 
+    const suggestions = this.buildRebalanceSuggestions(snapshot.items, recommendedBuyAmountByAssetClass)
+
     return {
       asOf: snapshot.asOf,
       displayCurrencyMode: snapshot.displayCurrencyMode,
@@ -226,7 +228,8 @@ export class PortfolioService {
       },
       recommendedBuyAmountByAssetClass,
       trackedMarketValue: roundTo(trackedMarketValue, 8),
-      notes: this.buildRebalanceNotes(snapshot.items, trackedMarketValue),
+      suggestions,
+      notes: this.buildRebalanceNotes(snapshot.items, trackedMarketValue, suggestions),
     }
   }
 
@@ -735,7 +738,57 @@ export class PortfolioService {
     )
   }
 
-  private buildRebalanceNotes(items: HoldingOverviewItem[], trackedMarketValue: number): string[] {
+  private buildRebalanceSuggestions(
+    items: HoldingOverviewItem[],
+    recommendedBuyAmountByAssetClass: Record<RebalanceTrackedAssetClass, number>,
+  ): PortfolioRebalanceResponseDto['suggestions'] {
+    const suggestions: PortfolioRebalanceResponseDto['suggestions'] = []
+
+    for (const assetClass of ['equity', 'bond'] as const) {
+      const totalRecommendedBuyAmount = recommendedBuyAmountByAssetClass[assetClass]
+      if (totalRecommendedBuyAmount <= 1e-9) {
+        continue
+      }
+
+      const classItems = items.filter((item) => item.assetClass === assetClass)
+      const classMarketValue = classItems.reduce((sum, item) => sum + item.marketValue, 0)
+
+      if (classItems.length === 0 || classMarketValue <= 1e-9) {
+        continue
+      }
+
+      for (const item of classItems) {
+        const currentWeightWithinAssetClass = item.marketValue / classMarketValue
+        const suggestedBuyAmount = totalRecommendedBuyAmount * currentWeightWithinAssetClass
+        suggestions.push({
+          assetClass,
+          assetId: item.assetId,
+          symbol: item.symbol,
+          name: item.name,
+          currentMarketValue: roundTo(item.marketValue, 8),
+          currentWeightWithinAssetClass: roundTo(currentWeightWithinAssetClass, 8),
+          suggestedBuyAmount: roundTo(suggestedBuyAmount, 8),
+          estimatedQuantity:
+            item.latestPrice != null && item.latestPrice > 0
+              ? roundTo(suggestedBuyAmount / item.latestPrice, 8)
+              : null,
+          latestPrice: item.latestPrice == null ? null : roundTo(item.latestPrice, 8),
+          latestPriceCurrency: item.latestPriceCurrency,
+        })
+      }
+    }
+
+    return suggestions.sort(
+      (left, right) =>
+        right.suggestedBuyAmount - left.suggestedBuyAmount || left.symbol.localeCompare(right.symbol),
+    )
+  }
+
+  private buildRebalanceNotes(
+    items: HoldingOverviewItem[],
+    trackedMarketValue: number,
+    suggestions: PortfolioRebalanceResponseDto['suggestions'],
+  ): string[] {
     const notes: string[] = []
     const excludedAssetClasses = [...new Set(
       items
@@ -754,6 +807,11 @@ export class PortfolioService {
     }
 
     notes.push('Recommended buy amounts assume a buy-only rebalance and do not suggest selling.')
+
+    if (suggestions.length > 0) {
+      notes.push('Suggestions are distributed across existing holdings based on current market value within each asset class.')
+      notes.push('Estimated quantities are approximate and do not account for broker lot-size constraints.')
+    }
 
     return notes
   }

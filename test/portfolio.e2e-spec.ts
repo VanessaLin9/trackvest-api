@@ -311,6 +311,23 @@ describe('Portfolio overview (e2e)', () => {
       note: 'buy bond asset',
     })
 
+    await prisma.price.createMany({
+      data: [
+        {
+          assetId: equityAsset.id,
+          price: 700,
+          asOf: new Date('2026-04-05T00:00:00.000Z'),
+          source: 'fixture',
+        },
+        {
+          assetId: bondAsset.id,
+          price: 300,
+          asOf: new Date('2026-04-05T00:00:00.000Z'),
+          source: 'fixture',
+        },
+      ],
+    })
+
     return { user }
   }
 
@@ -540,8 +557,24 @@ describe('Portfolio overview (e2e)', () => {
         bond: 0,
       },
       trackedMarketValue: 1000,
+      suggestions: [
+        {
+          assetClass: 'equity',
+          assetId: expect.any(String),
+          symbol: 'E2E-VTI',
+          name: 'E2E Total Stock ETF',
+          currentMarketValue: 700,
+          currentWeightWithinAssetClass: 1,
+          suggestedBuyAmount: 500,
+          estimatedQuantity: 0.71428571,
+          latestPrice: 700,
+          latestPriceCurrency: 'USD',
+        },
+      ],
       notes: [
         'Recommended buy amounts assume a buy-only rebalance and do not suggest selling.',
+        'Suggestions are distributed across existing holdings based on current market value within each asset class.',
+        'Estimated quantities are approximate and do not account for broker lot-size constraints.',
       ],
     })
   })
@@ -582,8 +615,24 @@ describe('Portfolio overview (e2e)', () => {
         bond: 166.66666667,
       },
       trackedMarketValue: 1000,
+      suggestions: [
+        {
+          assetClass: 'bond',
+          assetId: expect.any(String),
+          symbol: 'E2E-BND',
+          name: 'E2E Total Bond ETF',
+          currentMarketValue: 300,
+          currentWeightWithinAssetClass: 1,
+          suggestedBuyAmount: 166.66666667,
+          estimatedQuantity: 0.55555556,
+          latestPrice: 300,
+          latestPriceCurrency: 'USD',
+        },
+      ],
       notes: [
         'Recommended buy amounts assume a buy-only rebalance and do not suggest selling.',
+        'Suggestions are distributed across existing holdings based on current market value within each asset class.',
+        'Estimated quantities are approximate and do not account for broker lot-size constraints.',
       ],
     })
   })

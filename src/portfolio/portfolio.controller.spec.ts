@@ -147,7 +147,25 @@ describe('PortfolioController', () => {
       marketValueByAssetClass: { equity: 700, bond: 300 },
       recommendedBuyAmountByAssetClass: { equity: 500, bond: 0 },
       trackedMarketValue: 1000,
-      notes: ['Recommended buy amounts assume a buy-only rebalance and do not suggest selling.'],
+      suggestions: [
+        {
+          assetClass: 'equity',
+          assetId: 'asset-1',
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          currentMarketValue: 700,
+          currentWeightWithinAssetClass: 1,
+          suggestedBuyAmount: 500,
+          estimatedQuantity: 2,
+          latestPrice: 250,
+          latestPriceCurrency: 'USD',
+        },
+      ],
+      notes: [
+        'Recommended buy amounts assume a buy-only rebalance and do not suggest selling.',
+        'Suggestions are distributed across existing holdings based on current market value within each asset class.',
+        'Estimated quantities are approximate and do not account for broker lot-size constraints.',
+      ],
     })
 
     const result = await controller.getRebalance('user-1', { preferredBaseCurrency: 'TWD' })
@@ -165,7 +183,25 @@ describe('PortfolioController', () => {
       marketValueByAssetClass: { equity: 700, bond: 300 },
       recommendedBuyAmountByAssetClass: { equity: 500, bond: 0 },
       trackedMarketValue: 1000,
-      notes: ['Recommended buy amounts assume a buy-only rebalance and do not suggest selling.'],
+      suggestions: [
+        {
+          assetClass: 'equity',
+          assetId: 'asset-1',
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          currentMarketValue: 700,
+          currentWeightWithinAssetClass: 1,
+          suggestedBuyAmount: 500,
+          estimatedQuantity: 2,
+          latestPrice: 250,
+          latestPriceCurrency: 'USD',
+        },
+      ],
+      notes: [
+        'Recommended buy amounts assume a buy-only rebalance and do not suggest selling.',
+        'Suggestions are distributed across existing holdings based on current market value within each asset class.',
+        'Estimated quantities are approximate and do not account for broker lot-size constraints.',
+      ],
     })
   })
 
