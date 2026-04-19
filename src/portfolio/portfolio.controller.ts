@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Query } from '@nestjs/common'
 import { ApiHeader, ApiOkResponse, ApiTags } from '@nestjs/swagger'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
+import { GetPortfolioRebalanceDto } from './dto/get-portfolio-rebalance.dto'
 import { GetPortfolioDisplayCurrencyDto } from './dto/get-portfolio-display-currency.dto'
 import { PortfolioRebalanceResponseDto } from './dto/portfolio-rebalance.response.dto'
 import { PortfolioHoldingsResponseDto } from './dto/portfolio-holdings.response.dto'
@@ -39,7 +40,7 @@ export class PortfolioController {
   @ApiOkResponse({ type: PortfolioRebalanceResponseDto })
   async getRebalance(
     @CurrentUser() userId: string,
-    @Query() query: GetPortfolioDisplayCurrencyDto,
+    @Query() query: GetPortfolioRebalanceDto,
   ): Promise<PortfolioRebalanceResponseDto> {
     return this.portfolioService.getRebalance(userId, query)
   }

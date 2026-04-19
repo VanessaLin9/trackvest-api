@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common'
 import { PortfolioService } from './portfolio.service'
 
 describe('PortfolioService', () => {
@@ -362,6 +363,79 @@ describe('PortfolioService', () => {
       'Current ratios are calculated from equity and bond holdings only. Excluded asset classes: precious_metal.',
       'Recommended buy amounts assume a buy-only rebalance and do not suggest selling.',
     ])
+  })
+
+  it('uses custom rebalance targets provided by the client', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.position.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        quantity: 1,
+        avgCost: 700,
+        openedAt: new Date('2026-03-01T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-1',
+          symbol: 'VTI',
+          name: 'Vanguard Total Stock ETF',
+          type: 'etf',
+          assetClass: 'equity',
+          baseCurrency: 'USD',
+        },
+      },
+      {
+        assetId: 'asset-2',
+        quantity: 1,
+        avgCost: 300,
+        openedAt: new Date('2026-03-02T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-2',
+          symbol: 'BND',
+          name: 'Vanguard Total Bond ETF',
+          type: 'etf',
+          assetClass: 'bond',
+          baseCurrency: 'USD',
+        },
+      },
+    ])
+    prisma.price.findMany.mockResolvedValue([])
+    prisma.transaction.findMany.mockResolvedValue([])
+    fxRateService.getReferenceRate.mockResolvedValue({
+      base: 'USD',
+      quote: 'USD',
+      rate: 1,
+      date: '2026-04-05',
+      provider: 'identity',
+    })
+
+    const result = await service.getRebalance('user-1', { targetBond: 0.4 })
+
+    expect(result.targets).toEqual({ equity: 0.6, bond: 0.4 })
+    expect(result.current).toEqual({ equity: 0.7, bond: 0.3 })
+    expect(result.gaps).toEqual({ equity: -0.1, bond: 0.1 })
+    expect(result.recommendedBuyAmountByAssetClass).toEqual({
+      equity: 0,
+      bond: 166.66666667,
+    })
+  })
+
+  it('rejects invalid rebalance targets when the provided ratios do not sum to one', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.position.findMany.mockResolvedValue([])
+    fxRateService.getReferenceRate.mockResolvedValue({
+      base: 'USD',
+      quote: 'USD',
+      rate: 1,
+      date: '2026-04-05',
+      provider: 'identity',
+    })
+
+    await expect(
+      service.getRebalance('user-1', { targetEquity: 0.8, targetBond: 0.3 }),
+    ).rejects.toThrow(new BadRequestException('targetEquity and targetBond must sum to 1'))
   })
 
   it('returns empty rebalance metrics when there are no equity or bond holdings', async () => {

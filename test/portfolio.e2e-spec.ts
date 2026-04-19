@@ -545,4 +545,46 @@ describe('Portfolio overview (e2e)', () => {
       ],
     })
   })
+
+  it('accepts client-provided rebalance targets', async () => {
+    const { user } = await createRebalanceFixture()
+
+    const rebalanceResponse = await request(app.getHttpServer())
+      .get('/portfolio/rebalance')
+      .query({ targetBond: 0.4 })
+      .set(auth(user.id))
+      .expect(200)
+
+    expect(rebalanceResponse.body).toEqual({
+      asOf: expect.any(String),
+      displayCurrencyMode: 'portfolio-default',
+      requestedDisplayCurrency: null,
+      effectiveDisplayCurrency: 'USD',
+      baseCurrency: 'USD',
+      targets: {
+        equity: 0.6,
+        bond: 0.4,
+      },
+      current: {
+        equity: 0.7,
+        bond: 0.3,
+      },
+      gaps: {
+        equity: -0.1,
+        bond: 0.1,
+      },
+      marketValueByAssetClass: {
+        equity: 700,
+        bond: 300,
+      },
+      recommendedBuyAmountByAssetClass: {
+        equity: 0,
+        bond: 166.66666667,
+      },
+      trackedMarketValue: 1000,
+      notes: [
+        'Recommended buy amounts assume a buy-only rebalance and do not suggest selling.',
+      ],
+    })
+  })
 })

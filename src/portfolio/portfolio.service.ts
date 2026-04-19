@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { AssetClass, AssetType, TxType } from '@prisma/client'
 import { APP_CURRENCIES } from '../common/constants/currency.constants'
 import { normalizeAssetCurrencyInput } from '../common/utils'
@@ -7,6 +7,7 @@ import { roundTo, toNumber } from '../common/utils/number.util'
 import { FxRateService } from '../fx/fx-rate.service'
 import { PrismaService } from '../prisma.service'
 import { GetPortfolioDisplayCurrencyDto } from './dto/get-portfolio-display-currency.dto'
+import { GetPortfolioRebalanceDto } from './dto/get-portfolio-rebalance.dto'
 import { PortfolioDisplayCurrencyMode } from './dto/portfolio-display-currency.types'
 import { PortfolioHoldingsResponseDto } from './dto/portfolio-holdings.response.dto'
 import { PortfolioRebalanceResponseDto } from './dto/portfolio-rebalance.response.dto'
@@ -42,7 +43,7 @@ type PortfolioDisplayCurrencyContext = {
   effectiveDisplayCurrency: string
 }
 
-const REBALANCE_TARGETS: Record<RebalanceTrackedAssetClass, number> = {
+const DEFAULT_REBALANCE_TARGETS: Record<RebalanceTrackedAssetClass, number> = {
   equity: 0.8,
   bond: 0.2,
 }
@@ -163,9 +164,10 @@ export class PortfolioService {
 
   async getRebalance(
     userId: string,
-    query?: GetPortfolioDisplayCurrencyDto,
+    query?: GetPortfolioRebalanceDto,
   ): Promise<PortfolioRebalanceResponseDto> {
     const snapshot = await this.buildHoldingsSnapshot(userId, query)
+    const targets = this.resolveRebalanceTargets(query)
     const marketValueByAssetClass = this.sumTrackedAssetClassMarketValues(snapshot.items)
     const trackedMarketValue = marketValueByAssetClass.equity + marketValueByAssetClass.bond
     const current = trackedMarketValue > 0
@@ -179,15 +181,15 @@ export class PortfolioService {
         }
 
     const gaps = {
-      equity: roundTo(REBALANCE_TARGETS.equity - current.equity, 8),
-      bond: roundTo(REBALANCE_TARGETS.bond - current.bond, 8),
+      equity: roundTo(targets.equity - current.equity, 8),
+      bond: roundTo(targets.bond - current.bond, 8),
     }
 
     const recommendedBuyAmountByAssetClass = trackedMarketValue > 0
       ? {
           equity: roundTo(
             this.calculateRecommendedBuyAmount({
-              targetWeight: REBALANCE_TARGETS.equity,
+              targetWeight: targets.equity,
               currentWeight: current.equity,
               currentMarketValue: marketValueByAssetClass.equity,
               trackedMarketValue,
@@ -196,7 +198,7 @@ export class PortfolioService {
           ),
           bond: roundTo(
             this.calculateRecommendedBuyAmount({
-              targetWeight: REBALANCE_TARGETS.bond,
+              targetWeight: targets.bond,
               currentWeight: current.bond,
               currentMarketValue: marketValueByAssetClass.bond,
               trackedMarketValue,
@@ -215,7 +217,7 @@ export class PortfolioService {
       requestedDisplayCurrency: snapshot.requestedDisplayCurrency,
       effectiveDisplayCurrency: snapshot.effectiveDisplayCurrency,
       baseCurrency: snapshot.baseCurrency,
-      targets: REBALANCE_TARGETS,
+      targets,
       current,
       gaps,
       marketValueByAssetClass: {
@@ -680,6 +682,41 @@ export class PortfolioService {
       },
       { equity: 0, bond: 0 },
     )
+  }
+
+  private resolveRebalanceTargets(
+    query?: Pick<GetPortfolioRebalanceDto, 'targetEquity' | 'targetBond'>,
+  ): Record<RebalanceTrackedAssetClass, number> {
+    const targetEquity = query?.targetEquity
+    const targetBond = query?.targetBond
+
+    if (targetEquity == null && targetBond == null) {
+      return DEFAULT_REBALANCE_TARGETS
+    }
+
+    if (targetEquity != null && targetBond == null) {
+      return {
+        equity: roundTo(targetEquity, 8),
+        bond: roundTo(1 - targetEquity, 8),
+      }
+    }
+
+    if (targetEquity == null && targetBond != null) {
+      return {
+        equity: roundTo(1 - targetBond, 8),
+        bond: roundTo(targetBond, 8),
+      }
+    }
+
+    const total = (targetEquity ?? 0) + (targetBond ?? 0)
+    if (Math.abs(total - 1) > 1e-8) {
+      throw new BadRequestException('targetEquity and targetBond must sum to 1')
+    }
+
+    return {
+      equity: roundTo(targetEquity ?? DEFAULT_REBALANCE_TARGETS.equity, 8),
+      bond: roundTo(targetBond ?? DEFAULT_REBALANCE_TARGETS.bond, 8),
+    }
   }
 
   private calculateRecommendedBuyAmount(input: {
