@@ -359,6 +359,34 @@ describe('PortfolioService', () => {
     expect(result.marketValueByAssetClass).toEqual({ equity: 700, bond: 300 })
     expect(result.recommendedBuyAmountByAssetClass).toEqual({ equity: 500, bond: 0 })
     expect(result.trackedMarketValue).toBe(1000)
+    expect(result.candidates).toEqual([
+      {
+        assetClass: 'bond',
+        assetId: 'asset-2',
+        symbol: 'BND',
+        name: 'Vanguard Total Bond Market ETF',
+        currentMarketValue: 300,
+        currentWeightWithinAssetClass: 1,
+        latestPrice: null,
+        latestPriceCurrency: null,
+        assetBaseCurrency: 'USD',
+        lotSize: null,
+        minTradeUnit: null,
+      },
+      {
+        assetClass: 'equity',
+        assetId: 'asset-1',
+        symbol: 'VTI',
+        name: 'Vanguard Total Stock Market ETF',
+        currentMarketValue: 700,
+        currentWeightWithinAssetClass: 1,
+        latestPrice: null,
+        latestPriceCurrency: null,
+        assetBaseCurrency: 'USD',
+        lotSize: null,
+        minTradeUnit: null,
+      },
+    ])
     expect(result.suggestions).toEqual([
       {
         assetClass: 'equity',
@@ -435,6 +463,34 @@ describe('PortfolioService', () => {
       equity: 0,
       bond: 166.66666667,
     })
+    expect(result.candidates).toEqual([
+      {
+        assetClass: 'bond',
+        assetId: 'asset-2',
+        symbol: 'BND',
+        name: 'Vanguard Total Bond ETF',
+        currentMarketValue: 300,
+        currentWeightWithinAssetClass: 1,
+        latestPrice: null,
+        latestPriceCurrency: null,
+        assetBaseCurrency: 'USD',
+        lotSize: null,
+        minTradeUnit: null,
+      },
+      {
+        assetClass: 'equity',
+        assetId: 'asset-1',
+        symbol: 'VTI',
+        name: 'Vanguard Total Stock ETF',
+        currentMarketValue: 700,
+        currentWeightWithinAssetClass: 1,
+        latestPrice: null,
+        latestPriceCurrency: null,
+        assetBaseCurrency: 'USD',
+        lotSize: null,
+        minTradeUnit: null,
+      },
+    ])
     expect(result.suggestions).toEqual([
       {
         assetClass: 'bond',
@@ -505,6 +561,7 @@ describe('PortfolioService', () => {
     expect(result.marketValueByAssetClass).toEqual({ equity: 0, bond: 0 })
     expect(result.recommendedBuyAmountByAssetClass).toEqual({ equity: 0, bond: 0 })
     expect(result.trackedMarketValue).toBe(0)
+    expect(result.candidates).toEqual([])
     expect(result.suggestions).toEqual([])
     expect(result.notes).toEqual([
       'No equity or bond holdings are available for rebalance calculations yet.',

@@ -211,6 +211,7 @@ export class PortfolioService {
           bond: 0,
         }
 
+    const candidates = this.buildRebalanceCandidates(snapshot.items)
     const suggestions = this.buildRebalanceSuggestions(snapshot.items, recommendedBuyAmountByAssetClass)
 
     return {
@@ -228,6 +229,7 @@ export class PortfolioService {
       },
       recommendedBuyAmountByAssetClass,
       trackedMarketValue: roundTo(trackedMarketValue, 8),
+      candidates,
       suggestions,
       notes: this.buildRebalanceNotes(snapshot.items, trackedMarketValue, suggestions),
     }
@@ -781,6 +783,44 @@ export class PortfolioService {
     return suggestions.sort(
       (left, right) =>
         right.suggestedBuyAmount - left.suggestedBuyAmount || left.symbol.localeCompare(right.symbol),
+    )
+  }
+
+  private buildRebalanceCandidates(
+    items: HoldingOverviewItem[],
+  ): PortfolioRebalanceResponseDto['candidates'] {
+    const candidates: PortfolioRebalanceResponseDto['candidates'] = []
+
+    for (const assetClass of ['equity', 'bond'] as const) {
+      const classItems = items.filter((item) => item.assetClass === assetClass)
+      const classMarketValue = classItems.reduce((sum, item) => sum + item.marketValue, 0)
+
+      if (classItems.length === 0 || classMarketValue <= 1e-9) {
+        continue
+      }
+
+      for (const item of classItems) {
+        candidates.push({
+          assetClass,
+          assetId: item.assetId,
+          symbol: item.symbol,
+          name: item.name,
+          currentMarketValue: roundTo(item.marketValue, 8),
+          currentWeightWithinAssetClass: roundTo(item.marketValue / classMarketValue, 8),
+          latestPrice: item.latestPrice == null ? null : roundTo(item.latestPrice, 8),
+          latestPriceCurrency: item.latestPriceCurrency,
+          assetBaseCurrency: item.assetBaseCurrency,
+          lotSize: null,
+          minTradeUnit: null,
+        })
+      }
+    }
+
+    return candidates.sort(
+      (left, right) =>
+        left.assetClass.localeCompare(right.assetClass)
+        || right.currentMarketValue - left.currentMarketValue
+        || left.symbol.localeCompare(right.symbol),
     )
   }
 

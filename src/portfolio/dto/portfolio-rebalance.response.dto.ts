@@ -49,6 +49,41 @@ export class PortfolioRebalanceSuggestionResponseDto {
   latestPriceCurrency!: string | null
 }
 
+export class PortfolioRebalanceCandidateResponseDto {
+  @ApiProperty({ enum: ['equity', 'bond'], example: 'equity' })
+  assetClass!: 'equity' | 'bond'
+
+  @ApiProperty({ example: 'asset-1' })
+  assetId!: string
+
+  @ApiProperty({ example: 'AAPL' })
+  symbol!: string
+
+  @ApiProperty({ example: 'Apple Inc.' })
+  name!: string
+
+  @ApiProperty({ example: 2480.67063 })
+  currentMarketValue!: number
+
+  @ApiProperty({ example: 1 })
+  currentWeightWithinAssetClass!: number
+
+  @ApiProperty({ example: 250, nullable: true })
+  latestPrice!: number | null
+
+  @ApiProperty({ example: 'USD', nullable: true })
+  latestPriceCurrency!: string | null
+
+  @ApiProperty({ example: 'USD' })
+  assetBaseCurrency!: string
+
+  @ApiProperty({ example: null, nullable: true })
+  lotSize!: number | null
+
+  @ApiProperty({ example: null, nullable: true })
+  minTradeUnit!: number | null
+}
+
 export class PortfolioRebalanceResponseDto extends PortfolioDisplayCurrencyResponseDto {
   @ApiProperty({ example: '2026-04-19T00:00:00.000Z' })
   asOf!: string
@@ -73,6 +108,9 @@ export class PortfolioRebalanceResponseDto extends PortfolioDisplayCurrencyRespo
 
   @ApiProperty({ example: 100000 })
   trackedMarketValue!: number
+
+  @ApiProperty({ type: PortfolioRebalanceCandidateResponseDto, isArray: true })
+  candidates!: PortfolioRebalanceCandidateResponseDto[]
 
   @ApiProperty({ type: PortfolioRebalanceSuggestionResponseDto, isArray: true })
   suggestions!: PortfolioRebalanceSuggestionResponseDto[]
