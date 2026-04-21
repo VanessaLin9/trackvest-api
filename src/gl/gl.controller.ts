@@ -1,5 +1,5 @@
 import { Body, Controller, Post, BadRequestException, Get, Query } from '@nestjs/common'
-import { ApiBadRequestResponse, ApiBody, ApiCreatedResponse, ApiTags, ApiHeader, ApiResponse } from '@nestjs/swagger'
+import { ApiBadRequestResponse, ApiBody, ApiCreatedResponse, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger'
 import { PostingService } from './posting.service'
 import { ErrorResponse } from 'src/common/dto'
 import { PostTransferCommand } from './dto/post-transfer.command'
@@ -9,7 +9,7 @@ import { AuthUser } from '../common/decorators/auth-user.decorator'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
 import { OwnershipService } from '../common/services/ownership.service'
 import { AuthenticatedUser } from '../common/types/auth-user'
-import { GlService } from './services/gl.service'
+import { ALL_GL_ACCOUNTS, GlService } from './services/gl.service'
 import { GlAccountType } from '@prisma/client'
 import { GetAccountDto } from './dto/get-account.dto'
 import { GlEntryDto } from './dto/get-entry.dto'
@@ -17,7 +17,7 @@ import { GlEntryDto } from './dto/get-entry.dto'
 @ApiTags('gl')
 @Controller('gl')
 @ApiBadRequestResponse({ type: ErrorResponse })
-@ApiHeader({ name: 'X-User-Id', description: 'User ID', required: true })
+@ApiSecurity('user-id')
 export class GlController {
   constructor(
     private readonly post: PostingService,
@@ -31,12 +31,15 @@ export class GlController {
     if (!type) {
       throw new BadRequestException('Type is required')
     }
-    return this.glService.findByTypeAndName(userId, type)
+    return this.glService.findByType(userId, type)
   }
 
   @Get('entries')
   @ApiResponse({ type: [GlEntryDto] })
-  async getEntries(@CurrentUser() userId: string, @Query('accountId') accountParam: string = 'All') {
+  async getEntries(
+    @CurrentUser() userId: string,
+    @Query('accountId') accountParam: string = ALL_GL_ACCOUNTS,
+  ) {
     return this.glService.getEntriesByAccountId(userId, accountParam)
   }
 

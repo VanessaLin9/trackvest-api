@@ -1,8 +1,14 @@
 import { Injectable, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../../prisma.service'
-import { Account, Currency, GlAccountPurpose, GlAccountType, GlEntry, Prisma } from '@prisma/client'
+import { Account, Currency, GlAccountPurpose, GlAccountType, Prisma } from '@prisma/client'
 import { GetAccountDto } from '../dto/get-account.dto'
 import { GlEntryDto } from '../dto/get-entry.dto'
+
+/**
+ * Sentinel value used by the GET /gl/entries endpoint to indicate "no
+ * account filter; return every entry for the user".
+ */
+export const ALL_GL_ACCOUNTS = 'All'
 
 type DbClient = Prisma.TransactionClient | PrismaService
 
@@ -152,79 +158,45 @@ export class GlService {
   }
 
   /**
-   * Generic GL account lookup by type and optional name pattern
+   * List a user's GL accounts filtered by {@link GlAccountType}.
    */
-  async findByTypeAndName(
-    userId: string,
-    type: GlAccountType,
-  ): Promise<GetAccountDto[]> {
-    const gl = await this.prisma.glAccount.findMany({
-      where: {
-        userId : { equals: userId },
-      },
+  async findByType(userId: string, type: GlAccountType): Promise<GetAccountDto[]> {
+    const accounts = await this.prisma.glAccount.findMany({
+      where: { userId, type },
+      orderBy: { name: 'asc' },
     })
-
-    const accounts = gl.filter((gl) => gl.type === type)
     return accounts.map(GetAccountDto.fromEntity)
   }
 
+  /**
+   * List GL entries for a user, optionally scoped to a single GL account.
+   *
+   * Pass {@link ALL_GL_ACCOUNTS} (or an empty value) to skip the account
+   * filter. Results are ordered by entry date descending at the database
+   * level.
+   */
   async getEntriesByAccountId(userId: string, accountId: string): Promise<GlEntryDto[]> {
-    let entries: GlEntry[] | undefined = undefined
-    if (accountId === 'All') {
-      entries = await this.prisma.glEntry.findMany({
-        where: {
-          userId: { equals: userId },
-          isDeleted: false,
-          ...(accountId !== 'All' ? {
-            lines: {
-              some: {
-                glAccountId: { equals: accountId },
-              },
-            },
-          } : {}),
-        },
-        include: {
-          lines: {
-            include: {
-              glAccount: {
-                select: {
-                  id: true,
-                  name: true,
-                  type: true,
-                  currency: true,
-                },
-              },
-            },
-          },
-        },
-      })
-    } else {
-    entries = await this.prisma.glEntry.findMany({
+    const hasAccountFilter = accountId && accountId !== ALL_GL_ACCOUNTS
+
+    const entries = await this.prisma.glEntry.findMany({
       where: {
-        userId: { equals: userId },
+        userId,
         isDeleted: false,
-        lines: {
-          some: {
-            glAccountId: { equals: accountId },
-          },
-        },
+        ...(hasAccountFilter
+          ? { lines: { some: { glAccountId: accountId } } }
+          : {}),
       },
       include: {
         lines: {
           include: {
             glAccount: {
-              select: {
-                id: true,
-                name: true,
-                type: true,
-                currency: true,
-              },
+              select: { id: true, name: true, type: true, currency: true },
             },
           },
-          },
         },
-      })
-    }
-    return entries?.map(GlEntryDto.fromEntity).sort((a, b) => b.date.localeCompare(a.date)) ?? []
+      },
+      orderBy: { date: 'desc' },
+    })
+    return entries.map(GlEntryDto.fromEntity)
   }
 }

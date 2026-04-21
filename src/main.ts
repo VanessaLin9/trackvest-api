@@ -26,12 +26,23 @@ async function bootstrap() {
   )
 
 
-  // Swagger（/docs）
+  // Swagger（/docs）— X-User-Id is a dev-mode auth header consumed by AuthGuard.
+  // Declaring it as an apiKey security scheme gives Swagger UI a single
+  // Authorize dialog where developers can set the acting user for every
+  // request, matching how the real AuthGuard validates requests.
   const swaggerCfg = new DocumentBuilder()
     .setTitle('Trackvest API')
     .setDescription('API for investment bookkeeping')
     .setVersion('0.1.0')
-    .addBearerAuth()
+    .addApiKey(
+      {
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-User-Id',
+        description: 'UUID of the acting user (dev-mode authentication)',
+      },
+      'user-id',
+    )
     .addTag('health', 'Health check')
     .addTag('users', 'User management')
     .addTag('accounts', 'Cash/Broker/Bank accounts')

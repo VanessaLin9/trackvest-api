@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common'
-import { ApiOkResponse, ApiCreatedResponse, ApiTags, ApiBadRequestResponse, ApiHeader } from '@nestjs/swagger'
+import { ApiBadRequestResponse, ApiCreatedResponse, ApiOkResponse, ApiSecurity, ApiTags } from '@nestjs/swagger'
 import { AccountsService } from './accounts.service'
 import { CreateAndUpdateAccountDto } from './dto/account.createAndUpdate.dto'
 import { AccountResponseDto } from './dto/account.response.dto'
@@ -12,7 +12,7 @@ import { AuthenticatedUser } from '../common/types/auth-user'
 @ApiTags('accounts')
 @Controller('accounts')
 @ApiBadRequestResponse({ type: ErrorResponse })
-@ApiHeader({ name: 'X-User-Id', description: 'User ID', required: true })
+@ApiSecurity('user-id')
 export class AccountsController {
   constructor(
     private readonly svc: AccountsService,

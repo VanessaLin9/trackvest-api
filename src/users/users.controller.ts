@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post } from '@nestjs/common'
-import { ApiBadRequestResponse, ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger'
+import { ApiBadRequestResponse, ApiCreatedResponse, ApiOkResponse, ApiSecurity, ApiTags } from '@nestjs/swagger'
 import { plainToInstance } from 'class-transformer'
 import { UserRole } from '@prisma/client'
 import { UsersService } from './users.service'
@@ -25,6 +25,7 @@ export class UsersController {
 
   @Get()
   @Roles(UserRole.admin)
+  @ApiSecurity('user-id')
   @ApiOkResponse({ type: UserResponseDto, isArray: true })
   async findAll(): Promise<UserResponseDto[]> {
     const list = await this.svc.findAll()

@@ -1,5 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common'
-import { ApiHeader, ApiOkResponse, ApiTags } from '@nestjs/swagger'
+import { ApiOkResponse, ApiSecurity, ApiTags } from '@nestjs/swagger'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
 import { DashboardService } from './dashboard.service'
 import { DashboardActivityDto } from './dto/dashboard-activity.dto'
@@ -8,7 +8,7 @@ import { DashboardSummaryDto } from './dto/dashboard-summary.dto'
 
 @ApiTags('dashboard')
 @Controller('dashboard')
-@ApiHeader({ name: 'X-User-Id', description: 'User ID', required: true })
+@ApiSecurity('user-id')
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
