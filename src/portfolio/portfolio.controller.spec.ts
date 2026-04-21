@@ -3,6 +3,7 @@ import { PortfolioController } from './portfolio.controller'
 describe('PortfolioController', () => {
   function createHarness() {
     const portfolioService = {
+      getRebalance: jest.fn(),
       getSummary: jest.fn(),
       getHoldings: jest.fn(),
       getTrend: jest.fn(),
@@ -128,6 +129,108 @@ describe('PortfolioController', () => {
           marketValue: 600,
           weight: 1,
         },
+      ],
+    })
+  })
+
+  it('returns portfolio rebalance data from the service', async () => {
+    const { controller, portfolioService } = createHarness()
+    portfolioService.getRebalance.mockResolvedValue({
+      asOf: '2026-04-05T00:00:00.000Z',
+      displayCurrencyMode: 'preferred-base',
+      requestedDisplayCurrency: 'TWD',
+      effectiveDisplayCurrency: 'TWD',
+      baseCurrency: 'TWD',
+      targets: { equity: 0.8, bond: 0.2 },
+      current: { equity: 0.7, bond: 0.3 },
+      gaps: { equity: 0.1, bond: -0.1 },
+      marketValueByAssetClass: { equity: 700, bond: 300 },
+      recommendedBuyAmountByAssetClass: { equity: 500, bond: 0 },
+      trackedMarketValue: 1000,
+      candidates: [
+        {
+          assetClass: 'equity',
+          assetId: 'asset-1',
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          currentMarketValue: 700,
+          currentWeightWithinAssetClass: 1,
+          latestPrice: 250,
+          latestPriceCurrency: 'USD',
+          assetBaseCurrency: 'USD',
+          lotSize: null,
+          minTradeUnit: null,
+        },
+      ],
+      suggestions: [
+        {
+          assetClass: 'equity',
+          assetId: 'asset-1',
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          currentMarketValue: 700,
+          currentWeightWithinAssetClass: 1,
+          suggestedBuyAmount: 500,
+          estimatedQuantity: 2,
+          latestPrice: 250,
+          latestPriceCurrency: 'USD',
+        },
+      ],
+      notes: [
+        'Recommended buy amounts assume a buy-only rebalance and do not suggest selling.',
+        'Suggestions are distributed across existing holdings based on current market value within each asset class.',
+        'Estimated quantities are approximate and do not account for broker lot-size constraints.',
+      ],
+    })
+
+    const result = await controller.getRebalance('user-1', { preferredBaseCurrency: 'TWD' })
+
+    expect(portfolioService.getRebalance).toHaveBeenCalledWith('user-1', { preferredBaseCurrency: 'TWD' })
+    expect(result).toEqual({
+      asOf: '2026-04-05T00:00:00.000Z',
+      displayCurrencyMode: 'preferred-base',
+      requestedDisplayCurrency: 'TWD',
+      effectiveDisplayCurrency: 'TWD',
+      baseCurrency: 'TWD',
+      targets: { equity: 0.8, bond: 0.2 },
+      current: { equity: 0.7, bond: 0.3 },
+      gaps: { equity: 0.1, bond: -0.1 },
+      marketValueByAssetClass: { equity: 700, bond: 300 },
+      recommendedBuyAmountByAssetClass: { equity: 500, bond: 0 },
+      trackedMarketValue: 1000,
+      candidates: [
+        {
+          assetClass: 'equity',
+          assetId: 'asset-1',
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          currentMarketValue: 700,
+          currentWeightWithinAssetClass: 1,
+          latestPrice: 250,
+          latestPriceCurrency: 'USD',
+          assetBaseCurrency: 'USD',
+          lotSize: null,
+          minTradeUnit: null,
+        },
+      ],
+      suggestions: [
+        {
+          assetClass: 'equity',
+          assetId: 'asset-1',
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          currentMarketValue: 700,
+          currentWeightWithinAssetClass: 1,
+          suggestedBuyAmount: 500,
+          estimatedQuantity: 2,
+          latestPrice: 250,
+          latestPriceCurrency: 'USD',
+        },
+      ],
+      notes: [
+        'Recommended buy amounts assume a buy-only rebalance and do not suggest selling.',
+        'Suggestions are distributed across existing holdings based on current market value within each asset class.',
+        'Estimated quantities are approximate and do not account for broker lot-size constraints.',
       ],
     })
   })

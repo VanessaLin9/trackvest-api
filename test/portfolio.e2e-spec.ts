@@ -211,6 +211,126 @@ describe('Portfolio overview (e2e)', () => {
     }
   }
 
+  async function createRebalanceFixture() {
+    const user = await prisma.user.create({
+      data: {
+        email: 'rebalance-e2e@trackvest.local',
+        passwordHash: '!',
+      },
+    })
+
+    const account = await prisma.account.create({
+      data: {
+        userId: user.id,
+        name: 'Broker USD',
+        type: 'broker',
+        currency: Currency.USD,
+        broker: 'ib',
+      },
+    })
+
+    const [equityAsset, bondAsset] = await Promise.all([
+      prisma.asset.create({
+        data: {
+          symbol: 'E2E-VTI',
+          name: 'E2E Total Stock ETF',
+          type: AssetType.etf,
+          assetClass: 'equity',
+          baseCurrency: 'USD',
+        },
+      }),
+      prisma.asset.create({
+        data: {
+          symbol: 'E2E-BND',
+          name: 'E2E Total Bond ETF',
+          type: AssetType.etf,
+          assetClass: 'bond',
+          baseCurrency: 'USD',
+        },
+      }),
+    ])
+
+    await prisma.glAccount.createMany({
+      data: [
+        {
+          userId: user.id,
+          name: '資產-投資-股票(美金)',
+          type: GlAccountType.asset,
+          currency: Currency.USD,
+        },
+        {
+          userId: user.id,
+          name: '費用-手續費',
+          type: GlAccountType.expense,
+          currency: Currency.USD,
+        },
+        {
+          userId: user.id,
+          name: '收入-已實現損益-收益',
+          type: GlAccountType.income,
+          currency: Currency.USD,
+        },
+        {
+          userId: user.id,
+          name: '費用-已實現損益-損失',
+          type: GlAccountType.expense,
+          currency: Currency.USD,
+        },
+        {
+          userId: user.id,
+          name: '權益-投入資本',
+          type: GlAccountType.equity,
+          currency: Currency.USD,
+        },
+      ],
+    })
+
+    await createTransaction(user.id, {
+      accountId: account.id,
+      assetId: equityAsset.id,
+      type: 'buy',
+      amount: 700,
+      quantity: 1,
+      price: 700,
+      fee: 0,
+      tax: 0,
+      tradeTime: '2026-04-01T09:30:00.000Z',
+      note: 'buy equity asset',
+    })
+
+    await createTransaction(user.id, {
+      accountId: account.id,
+      assetId: bondAsset.id,
+      type: 'buy',
+      amount: 300,
+      quantity: 1,
+      price: 300,
+      fee: 0,
+      tax: 0,
+      tradeTime: '2026-04-02T09:30:00.000Z',
+      note: 'buy bond asset',
+    })
+
+    await prisma.price.createMany({
+      data: [
+        {
+          assetId: equityAsset.id,
+          price: 700,
+          asOf: new Date('2026-04-05T00:00:00.000Z'),
+          source: 'fixture',
+        },
+        {
+          assetId: bondAsset.id,
+          price: 300,
+          asOf: new Date('2026-04-05T00:00:00.000Z'),
+          source: 'fixture',
+        },
+      ],
+    })
+
+    return { user }
+  }
+
   it('returns a live cross-currency portfolio summary and holdings snapshot', async () => {
     const { user, twdAsset, usdAsset } = await createFixture()
 
@@ -398,6 +518,177 @@ describe('Portfolio overview (e2e)', () => {
           marketValue: 9200,
           weight: 1,
         },
+      ],
+    })
+  })
+
+  it('returns rebalance metrics for equity and bond holdings', async () => {
+    const { user } = await createRebalanceFixture()
+
+    const rebalanceResponse = await request(app.getHttpServer())
+      .get('/portfolio/rebalance')
+      .set(auth(user.id))
+      .expect(200)
+
+    expect(rebalanceResponse.body).toEqual({
+      asOf: expect.any(String),
+      displayCurrencyMode: 'portfolio-default',
+      requestedDisplayCurrency: null,
+      effectiveDisplayCurrency: 'USD',
+      baseCurrency: 'USD',
+      targets: {
+        equity: 0.8,
+        bond: 0.2,
+      },
+      current: {
+        equity: 0.7,
+        bond: 0.3,
+      },
+      gaps: {
+        equity: 0.1,
+        bond: -0.1,
+      },
+      marketValueByAssetClass: {
+        equity: 700,
+        bond: 300,
+      },
+      recommendedBuyAmountByAssetClass: {
+        equity: 500,
+        bond: 0,
+      },
+      trackedMarketValue: 1000,
+      candidates: [
+        {
+          assetClass: 'bond',
+          assetId: expect.any(String),
+          symbol: 'E2E-BND',
+          name: 'E2E Total Bond ETF',
+          currentMarketValue: 300,
+          currentWeightWithinAssetClass: 1,
+          latestPrice: 300,
+          latestPriceCurrency: 'USD',
+          assetBaseCurrency: 'USD',
+          lotSize: null,
+          minTradeUnit: null,
+        },
+        {
+          assetClass: 'equity',
+          assetId: expect.any(String),
+          symbol: 'E2E-VTI',
+          name: 'E2E Total Stock ETF',
+          currentMarketValue: 700,
+          currentWeightWithinAssetClass: 1,
+          latestPrice: 700,
+          latestPriceCurrency: 'USD',
+          assetBaseCurrency: 'USD',
+          lotSize: null,
+          minTradeUnit: null,
+        },
+      ],
+      suggestions: [
+        {
+          assetClass: 'equity',
+          assetId: expect.any(String),
+          symbol: 'E2E-VTI',
+          name: 'E2E Total Stock ETF',
+          currentMarketValue: 700,
+          currentWeightWithinAssetClass: 1,
+          suggestedBuyAmount: 500,
+          estimatedQuantity: 0.71428571,
+          latestPrice: 700,
+          latestPriceCurrency: 'USD',
+        },
+      ],
+      notes: [
+        'Recommended buy amounts assume a buy-only rebalance and do not suggest selling.',
+        'Suggestions are distributed across existing holdings based on current market value within each asset class.',
+        'Estimated quantities are approximate and do not account for broker lot-size constraints.',
+      ],
+    })
+  })
+
+  it('accepts client-provided rebalance targets', async () => {
+    const { user } = await createRebalanceFixture()
+
+    const rebalanceResponse = await request(app.getHttpServer())
+      .get('/portfolio/rebalance')
+      .query({ targetBond: 0.4 })
+      .set(auth(user.id))
+      .expect(200)
+
+    expect(rebalanceResponse.body).toEqual({
+      asOf: expect.any(String),
+      displayCurrencyMode: 'portfolio-default',
+      requestedDisplayCurrency: null,
+      effectiveDisplayCurrency: 'USD',
+      baseCurrency: 'USD',
+      targets: {
+        equity: 0.6,
+        bond: 0.4,
+      },
+      current: {
+        equity: 0.7,
+        bond: 0.3,
+      },
+      gaps: {
+        equity: -0.1,
+        bond: 0.1,
+      },
+      marketValueByAssetClass: {
+        equity: 700,
+        bond: 300,
+      },
+      recommendedBuyAmountByAssetClass: {
+        equity: 0,
+        bond: 166.66666667,
+      },
+      trackedMarketValue: 1000,
+      candidates: [
+        {
+          assetClass: 'bond',
+          assetId: expect.any(String),
+          symbol: 'E2E-BND',
+          name: 'E2E Total Bond ETF',
+          currentMarketValue: 300,
+          currentWeightWithinAssetClass: 1,
+          latestPrice: 300,
+          latestPriceCurrency: 'USD',
+          assetBaseCurrency: 'USD',
+          lotSize: null,
+          minTradeUnit: null,
+        },
+        {
+          assetClass: 'equity',
+          assetId: expect.any(String),
+          symbol: 'E2E-VTI',
+          name: 'E2E Total Stock ETF',
+          currentMarketValue: 700,
+          currentWeightWithinAssetClass: 1,
+          latestPrice: 700,
+          latestPriceCurrency: 'USD',
+          assetBaseCurrency: 'USD',
+          lotSize: null,
+          minTradeUnit: null,
+        },
+      ],
+      suggestions: [
+        {
+          assetClass: 'bond',
+          assetId: expect.any(String),
+          symbol: 'E2E-BND',
+          name: 'E2E Total Bond ETF',
+          currentMarketValue: 300,
+          currentWeightWithinAssetClass: 1,
+          suggestedBuyAmount: 166.66666667,
+          estimatedQuantity: 0.55555556,
+          latestPrice: 300,
+          latestPriceCurrency: 'USD',
+        },
+      ],
+      notes: [
+        'Recommended buy amounts assume a buy-only rebalance and do not suggest selling.',
+        'Suggestions are distributed across existing holdings based on current market value within each asset class.',
+        'Estimated quantities are approximate and do not account for broker lot-size constraints.',
       ],
     })
   })

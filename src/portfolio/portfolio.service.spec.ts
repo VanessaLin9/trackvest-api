@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common'
 import { PortfolioService } from './portfolio.service'
 
 describe('PortfolioService', () => {
@@ -285,6 +286,288 @@ describe('PortfolioService', () => {
     expect(result.totalPnl).toBe(0)
     expect(result.totalReturnRate).toBe(0)
     expect(result.holdingsCount).toBe(2)
+  })
+
+  it('builds rebalance metrics from equity and bond holdings only', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.position.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        quantity: 1,
+        avgCost: 700,
+        openedAt: new Date('2026-03-01T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-1',
+          symbol: 'VTI',
+          name: 'Vanguard Total Stock Market ETF',
+          type: 'etf',
+          assetClass: 'equity',
+          baseCurrency: 'USD',
+        },
+      },
+      {
+        assetId: 'asset-2',
+        quantity: 1,
+        avgCost: 300,
+        openedAt: new Date('2026-03-02T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-2',
+          symbol: 'BND',
+          name: 'Vanguard Total Bond Market ETF',
+          type: 'etf',
+          assetClass: 'bond',
+          baseCurrency: 'USD',
+        },
+      },
+      {
+        assetId: 'asset-3',
+        quantity: 1,
+        avgCost: 50,
+        openedAt: new Date('2026-03-03T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-3',
+          symbol: 'GLD',
+          name: 'SPDR Gold Shares',
+          type: 'etf',
+          assetClass: 'precious_metal',
+          baseCurrency: 'USD',
+        },
+      },
+    ])
+    prisma.price.findMany.mockResolvedValue([])
+    prisma.transaction.findMany.mockResolvedValue([])
+    fxRateService.getReferenceRate.mockResolvedValue({
+      base: 'USD',
+      quote: 'USD',
+      rate: 1,
+      date: '2026-04-05',
+      provider: 'identity',
+    })
+
+    const result = await service.getRebalance('user-1')
+
+    expect(result.displayCurrencyMode).toBe('portfolio-default')
+    expect(result.requestedDisplayCurrency).toBeNull()
+    expect(result.effectiveDisplayCurrency).toBe('USD')
+    expect(result.targets).toEqual({ equity: 0.8, bond: 0.2 })
+    expect(result.current).toEqual({ equity: 0.7, bond: 0.3 })
+    expect(result.gaps).toEqual({ equity: 0.1, bond: -0.1 })
+    expect(result.marketValueByAssetClass).toEqual({ equity: 700, bond: 300 })
+    expect(result.recommendedBuyAmountByAssetClass).toEqual({ equity: 500, bond: 0 })
+    expect(result.trackedMarketValue).toBe(1000)
+    expect(result.candidates).toEqual([
+      {
+        assetClass: 'bond',
+        assetId: 'asset-2',
+        symbol: 'BND',
+        name: 'Vanguard Total Bond Market ETF',
+        currentMarketValue: 300,
+        currentWeightWithinAssetClass: 1,
+        latestPrice: null,
+        latestPriceCurrency: null,
+        assetBaseCurrency: 'USD',
+        lotSize: null,
+        minTradeUnit: null,
+      },
+      {
+        assetClass: 'equity',
+        assetId: 'asset-1',
+        symbol: 'VTI',
+        name: 'Vanguard Total Stock Market ETF',
+        currentMarketValue: 700,
+        currentWeightWithinAssetClass: 1,
+        latestPrice: null,
+        latestPriceCurrency: null,
+        assetBaseCurrency: 'USD',
+        lotSize: null,
+        minTradeUnit: null,
+      },
+    ])
+    expect(result.suggestions).toEqual([
+      {
+        assetClass: 'equity',
+        assetId: 'asset-1',
+        symbol: 'VTI',
+        name: 'Vanguard Total Stock Market ETF',
+        currentMarketValue: 700,
+        currentWeightWithinAssetClass: 1,
+        suggestedBuyAmount: 500,
+        estimatedQuantity: null,
+        latestPrice: null,
+        latestPriceCurrency: null,
+      },
+    ])
+    expect(result.notes).toEqual([
+      'Current ratios are calculated from equity and bond holdings only. Excluded asset classes: precious_metal.',
+      'Recommended buy amounts assume a buy-only rebalance and do not suggest selling.',
+      'Suggestions are distributed across existing holdings based on current market value within each asset class.',
+      'Estimated quantities are approximate and do not account for broker lot-size constraints.',
+    ])
+  })
+
+  it('uses custom rebalance targets provided by the client', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.position.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        quantity: 1,
+        avgCost: 700,
+        openedAt: new Date('2026-03-01T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-1',
+          symbol: 'VTI',
+          name: 'Vanguard Total Stock ETF',
+          type: 'etf',
+          assetClass: 'equity',
+          baseCurrency: 'USD',
+        },
+      },
+      {
+        assetId: 'asset-2',
+        quantity: 1,
+        avgCost: 300,
+        openedAt: new Date('2026-03-02T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-2',
+          symbol: 'BND',
+          name: 'Vanguard Total Bond ETF',
+          type: 'etf',
+          assetClass: 'bond',
+          baseCurrency: 'USD',
+        },
+      },
+    ])
+    prisma.price.findMany.mockResolvedValue([])
+    prisma.transaction.findMany.mockResolvedValue([])
+    fxRateService.getReferenceRate.mockResolvedValue({
+      base: 'USD',
+      quote: 'USD',
+      rate: 1,
+      date: '2026-04-05',
+      provider: 'identity',
+    })
+
+    const result = await service.getRebalance('user-1', { targetBond: 0.4 })
+
+    expect(result.targets).toEqual({ equity: 0.6, bond: 0.4 })
+    expect(result.current).toEqual({ equity: 0.7, bond: 0.3 })
+    expect(result.gaps).toEqual({ equity: -0.1, bond: 0.1 })
+    expect(result.recommendedBuyAmountByAssetClass).toEqual({
+      equity: 0,
+      bond: 166.66666667,
+    })
+    expect(result.candidates).toEqual([
+      {
+        assetClass: 'bond',
+        assetId: 'asset-2',
+        symbol: 'BND',
+        name: 'Vanguard Total Bond ETF',
+        currentMarketValue: 300,
+        currentWeightWithinAssetClass: 1,
+        latestPrice: null,
+        latestPriceCurrency: null,
+        assetBaseCurrency: 'USD',
+        lotSize: null,
+        minTradeUnit: null,
+      },
+      {
+        assetClass: 'equity',
+        assetId: 'asset-1',
+        symbol: 'VTI',
+        name: 'Vanguard Total Stock ETF',
+        currentMarketValue: 700,
+        currentWeightWithinAssetClass: 1,
+        latestPrice: null,
+        latestPriceCurrency: null,
+        assetBaseCurrency: 'USD',
+        lotSize: null,
+        minTradeUnit: null,
+      },
+    ])
+    expect(result.suggestions).toEqual([
+      {
+        assetClass: 'bond',
+        assetId: 'asset-2',
+        symbol: 'BND',
+        name: 'Vanguard Total Bond ETF',
+        currentMarketValue: 300,
+        currentWeightWithinAssetClass: 1,
+        suggestedBuyAmount: 166.66666667,
+        estimatedQuantity: null,
+        latestPrice: null,
+        latestPriceCurrency: null,
+      },
+    ])
+  })
+
+  it('rejects invalid rebalance targets when the provided ratios do not sum to one', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.position.findMany.mockResolvedValue([])
+    fxRateService.getReferenceRate.mockResolvedValue({
+      base: 'USD',
+      quote: 'USD',
+      rate: 1,
+      date: '2026-04-05',
+      provider: 'identity',
+    })
+
+    await expect(
+      service.getRebalance('user-1', { targetEquity: 0.8, targetBond: 0.3 }),
+    ).rejects.toThrow(new BadRequestException('targetEquity and targetBond must sum to 1'))
+  })
+
+  it('returns empty rebalance metrics when there are no equity or bond holdings', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.position.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        quantity: 1,
+        avgCost: 100,
+        openedAt: new Date('2026-03-01T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-1',
+          symbol: 'GLD',
+          name: 'SPDR Gold Shares',
+          type: 'etf',
+          assetClass: 'precious_metal',
+          baseCurrency: 'USD',
+        },
+      },
+    ])
+    prisma.price.findMany.mockResolvedValue([])
+    prisma.transaction.findMany.mockResolvedValue([])
+    fxRateService.getReferenceRate.mockResolvedValue({
+      base: 'USD',
+      quote: 'USD',
+      rate: 1,
+      date: '2026-04-05',
+      provider: 'identity',
+    })
+
+    const result = await service.getRebalance('user-1')
+
+    expect(result.current).toEqual({ equity: 0, bond: 0 })
+    expect(result.gaps).toEqual({ equity: 0.8, bond: 0.2 })
+    expect(result.marketValueByAssetClass).toEqual({ equity: 0, bond: 0 })
+    expect(result.recommendedBuyAmountByAssetClass).toEqual({ equity: 0, bond: 0 })
+    expect(result.trackedMarketValue).toBe(0)
+    expect(result.candidates).toEqual([])
+    expect(result.suggestions).toEqual([])
+    expect(result.notes).toEqual([
+      'No equity or bond holdings are available for rebalance calculations yet.',
+      'Current ratios are calculated from equity and bond holdings only. Excluded asset classes: precious_metal.',
+      'Recommended buy amounts assume a buy-only rebalance and do not suggest selling.',
+    ])
   })
 
   it('converts each position before aggregating the same asset across mixed account currencies', async () => {
