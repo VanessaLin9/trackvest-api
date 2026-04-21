@@ -7,10 +7,10 @@ import { CreateAndUpdateTransactionDto } from './dto/transaction.createAndUpdate
 import { TransactionResponseDto } from './dto/transaction.response.dto'
 import { ImportTransactionsDto } from './dto/import-transactions.dto'
 import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
-import { plainToInstance } from 'class-transformer'
 import { ErrorResponse } from 'src/common/dto'
 import { AuthUser } from '../common/decorators/auth-user.decorator'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
+import { Serialize } from '../common/interceptors/serialize.interceptor'
 import { AuthenticatedUser } from '../common/types/auth-user'
 
 @ApiTags('transactions')
@@ -22,12 +22,12 @@ export class TransactionsController {
 
   @Post()
   @ApiCreatedResponse({ type: TransactionResponseDto })
+  @Serialize(TransactionResponseDto)
   async create(
     @Body() dto: CreateTransactionDto,
     @CurrentUser() userId: string,
-  ): Promise<TransactionResponseDto> {
-    const created = await this.svc.create(dto, userId)
-    return plainToInstance(TransactionResponseDto, created, { excludeExtraneousValues: true })
+  ) {
+    return this.svc.create(dto, userId)
   }
 
   @Post('import')
@@ -50,42 +50,42 @@ export class TransactionsController {
 
   @Get(':id')
   @ApiOkResponse({ type: TransactionResponseDto })
+  @Serialize(TransactionResponseDto)
   async findOne(
     @Param('id') id: string,
     @CurrentUser() userId: string,
-  ): Promise<TransactionResponseDto> {
-    const transaction = await this.svc.findOne(id, userId)
-    return plainToInstance(TransactionResponseDto, transaction, { excludeExtraneousValues: true })
+  ) {
+    return this.svc.findOne(id, userId)
   }
 
   @Patch(':id')
   @ApiOkResponse({ type: TransactionResponseDto })
+  @Serialize(TransactionResponseDto)
   async update(
     @Param('id') id: string,
     @Body() dto: CreateAndUpdateTransactionDto,
     @CurrentUser() userId: string,
-  ): Promise<TransactionResponseDto> {
-    const transaction = await this.svc.update(id, dto, userId)
-    return plainToInstance(TransactionResponseDto, transaction, { excludeExtraneousValues: true })
+  ) {
+    return this.svc.update(id, dto, userId)
   }
 
   @Delete(':id')
   @ApiOkResponse({ type: TransactionResponseDto })
+  @Serialize(TransactionResponseDto)
   async remove(
     @Param('id') id: string,
     @CurrentUser() userId: string,
-  ): Promise<TransactionResponseDto> {
-    const transaction = await this.svc.remove(id, userId)
-    return plainToInstance(TransactionResponseDto, transaction, { excludeExtraneousValues: true })
+  ) {
+    return this.svc.remove(id, userId)
   }
 
   @Delete(':id/hard')
   @ApiOkResponse({ type: TransactionResponseDto })
+  @Serialize(TransactionResponseDto)
   async hardDelete(
     @Param('id') id: string,
     @CurrentUser() userId: string,
-  ): Promise<TransactionResponseDto> {
-    const transaction = await this.svc.hardDelete(id, userId)
-    return plainToInstance(TransactionResponseDto, transaction, { excludeExtraneousValues: true })
+  ) {
+    return this.svc.hardDelete(id, userId)
   }
 }

@@ -3,9 +3,9 @@ import { ApiBadRequestResponse, ApiCreatedResponse, ApiOkResponse, ApiSecurity, 
 import { AccountsService } from './accounts.service'
 import { CreateAndUpdateAccountDto } from './dto/account.createAndUpdate.dto'
 import { AccountResponseDto } from './dto/account.response.dto'
-import { plainToInstance } from 'class-transformer'
 import { ErrorResponse } from 'src/common/dto'
 import { AuthUser } from '../common/decorators/auth-user.decorator'
+import { Serialize } from '../common/interceptors/serialize.interceptor'
 import { OwnershipService } from '../common/services/ownership.service'
 import { AuthenticatedUser } from '../common/types/auth-user'
 
@@ -13,6 +13,7 @@ import { AuthenticatedUser } from '../common/types/auth-user'
 @Controller('accounts')
 @ApiBadRequestResponse({ type: ErrorResponse })
 @ApiSecurity('user-id')
+@Serialize(AccountResponseDto)
 export class AccountsController {
   constructor(
     private readonly svc: AccountsService,
@@ -24,17 +25,15 @@ export class AccountsController {
   async create(
     @Body() dto: CreateAndUpdateAccountDto,
     @AuthUser() user: AuthenticatedUser,
-  ): Promise<AccountResponseDto> {
+  ) {
     this.ownershipService.assertSameUserOrAdmin(dto.userId, user)
-    const created = await this.svc.create(dto, user)
-    return plainToInstance(AccountResponseDto, created, { excludeExtraneousValues: true })
+    return this.svc.create(dto, user)
   }
 
   @Get()
   @ApiOkResponse({ type: AccountResponseDto, isArray: true })
-  async findAll(@AuthUser() user: AuthenticatedUser): Promise<AccountResponseDto[]> {
-    const list = await this.svc.findAll(user)
-    return list.map(e => plainToInstance(AccountResponseDto, e, { excludeExtraneousValues: true }))
+  async findAll(@AuthUser() user: AuthenticatedUser) {
+    return this.svc.findAll(user)
   }
 
   @Get(':id')
@@ -42,9 +41,8 @@ export class AccountsController {
   async findOne(
     @Param('id') id: string,
     @AuthUser() user: AuthenticatedUser,
-  ): Promise<AccountResponseDto> {
-    const e = await this.svc.findOne(id, user)
-    return plainToInstance(AccountResponseDto, e, { excludeExtraneousValues: true })
+  ) {
+    return this.svc.findOne(id, user)
   }
 
   @Patch(':id')
@@ -53,10 +51,9 @@ export class AccountsController {
     @Param('id') id: string,
     @Body() dto: CreateAndUpdateAccountDto,
     @AuthUser() user: AuthenticatedUser,
-  ): Promise<AccountResponseDto> {
+  ) {
     this.ownershipService.assertSameUserOrAdmin(dto.userId, user)
-    const e = await this.svc.update(id, dto, user)
-    return plainToInstance(AccountResponseDto, e, { excludeExtraneousValues: true })
+    return this.svc.update(id, dto, user)
   }
 
   @Delete(':id')
@@ -64,8 +61,7 @@ export class AccountsController {
   async remove(
     @Param('id') id: string,
     @AuthUser() user: AuthenticatedUser,
-  ): Promise<AccountResponseDto> {
-    const e = await this.svc.remove(id, user)
-    return plainToInstance(AccountResponseDto, e, { excludeExtraneousValues: true })
+  ) {
+    return this.svc.remove(id, user)
   }
 }

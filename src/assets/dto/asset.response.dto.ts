@@ -1,6 +1,6 @@
 // src/assets/dto/asset.response.dto.ts
 import { ApiProperty, IntersectionType } from '@nestjs/swagger'
-import { Expose } from 'class-transformer'
+import { Expose, Type } from 'class-transformer'
 import { AssetBaseDto } from './asset.base.dto'
 
 export class AssetBaseResponseDto {
@@ -17,6 +17,7 @@ export class AssetResponseDto extends IntersectionType(
 export class AssetListResponseDto {
   @ApiProperty({ type: AssetResponseDto, isArray: true })
   @Expose()
+  @Type(() => AssetResponseDto)
   items!: AssetResponseDto[]
 
   @ApiProperty({ example: 42 })
