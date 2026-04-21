@@ -1,5 +1,5 @@
 import { Body, Controller, Post, BadRequestException, Get, Query } from '@nestjs/common'
-import { ApiBadRequestResponse, ApiBody, ApiCreatedResponse, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger'
+import { ApiBadRequestResponse, ApiBody, ApiCookieAuth, ApiCreatedResponse, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { PostingService } from './posting.service'
 import { ErrorResponse } from 'src/common/dto'
 import { PostTransferCommand } from './dto/post-transfer.command'
@@ -17,7 +17,7 @@ import { GlEntryDto } from './dto/get-entry.dto'
 @ApiTags('gl')
 @Controller('gl')
 @ApiBadRequestResponse({ type: ErrorResponse })
-@ApiSecurity('user-id')
+@ApiCookieAuth('access_token')
 export class GlController {
   constructor(
     private readonly post: PostingService,

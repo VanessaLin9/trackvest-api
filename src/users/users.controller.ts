@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post } from '@nestjs/common'
-import { ApiBadRequestResponse, ApiCreatedResponse, ApiOkResponse, ApiSecurity, ApiTags } from '@nestjs/swagger'
+import { ApiBadRequestResponse, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger'
 import { UserRole } from '@prisma/client'
 import { UsersService } from './users.service'
 import { CreateUserDto } from './dto/user.create.dto'
@@ -25,7 +25,7 @@ export class UsersController {
 
   @Get()
   @Roles(UserRole.admin)
-  @ApiSecurity('user-id')
+  @ApiCookieAuth('access_token')
   @ApiOkResponse({ type: UserResponseDto, isArray: true })
   async findAll() {
     return this.svc.findAll()

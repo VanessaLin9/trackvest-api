@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common'
-import { ApiBadRequestResponse, ApiCreatedResponse, ApiOkResponse, ApiSecurity, ApiTags } from '@nestjs/swagger'
+import { ApiBadRequestResponse, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger'
 import { AccountsService } from './accounts.service'
 import { CreateAndUpdateAccountDto } from './dto/account.createAndUpdate.dto'
 import { AccountResponseDto } from './dto/account.response.dto'
@@ -12,7 +12,7 @@ import { AuthenticatedUser } from '../common/types/auth-user'
 @ApiTags('accounts')
 @Controller('accounts')
 @ApiBadRequestResponse({ type: ErrorResponse })
-@ApiSecurity('user-id')
+@ApiCookieAuth('access_token')
 @Serialize(AccountResponseDto)
 export class AccountsController {
   constructor(

@@ -1,13 +1,14 @@
 import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { UserRole } from '@prisma/client'
+import { ACCESS_TOKEN_COOKIE } from '../../auth/auth.config'
+import type { AccessTokenPayload, AccessTokenService } from '../../auth/tokens/access-token.service'
 import { AuthGuard } from './auth.guard'
 import { IS_PUBLIC_KEY, Public } from '../decorators/public.decorator'
 import { ROLES_KEY, Roles } from '../decorators/roles.decorator'
 
 type MockReq = {
-  headers?: Record<string, unknown>
-  query?: Record<string, unknown>
+  cookies?: Record<string, string>
   user?: unknown
 }
 
@@ -24,17 +25,25 @@ function buildContext(request: MockReq): { ctx: ExecutionContext; handler: () =>
   return { ctx, handler, cls: HandlerClass }
 }
 
+function buildAccessTokens(
+  payloadFor: Record<string, AccessTokenPayload>,
+): AccessTokenService {
+  return {
+    verify: jest.fn((token: string) => {
+      const p = payloadFor[token]
+      if (!p) throw new UnauthorizedException('Invalid or expired access token')
+      return p
+    }),
+    sign: jest.fn(),
+  } as unknown as AccessTokenService
+}
+
 describe('AuthGuard', () => {
   const reflector = new Reflector()
-  const buildPrisma = (user: { id: string; role: UserRole } | null) => ({
-    user: {
-      findUnique: jest.fn().mockResolvedValue(user),
-    },
-  })
 
-  it('allows public routes without looking up the user', async () => {
-    const prisma = buildPrisma(null)
-    const guard = new AuthGuard(reflector, prisma as never)
+  it('allows public routes without verifying a token', () => {
+    const accessTokens = buildAccessTokens({})
+    const guard = new AuthGuard(reflector, accessTokens)
 
     class C {
       @Public()
@@ -42,87 +51,82 @@ describe('AuthGuard', () => {
     }
     const handler = Object.getOwnPropertyDescriptor(C.prototype, 'handler')!.value
     const ctx = {
-      switchToHttp: () => ({ getRequest: () => ({ headers: {} }) }),
+      switchToHttp: () => ({ getRequest: () => ({ cookies: {} }) }),
       getHandler: () => handler,
       getClass: () => C,
     } as unknown as ExecutionContext
 
-    await expect(guard.canActivate(ctx)).resolves.toBe(true)
-    expect(prisma.user.findUnique).not.toHaveBeenCalled()
+    expect(guard.canActivate(ctx)).toBe(true)
+    expect(accessTokens.verify).not.toHaveBeenCalled()
   })
 
-  it('rejects requests without a user id', async () => {
-    const prisma = buildPrisma(null)
-    const guard = new AuthGuard(reflector, prisma as never)
-    const { ctx } = buildContext({ headers: {}, query: {} })
+  it('rejects requests without an access token cookie', () => {
+    const guard = new AuthGuard(reflector, buildAccessTokens({}))
+    const { ctx } = buildContext({ cookies: {} })
 
-    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(UnauthorizedException)
+    expect(() => guard.canActivate(ctx)).toThrow(UnauthorizedException)
   })
 
-  it('rejects unknown users', async () => {
-    const prisma = buildPrisma(null)
-    const guard = new AuthGuard(reflector, prisma as never)
-    const { ctx } = buildContext({ headers: { 'x-user-id': 'ghost' } })
+  it('rejects requests with an invalid token', () => {
+    const accessTokens = buildAccessTokens({})
+    const guard = new AuthGuard(reflector, accessTokens)
+    const { ctx } = buildContext({ cookies: { [ACCESS_TOKEN_COOKIE]: 'garbage' } })
 
-    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(UnauthorizedException)
+    expect(() => guard.canActivate(ctx)).toThrow(UnauthorizedException)
   })
 
-  it('attaches req.user for authenticated calls', async () => {
-    const prisma = buildPrisma({ id: 'u1', role: UserRole.user })
-    const guard = new AuthGuard(reflector, prisma as never)
-    const request: MockReq = { headers: { 'x-user-id': 'u1' }, query: {} }
+  it('attaches req.user when the token is valid', () => {
+    const accessTokens = buildAccessTokens({
+      'tok-1': { sub: 'u1', role: UserRole.user },
+    })
+    const guard = new AuthGuard(reflector, accessTokens)
+    const request: MockReq = { cookies: { [ACCESS_TOKEN_COOKIE]: 'tok-1' } }
     const { ctx } = buildContext(request)
 
-    await expect(guard.canActivate(ctx)).resolves.toBe(true)
+    expect(guard.canActivate(ctx)).toBe(true)
     expect(request.user).toEqual({ id: 'u1', role: UserRole.user })
   })
 
-  it('reads userId from the query param as a fallback', async () => {
-    const prisma = buildPrisma({ id: 'u1', role: UserRole.user })
-    const guard = new AuthGuard(reflector, prisma as never)
-    const request: MockReq = { headers: {}, query: { userId: 'u1' } }
-    const { ctx } = buildContext(request)
-
-    await expect(guard.canActivate(ctx)).resolves.toBe(true)
-    expect(request.user).toEqual({ id: 'u1', role: UserRole.user })
-  })
-
-  it('enforces @Roles(admin) on non-admin users', async () => {
-    const prisma = buildPrisma({ id: 'u1', role: UserRole.user })
-    const guard = new AuthGuard(reflector, prisma as never)
+  it('enforces @Roles(admin) on non-admin users', () => {
+    const accessTokens = buildAccessTokens({
+      'tok-1': { sub: 'u1', role: UserRole.user },
+    })
+    const guard = new AuthGuard(reflector, accessTokens)
 
     class C {
       @Roles(UserRole.admin)
       handler() {}
     }
     const handler = Object.getOwnPropertyDescriptor(C.prototype, 'handler')!.value
-    const request: MockReq = { headers: { 'x-user-id': 'u1' } }
+    const request: MockReq = { cookies: { [ACCESS_TOKEN_COOKIE]: 'tok-1' } }
     const ctx = {
       switchToHttp: () => ({ getRequest: () => request }),
       getHandler: () => handler,
       getClass: () => C,
     } as unknown as ExecutionContext
 
-    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(ForbiddenException)
+    expect(() => guard.canActivate(ctx)).toThrow(ForbiddenException)
   })
 
-  it('allows @Roles(admin) for admin users', async () => {
-    const prisma = buildPrisma({ id: 'u1', role: UserRole.admin })
-    const guard = new AuthGuard(reflector, prisma as never)
+  it('allows @Roles(admin) for admin users', () => {
+    const accessTokens = buildAccessTokens({
+      'tok-1': { sub: 'u1', role: UserRole.admin },
+    })
+    const guard = new AuthGuard(reflector, accessTokens)
 
     class C {
       @Roles(UserRole.admin)
       handler() {}
     }
     const handler = Object.getOwnPropertyDescriptor(C.prototype, 'handler')!.value
-    const request: MockReq = { headers: { 'x-user-id': 'u1' } }
+    const request: MockReq = { cookies: { [ACCESS_TOKEN_COOKIE]: 'tok-1' } }
     const ctx = {
       switchToHttp: () => ({ getRequest: () => request }),
       getHandler: () => handler,
       getClass: () => C,
     } as unknown as ExecutionContext
 
-    await expect(guard.canActivate(ctx)).resolves.toBe(true)
+    expect(guard.canActivate(ctx)).toBe(true)
   })
 
   it('uses IS_PUBLIC_KEY and ROLES_KEY sentinels', () => {
