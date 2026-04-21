@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { GlAccountPurpose, PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
@@ -200,6 +200,7 @@ async function main() {
         userId: demoUser.id,
         name: '資產-投資-股票(台幣)',
         type: 'asset',
+        purpose: GlAccountPurpose.investment_bucket,
         currency: 'TWD',
       },
       {
@@ -207,6 +208,7 @@ async function main() {
         userId: demoUser.id,
         name: '權益-投入資本',
         type: 'equity',
+        purpose: GlAccountPurpose.equity_contribution,
         currency: 'TWD',
       },
       {
@@ -214,6 +216,7 @@ async function main() {
         userId: demoUser.id,
         name: '收入-股利',
         type: 'income',
+        purpose: GlAccountPurpose.dividend_income,
         currency: 'TWD',
       },
       {
@@ -221,6 +224,7 @@ async function main() {
         userId: demoUser.id,
         name: '收入-已實現損益-收益',
         type: 'income',
+        purpose: GlAccountPurpose.realized_gain_income,
         currency: 'TWD',
       },
       {
@@ -228,6 +232,7 @@ async function main() {
         userId: demoUser.id,
         name: '費用-手續費',
         type: 'expense',
+        purpose: GlAccountPurpose.fee_expense,
         currency: 'TWD',
       },
       {
@@ -235,6 +240,7 @@ async function main() {
         userId: demoUser.id,
         name: '費用-已實現損益-損失',
         type: 'expense',
+        purpose: GlAccountPurpose.realized_loss_expense,
         currency: 'TWD',
       },
       {

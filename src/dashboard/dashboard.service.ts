@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { GlAccountPurpose } from '@prisma/client'
 import { PrismaService } from '../prisma.service'
 import { OwnershipService } from '../common/services/ownership.service'
 import { DashboardActivityDto, DashboardRecentActivityItemDto } from './dto/dashboard-activity.dto'
@@ -227,7 +228,7 @@ export class DashboardService {
             type: 'asset',
             archivedAt: null,
             OR: [
-              { name: { contains: '投資' } },
+              { purpose: GlAccountPurpose.investment_bucket },
               {
                 linked: {
                   type: 'broker',

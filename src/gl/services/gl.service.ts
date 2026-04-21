@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../../prisma.service'
-import { Account, Currency, GlAccountType, GlEntry, Prisma } from '@prisma/client'
+import { Account, Currency, GlAccountPurpose, GlAccountType, GlEntry, Prisma } from '@prisma/client'
 import { GetAccountDto } from '../dto/get-account.dto'
 import { GlEntryDto } from '../dto/get-entry.dto'
 
@@ -75,22 +75,31 @@ export class GlService {
   }
 
   /**
-   * Find GL account by name pattern (contains search)
+   * Look up a GL account by its system-defined purpose.
+   *
+   * - `investment_bucket` is treated as currency-scoped; callers pass `currency`
+   *   so the correct per-currency bucket is returned.
+   * - Other purposes (equity / fee / dividend / realized gain|loss) are
+   *   currency-agnostic today; callers may pass `currency` to narrow down if
+   *   the user has multiple currency variants.
    */
-  async getNamedGlAccountId(
+  async getByPurpose(
     userId: string,
-    nameContains: string,
+    purpose: GlAccountPurpose,
+    currency?: Currency,
     db?: DbClient,
   ): Promise<string> {
     const gl = await this.getDb(db).glAccount.findFirst({
       where: {
         userId,
-        name: { contains: nameContains },
+        purpose,
+        ...(currency ? { currency } : {}),
       },
     })
     if (!gl) {
+      const suffix = currency ? ` (${currency})` : ''
       throw new BadRequestException(
-        `GL account not found by name contains "${nameContains}"`,
+        `GL account with purpose "${purpose}"${suffix} not found for user`,
       )
     }
     return gl.id
@@ -104,55 +113,42 @@ export class GlService {
     currency: Currency,
     db?: DbClient,
   ): Promise<string> {
-    const gl = await this.getDb(db).glAccount.findFirst({
-      where: {
-        userId,
-        type: 'asset',
-        currency,
-        name: { contains: '投資' },
-      },
-    })
-    if (!gl) {
-      throw new BadRequestException(
-        `Investment bucket GL account not found for ${currency}`,
-      )
-    }
-    return gl.id
+    return this.getByPurpose(userId, GlAccountPurpose.investment_bucket, currency, db)
   }
 
   /**
    * Find fee expense GL account
    */
   async getFeeExpenseGlAccountId(userId: string, db?: DbClient): Promise<string> {
-    return this.getNamedGlAccountId(userId, '手續費', db)
+    return this.getByPurpose(userId, GlAccountPurpose.fee_expense, undefined, db)
   }
 
   /**
    * Find dividend income GL account
    */
   async getDividendIncomeGlAccountId(userId: string, db?: DbClient): Promise<string> {
-    return this.getNamedGlAccountId(userId, '股利', db)
+    return this.getByPurpose(userId, GlAccountPurpose.dividend_income, undefined, db)
   }
 
   /**
    * Find realized gain income GL account
    */
   async getRealizedGainIncomeGlAccountId(userId: string, db?: DbClient): Promise<string> {
-    return this.getNamedGlAccountId(userId, '已實現損益-收益', db)
+    return this.getByPurpose(userId, GlAccountPurpose.realized_gain_income, undefined, db)
   }
 
   /**
    * Find realized loss expense GL account
    */
   async getRealizedLossExpenseGlAccountId(userId: string, db?: DbClient): Promise<string> {
-    return this.getNamedGlAccountId(userId, '已實現損益-損失', db)
+    return this.getByPurpose(userId, GlAccountPurpose.realized_loss_expense, undefined, db)
   }
 
   /**
    * Find equity GL account
    */
   async getEquityGlAccountId(userId: string, db?: DbClient): Promise<string> {
-    return this.getNamedGlAccountId(userId, '權益', db)
+    return this.getByPurpose(userId, GlAccountPurpose.equity_contribution, undefined, db)
   }
 
   /**
