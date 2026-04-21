@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Query } from '@nestjs/common'
-import { ApiHeader, ApiOkResponse, ApiTags } from '@nestjs/swagger'
+import { ApiOkResponse, ApiSecurity, ApiTags } from '@nestjs/swagger'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
 import { GetPortfolioRebalanceDto } from './dto/get-portfolio-rebalance.dto'
 import { GetPortfolioDisplayCurrencyDto } from './dto/get-portfolio-display-currency.dto'
@@ -14,7 +14,7 @@ import { PortfolioService } from './portfolio.service'
 
 @ApiTags('portfolio')
 @Controller('portfolio')
-@ApiHeader({ name: 'X-User-Id', description: 'User ID', required: true })
+@ApiSecurity('user-id')
 export class PortfolioController {
   constructor(private readonly portfolioService: PortfolioService) {}
 

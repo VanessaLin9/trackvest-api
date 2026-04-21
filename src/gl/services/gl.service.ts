@@ -1,8 +1,14 @@
 import { Injectable, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../../prisma.service'
-import { Account, Currency, GlAccountType, GlEntry, Prisma } from '@prisma/client'
+import { Account, Currency, GlAccountPurpose, GlAccountType, Prisma } from '@prisma/client'
 import { GetAccountDto } from '../dto/get-account.dto'
 import { GlEntryDto } from '../dto/get-entry.dto'
+
+/**
+ * Sentinel value used by the GET /gl/entries endpoint to indicate "no
+ * account filter; return every entry for the user".
+ */
+export const ALL_GL_ACCOUNTS = 'All'
 
 type DbClient = Prisma.TransactionClient | PrismaService
 
@@ -75,22 +81,31 @@ export class GlService {
   }
 
   /**
-   * Find GL account by name pattern (contains search)
+   * Look up a GL account by its system-defined purpose.
+   *
+   * - `investment_bucket` is treated as currency-scoped; callers pass `currency`
+   *   so the correct per-currency bucket is returned.
+   * - Other purposes (equity / fee / dividend / realized gain|loss) are
+   *   currency-agnostic today; callers may pass `currency` to narrow down if
+   *   the user has multiple currency variants.
    */
-  async getNamedGlAccountId(
+  async getByPurpose(
     userId: string,
-    nameContains: string,
+    purpose: GlAccountPurpose,
+    currency?: Currency,
     db?: DbClient,
   ): Promise<string> {
     const gl = await this.getDb(db).glAccount.findFirst({
       where: {
         userId,
-        name: { contains: nameContains },
+        purpose,
+        ...(currency ? { currency } : {}),
       },
     })
     if (!gl) {
+      const suffix = currency ? ` (${currency})` : ''
       throw new BadRequestException(
-        `GL account not found by name contains "${nameContains}"`,
+        `GL account with purpose "${purpose}"${suffix} not found for user`,
       )
     }
     return gl.id
@@ -104,131 +119,84 @@ export class GlService {
     currency: Currency,
     db?: DbClient,
   ): Promise<string> {
-    const gl = await this.getDb(db).glAccount.findFirst({
-      where: {
-        userId,
-        type: 'asset',
-        currency,
-        name: { contains: '投資' },
-      },
-    })
-    if (!gl) {
-      throw new BadRequestException(
-        `Investment bucket GL account not found for ${currency}`,
-      )
-    }
-    return gl.id
+    return this.getByPurpose(userId, GlAccountPurpose.investment_bucket, currency, db)
   }
 
   /**
    * Find fee expense GL account
    */
   async getFeeExpenseGlAccountId(userId: string, db?: DbClient): Promise<string> {
-    return this.getNamedGlAccountId(userId, '手續費', db)
+    return this.getByPurpose(userId, GlAccountPurpose.fee_expense, undefined, db)
   }
 
   /**
    * Find dividend income GL account
    */
   async getDividendIncomeGlAccountId(userId: string, db?: DbClient): Promise<string> {
-    return this.getNamedGlAccountId(userId, '股利', db)
+    return this.getByPurpose(userId, GlAccountPurpose.dividend_income, undefined, db)
   }
 
   /**
    * Find realized gain income GL account
    */
   async getRealizedGainIncomeGlAccountId(userId: string, db?: DbClient): Promise<string> {
-    return this.getNamedGlAccountId(userId, '已實現損益-收益', db)
+    return this.getByPurpose(userId, GlAccountPurpose.realized_gain_income, undefined, db)
   }
 
   /**
    * Find realized loss expense GL account
    */
   async getRealizedLossExpenseGlAccountId(userId: string, db?: DbClient): Promise<string> {
-    return this.getNamedGlAccountId(userId, '已實現損益-損失', db)
+    return this.getByPurpose(userId, GlAccountPurpose.realized_loss_expense, undefined, db)
   }
 
   /**
    * Find equity GL account
    */
   async getEquityGlAccountId(userId: string, db?: DbClient): Promise<string> {
-    return this.getNamedGlAccountId(userId, '權益', db)
+    return this.getByPurpose(userId, GlAccountPurpose.equity_contribution, undefined, db)
   }
 
   /**
-   * Generic GL account lookup by type and optional name pattern
+   * List a user's GL accounts filtered by {@link GlAccountType}.
    */
-  async findByTypeAndName(
-    userId: string,
-    type: GlAccountType,
-  ): Promise<GetAccountDto[]> {
-    const gl = await this.prisma.glAccount.findMany({
-      where: {
-        userId : { equals: userId },
-      },
+  async findByType(userId: string, type: GlAccountType): Promise<GetAccountDto[]> {
+    const accounts = await this.prisma.glAccount.findMany({
+      where: { userId, type },
+      orderBy: { name: 'asc' },
     })
-
-    const accounts = gl.filter((gl) => gl.type === type)
     return accounts.map(GetAccountDto.fromEntity)
   }
 
+  /**
+   * List GL entries for a user, optionally scoped to a single GL account.
+   *
+   * Pass {@link ALL_GL_ACCOUNTS} (or an empty value) to skip the account
+   * filter. Results are ordered by entry date descending at the database
+   * level.
+   */
   async getEntriesByAccountId(userId: string, accountId: string): Promise<GlEntryDto[]> {
-    let entries: GlEntry[] | undefined = undefined
-    if (accountId === 'All') {
-      entries = await this.prisma.glEntry.findMany({
-        where: {
-          userId: { equals: userId },
-          isDeleted: false,
-          ...(accountId !== 'All' ? {
-            lines: {
-              some: {
-                glAccountId: { equals: accountId },
-              },
-            },
-          } : {}),
-        },
-        include: {
-          lines: {
-            include: {
-              glAccount: {
-                select: {
-                  id: true,
-                  name: true,
-                  type: true,
-                  currency: true,
-                },
-              },
-            },
-          },
-        },
-      })
-    } else {
-    entries = await this.prisma.glEntry.findMany({
+    const hasAccountFilter = accountId && accountId !== ALL_GL_ACCOUNTS
+
+    const entries = await this.prisma.glEntry.findMany({
       where: {
-        userId: { equals: userId },
+        userId,
         isDeleted: false,
-        lines: {
-          some: {
-            glAccountId: { equals: accountId },
-          },
-        },
+        ...(hasAccountFilter
+          ? { lines: { some: { glAccountId: accountId } } }
+          : {}),
       },
       include: {
         lines: {
           include: {
             glAccount: {
-              select: {
-                id: true,
-                name: true,
-                type: true,
-                currency: true,
-              },
+              select: { id: true, name: true, type: true, currency: true },
             },
           },
-          },
         },
-      })
-    }
-    return entries?.map(GlEntryDto.fromEntity).sort((a, b) => b.date.localeCompare(a.date)) ?? []
+      },
+      orderBy: { date: 'desc' },
+    })
+    return entries.map(GlEntryDto.fromEntity)
   }
 }

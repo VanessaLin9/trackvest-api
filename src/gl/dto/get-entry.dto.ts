@@ -34,7 +34,13 @@ export class GlEntryDto {
   @ApiProperty({ type: [GlLineDto] })
   lines!: GlLineDto[]
 
-  static fromEntity(entity: GlEntry & { lines: (GlLine & { glAccount?: GlAccount })[] }): GlEntryDto {
+  static fromEntity(
+    entity: GlEntry & {
+      lines: (GlLine & {
+        glAccount?: Pick<GlAccount, 'id' | 'name' | 'type' | 'currency'> | null
+      })[]
+    },
+  ): GlEntryDto {
     return {
       id: entity.id,
       userId: entity.userId,

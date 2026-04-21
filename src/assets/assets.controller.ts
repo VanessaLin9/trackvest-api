@@ -5,7 +5,7 @@ import { AssetsService } from './assets.service'
 import { CreateAndUpdateAssetDto } from './dto/asset.createAndUpdate.dto'
 import { AssetListResponseDto, AssetResponseDto } from './dto/asset.response.dto'
 import { FindAssetsDto } from './dto/find-assets.dto'
-import { plainToInstance } from 'class-transformer'
+import { Serialize } from '../common/interceptors/serialize.interceptor'
 
 @ApiTags('assets')
 @Controller('assets')
@@ -14,47 +14,43 @@ export class AssetsController {
 
   @Post()
   @ApiCreatedResponse({ type: AssetResponseDto })
-  async create(@Body() dto: CreateAndUpdateAssetDto): Promise<AssetResponseDto> {
-    const created = await this.svc.create(dto)
-    return plainToInstance(AssetResponseDto, created, { excludeExtraneousValues: true })
+  @Serialize(AssetResponseDto)
+  async create(@Body() dto: CreateAndUpdateAssetDto) {
+    return this.svc.create(dto)
   }
 
   @Get()
   @ApiOkResponse({ type: AssetListResponseDto })
-  async findAll(@Query() query: FindAssetsDto): Promise<AssetListResponseDto> {
-    const result = await this.svc.findAll(query)
-    return {
-      ...result,
-      items: result.items.map((asset) =>
-        plainToInstance(AssetResponseDto, asset, { excludeExtraneousValues: true })),
-    }
+  @Serialize(AssetListResponseDto)
+  async findAll(@Query() query: FindAssetsDto) {
+    return this.svc.findAll(query)
   }
 
   @Get('symbol/:symbol')
   @ApiOkResponse({ type: AssetResponseDto })
-  async findBySymbol(@Param('symbol') symbol: string): Promise<AssetResponseDto> {
-    const asset = await this.svc.findBySymbol(symbol)
-    return plainToInstance(AssetResponseDto, asset, { excludeExtraneousValues: true })
+  @Serialize(AssetResponseDto)
+  async findBySymbol(@Param('symbol') symbol: string) {
+    return this.svc.findBySymbol(symbol)
   }
 
   @Get(':id')
   @ApiOkResponse({ type: AssetResponseDto })
-  async findOne(@Param('id') id: string): Promise<AssetResponseDto> {
-    const asset = await this.svc.findOne(id)
-    return plainToInstance(AssetResponseDto, asset, { excludeExtraneousValues: true })
+  @Serialize(AssetResponseDto)
+  async findOne(@Param('id') id: string) {
+    return this.svc.findOne(id)
   }
 
   @Patch(':id')
   @ApiOkResponse({ type: AssetResponseDto })
-  async update(@Param('id') id: string, @Body() dto: CreateAndUpdateAssetDto): Promise<AssetResponseDto> {
-    const asset = await this.svc.update(id, dto)
-    return plainToInstance(AssetResponseDto, asset, { excludeExtraneousValues: true })
-  } 
+  @Serialize(AssetResponseDto)
+  async update(@Param('id') id: string, @Body() dto: CreateAndUpdateAssetDto) {
+    return this.svc.update(id, dto)
+  }
 
   @Delete(':id')
   @ApiOkResponse({ type: AssetResponseDto })
-  async remove(@Param('id') id: string): Promise<AssetResponseDto> {
-    const asset = await this.svc.remove(id)
-    return plainToInstance(AssetResponseDto, asset, { excludeExtraneousValues: true })
+  @Serialize(AssetResponseDto)
+  async remove(@Param('id') id: string) {
+    return this.svc.remove(id)
   }
 }

@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common'
-import { ApiOkResponse, ApiCreatedResponse, ApiTags, ApiBadRequestResponse, ApiHeader } from '@nestjs/swagger'
+import { ApiBadRequestResponse, ApiCreatedResponse, ApiOkResponse, ApiSecurity, ApiTags } from '@nestjs/swagger'
 import { TransactionsService } from './transactions.service'
 import { FindTransactionsDto } from './dto/find-transaction.dto'
 import { CreateTransactionDto } from './dto/create-transaction.dto'
@@ -7,25 +7,27 @@ import { CreateAndUpdateTransactionDto } from './dto/transaction.createAndUpdate
 import { TransactionResponseDto } from './dto/transaction.response.dto'
 import { ImportTransactionsDto } from './dto/import-transactions.dto'
 import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
-import { plainToInstance } from 'class-transformer'
 import { ErrorResponse } from 'src/common/dto'
+import { AuthUser } from '../common/decorators/auth-user.decorator'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
+import { Serialize } from '../common/interceptors/serialize.interceptor'
+import { AuthenticatedUser } from '../common/types/auth-user'
 
 @ApiTags('transactions')
 @Controller('transactions')
 @ApiBadRequestResponse({ type: ErrorResponse })
-@ApiHeader({ name: 'X-User-Id', description: 'User ID', required: true })
+@ApiSecurity('user-id')
 export class TransactionsController {
   constructor(private readonly svc: TransactionsService) {}
 
   @Post()
   @ApiCreatedResponse({ type: TransactionResponseDto })
+  @Serialize(TransactionResponseDto)
   async create(
     @Body() dto: CreateTransactionDto,
     @CurrentUser() userId: string,
-  ): Promise<TransactionResponseDto> {
-    const created = await this.svc.create(dto, userId)
-    return plainToInstance(TransactionResponseDto, created, { excludeExtraneousValues: true })
+  ) {
+    return this.svc.create(dto, userId)
   }
 
   @Post('import')
@@ -41,49 +43,49 @@ export class TransactionsController {
   @ApiOkResponse({ type: TransactionResponseDto, isArray: true })
   async findAll(
     @Query() q: FindTransactionsDto,
-    @CurrentUser() userId: string,
+    @AuthUser() user: AuthenticatedUser,
   ) {
-    return this.svc.findAll(q, userId)
+    return this.svc.findAll(q, user)
   }
 
   @Get(':id')
   @ApiOkResponse({ type: TransactionResponseDto })
+  @Serialize(TransactionResponseDto)
   async findOne(
     @Param('id') id: string,
     @CurrentUser() userId: string,
-  ): Promise<TransactionResponseDto> {
-    const transaction = await this.svc.findOne(id, userId)
-    return plainToInstance(TransactionResponseDto, transaction, { excludeExtraneousValues: true })
+  ) {
+    return this.svc.findOne(id, userId)
   }
 
   @Patch(':id')
   @ApiOkResponse({ type: TransactionResponseDto })
+  @Serialize(TransactionResponseDto)
   async update(
     @Param('id') id: string,
     @Body() dto: CreateAndUpdateTransactionDto,
     @CurrentUser() userId: string,
-  ): Promise<TransactionResponseDto> {
-    const transaction = await this.svc.update(id, dto, userId)
-    return plainToInstance(TransactionResponseDto, transaction, { excludeExtraneousValues: true })
+  ) {
+    return this.svc.update(id, dto, userId)
   }
 
   @Delete(':id')
   @ApiOkResponse({ type: TransactionResponseDto })
+  @Serialize(TransactionResponseDto)
   async remove(
     @Param('id') id: string,
     @CurrentUser() userId: string,
-  ): Promise<TransactionResponseDto> {
-    const transaction = await this.svc.remove(id, userId)
-    return plainToInstance(TransactionResponseDto, transaction, { excludeExtraneousValues: true })
+  ) {
+    return this.svc.remove(id, userId)
   }
 
   @Delete(':id/hard')
   @ApiOkResponse({ type: TransactionResponseDto })
+  @Serialize(TransactionResponseDto)
   async hardDelete(
     @Param('id') id: string,
     @CurrentUser() userId: string,
-  ): Promise<TransactionResponseDto> {
-    const transaction = await this.svc.hardDelete(id, userId)
-    return plainToInstance(TransactionResponseDto, transaction, { excludeExtraneousValues: true })
+  ) {
+    return this.svc.hardDelete(id, userId)
   }
 }

@@ -223,13 +223,14 @@ model SellLotMatch {
 
 // 科目表（Chart of Accounts）
 model GlAccount {
-  id              String         @id @default(uuid())
+  id              String            @id @default(uuid())
   userId          String
-  code            String?        // 方便排序/匯出（可選）
+  code            String?           // 方便排序/匯出（可選）
   name            String
-  type            GlAccountType  // asset | liability | equity | income | expense
-  currency        Currency?      // 若指定，該科目只允許此幣別
-  linkedAccountId String?        // 對應你現有的 Account（銀行/券商/現金等）
+  type            GlAccountType     // asset | liability | equity | income | expense
+  purpose         GlAccountPurpose? // 系統自動過帳時辨識用的語意角色（nullable，使用者自訂科目留空）
+  currency        Currency?         // 若指定，該科目只允許此幣別
+  linkedAccountId String?           // 對應你現有的 Account（銀行/券商/現金等）
   archivedAt      DateTime?
 
   // 🔻 改：加 relation name，並對應上面 User/Account 的反向欄位
@@ -241,15 +242,27 @@ model GlAccount {
 
   @@unique([userId, name])
   @@index([userId, type])
+  @@index([userId, purpose])
   @@unique([linkedAccountId])
 }
 
-enum GlAccountType { 
-  asset 
-  liability 
-  equity 
-  income 
-  expense 
+enum GlAccountType {
+  asset
+  liability
+  equity
+  income
+  expense
+}
+
+/// 系統層級的科目語意角色；posting service 依此找到對應科目做自動分錄。
+/// 使用者自訂的科目（如「餐飲」「交通」）可留 NULL。
+enum GlAccountPurpose {
+  investment_bucket      // 投資部位現值（資產）
+  equity_contribution    // 投入／提領資本（權益）
+  fee_expense            // 交易手續費（費用）
+  dividend_income        // 股利收入（收入）
+  realized_gain_income   // 已實現損益-收益
+  realized_loss_expense  // 已實現損益-損失
 }
 
 // 分錄主表（每一張憑證）

@@ -1,6 +1,6 @@
 import { ValidationPipe, type INestApplication } from '@nestjs/common'
 import { Test, type TestingModule } from '@nestjs/testing'
-import { AssetType, Currency, GlAccountType } from '@prisma/client'
+import { AssetType, Currency, GlAccountPurpose, GlAccountType } from '@prisma/client'
 import * as request from 'supertest'
 import type { App } from 'supertest/types'
 import { AppModule } from '../src/app.module'
@@ -87,30 +87,35 @@ describe('Transactions sell FIFO (e2e)', () => {
           userId: user.id,
           name: '資產-投資-股票(台幣)',
           type: GlAccountType.asset,
+          purpose: GlAccountPurpose.investment_bucket,
           currency: Currency.TWD,
         },
         {
           userId: user.id,
           name: '費用-手續費',
           type: GlAccountType.expense,
+          purpose: GlAccountPurpose.fee_expense,
           currency: Currency.TWD,
         },
         {
           userId: user.id,
           name: '收入-已實現損益-收益',
           type: GlAccountType.income,
+          purpose: GlAccountPurpose.realized_gain_income,
           currency: Currency.TWD,
         },
         {
           userId: user.id,
           name: '費用-已實現損益-損失',
           type: GlAccountType.expense,
+          purpose: GlAccountPurpose.realized_loss_expense,
           currency: Currency.TWD,
         },
         {
           userId: user.id,
           name: '權益-投入資本',
           type: GlAccountType.equity,
+          purpose: GlAccountPurpose.equity_contribution,
           currency: Currency.TWD,
         },
       ],

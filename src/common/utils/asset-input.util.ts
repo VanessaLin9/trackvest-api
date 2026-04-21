@@ -1,3 +1,6 @@
+// Strip ASCII control characters (C0 + DEL) from user-supplied asset text;
+// matching these codepoints is the whole point of the regex.
+// eslint-disable-next-line no-control-regex
 const CONTROL_CHAR_REGEX = /[\u0000-\u001F\u007F]/g
 const MULTI_WHITESPACE_REGEX = /\s+/g
 

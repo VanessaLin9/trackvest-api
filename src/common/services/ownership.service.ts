@@ -1,19 +1,28 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common'
-import { PrismaService } from '../../prisma.service'
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { UserRole } from '@prisma/client'
+import { PrismaService } from '../../prisma.service'
+import { AuthenticatedUser, UserContext } from '../types/auth-user'
 
 /**
- * Service to validate resource ownership
- * Centralized ownership validation logic
- * Admins can bypass ownership checks
+ * Centralised ownership / admin-bypass validation.
+ *
+ * Callers may pass either a plain user id (string) or an `AuthenticatedUser`.
+ * Passing the full object avoids an extra `isAdmin` database round-trip
+ * (the role is already known from `AuthGuard`).
  */
 @Injectable()
 export class OwnershipService {
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * Check if a user is an admin
-   */
+  /** Resolve `{ userId, isAdmin }` from the caller context, querying the DB only when role is unknown. */
+  async resolveUser(ctx: UserContext): Promise<{ userId: string; isAdmin: boolean }> {
+    if (typeof ctx === 'string') {
+      return { userId: ctx, isAdmin: await this.isAdmin(ctx) }
+    }
+    return { userId: ctx.id, isAdmin: ctx.role === UserRole.admin }
+  }
+
+  /** Check whether a user has the admin role (DB lookup). Prefer passing `AuthenticatedUser` when available. */
   async isAdmin(userId: string): Promise<boolean> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -23,22 +32,18 @@ export class OwnershipService {
   }
 
   /**
-   * Validate that an account belongs to a user
-   * Admins can access any account
+   * Guard used by endpoints that accept a `userId` in the request body.
+   * Admins may act on behalf of any user; everyone else may only act on their own id.
    */
-  async validateAccountOwnership(accountId: string, userId: string): Promise<void> {
-    // Admins can access all resources
-    if (await this.isAdmin(userId)) {
-      // Still validate that account exists
-      const account = await this.prisma.account.findUnique({
-        where: { id: accountId },
-        select: { id: true },
-      })
-      if (!account) {
-        throw new NotFoundException('Account not found')
-      }
-      return
+  assertSameUserOrAdmin(targetUserId: string, currentUser: AuthenticatedUser): void {
+    if (currentUser.role === UserRole.admin) return
+    if (currentUser.id !== targetUserId) {
+      throw new ForbiddenException('You do not have permission to act on behalf of this user')
     }
+  }
+
+  async validateAccountOwnership(accountId: string, ctx: UserContext): Promise<void> {
+    const { userId, isAdmin } = await this.resolveUser(ctx)
 
     const account = await this.prisma.account.findUnique({
       where: { id: accountId },
@@ -49,28 +54,13 @@ export class OwnershipService {
       throw new NotFoundException('Account not found')
     }
 
-    if (account.userId !== userId) {
+    if (!isAdmin && account.userId !== userId) {
       throw new ForbiddenException('You do not have access to this account')
     }
   }
 
-  /**
-   * Validate that a transaction belongs to a user (via account)
-   * Admins can access any transaction
-   */
-  async validateTransactionOwnership(transactionId: string, userId: string): Promise<void> {
-    // Admins can access all resources
-    if (await this.isAdmin(userId)) {
-      // Still validate that transaction exists
-      const transaction = await this.prisma.transaction.findUnique({
-        where: { id: transactionId },
-        select: { id: true },
-      })
-      if (!transaction) {
-        throw new NotFoundException('Transaction not found')
-      }
-      return
-    }
+  async validateTransactionOwnership(transactionId: string, ctx: UserContext): Promise<void> {
+    const { userId, isAdmin } = await this.resolveUser(ctx)
 
     const transaction = await this.prisma.transaction.findUnique({
       where: { id: transactionId },
@@ -85,28 +75,13 @@ export class OwnershipService {
       throw new NotFoundException('Transaction not found')
     }
 
-    if (transaction.account.userId !== userId) {
+    if (!isAdmin && transaction.account.userId !== userId) {
       throw new ForbiddenException('You do not have access to this transaction')
     }
   }
 
-  /**
-   * Validate that a GL account belongs to a user
-   * Admins can access any GL account
-   */
-  async validateGlAccountOwnership(glAccountId: string, userId: string): Promise<void> {
-    // Admins can access all resources
-    if (await this.isAdmin(userId)) {
-      // Still validate that GL account exists
-      const glAccount = await this.prisma.glAccount.findUnique({
-        where: { id: glAccountId },
-        select: { id: true },
-      })
-      if (!glAccount) {
-        throw new NotFoundException('GL Account not found')
-      }
-      return
-    }
+  async validateGlAccountOwnership(glAccountId: string, ctx: UserContext): Promise<void> {
+    const { userId, isAdmin } = await this.resolveUser(ctx)
 
     const glAccount = await this.prisma.glAccount.findUnique({
       where: { id: glAccountId },
@@ -117,28 +92,13 @@ export class OwnershipService {
       throw new NotFoundException('GL Account not found')
     }
 
-    if (glAccount.userId !== userId) {
+    if (!isAdmin && glAccount.userId !== userId) {
       throw new ForbiddenException('You do not have access to this GL account')
     }
   }
 
-  /**
-   * Validate that a GL entry belongs to a user
-   * Admins can access any GL entry
-   */
-  async validateGlEntryOwnership(glEntryId: string, userId: string): Promise<void> {
-    // Admins can access all resources
-    if (await this.isAdmin(userId)) {
-      // Still validate that GL entry exists
-      const glEntry = await this.prisma.glEntry.findUnique({
-        where: { id: glEntryId },
-        select: { id: true },
-      })
-      if (!glEntry) {
-        throw new NotFoundException('GL Entry not found')
-      }
-      return
-    }
+  async validateGlEntryOwnership(glEntryId: string, ctx: UserContext): Promise<void> {
+    const { userId, isAdmin } = await this.resolveUser(ctx)
 
     const glEntry = await this.prisma.glEntry.findUnique({
       where: { id: glEntryId },
@@ -149,28 +109,13 @@ export class OwnershipService {
       throw new NotFoundException('GL Entry not found')
     }
 
-    if (glEntry.userId !== userId) {
+    if (!isAdmin && glEntry.userId !== userId) {
       throw new ForbiddenException('You do not have access to this GL entry')
     }
   }
 
-  /**
-   * Validate that a tag belongs to a user
-   * Admins can access any tag
-   */
-  async validateTagOwnership(tagId: string, userId: string): Promise<void> {
-    // Admins can access all resources
-    if (await this.isAdmin(userId)) {
-      // Still validate that tag exists
-      const tag = await this.prisma.tag.findUnique({
-        where: { id: tagId },
-        select: { id: true },
-      })
-      if (!tag) {
-        throw new NotFoundException('Tag not found')
-      }
-      return
-    }
+  async validateTagOwnership(tagId: string, ctx: UserContext): Promise<void> {
+    const { userId, isAdmin } = await this.resolveUser(ctx)
 
     const tag = await this.prisma.tag.findUnique({
       where: { id: tagId },
@@ -181,14 +126,11 @@ export class OwnershipService {
       throw new NotFoundException('Tag not found')
     }
 
-    if (tag.userId !== userId) {
+    if (!isAdmin && tag.userId !== userId) {
       throw new ForbiddenException('You do not have access to this tag')
     }
   }
 
-  /**
-   * Validate that a user exists
-   */
   async validateUserExists(userId: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -200,4 +142,3 @@ export class OwnershipService {
     }
   }
 }
-

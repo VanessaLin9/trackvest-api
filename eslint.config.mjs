@@ -3,11 +3,15 @@ import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
+  // Global ignores must live in a standalone config object (no `files`),
+  // otherwise flat-config only scopes the ignore to that single entry.
+  {
+    ignores: ['dist/**', 'node_modules/**', 'coverage/**'],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
     files: ['**/*.ts'],
-    ignores: ['dist', 'node_modules'],
     rules: {
       // 放寬常見警告
       '@typescript-eslint/no-unsafe-call': 'off',

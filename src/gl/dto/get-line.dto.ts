@@ -29,7 +29,9 @@ export class GlLineDto {
   @IsString()
   currency!: string
 
-  static fromEntity(entity: GlLine & { glAccount?: GlAccount }): GlLineDto {
+  static fromEntity(
+    entity: GlLine & { glAccount?: Pick<GlAccount, 'id' | 'name' | 'type' | 'currency'> | null },
+  ): GlLineDto {
     return {
       id: entity.id,
       glAccountId: entity.glAccountId,

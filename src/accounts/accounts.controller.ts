@@ -1,44 +1,48 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common'
-import { ApiOkResponse, ApiCreatedResponse, ApiTags, ApiBadRequestResponse, ApiHeader } from '@nestjs/swagger'
+import { ApiBadRequestResponse, ApiCreatedResponse, ApiOkResponse, ApiSecurity, ApiTags } from '@nestjs/swagger'
 import { AccountsService } from './accounts.service'
 import { CreateAndUpdateAccountDto } from './dto/account.createAndUpdate.dto'
 import { AccountResponseDto } from './dto/account.response.dto'
-import { plainToInstance } from 'class-transformer'
 import { ErrorResponse } from 'src/common/dto'
-import { CurrentUser } from '../common/decorators/current-user.decorator'
+import { AuthUser } from '../common/decorators/auth-user.decorator'
+import { Serialize } from '../common/interceptors/serialize.interceptor'
+import { OwnershipService } from '../common/services/ownership.service'
+import { AuthenticatedUser } from '../common/types/auth-user'
 
 @ApiTags('accounts')
 @Controller('accounts')
 @ApiBadRequestResponse({ type: ErrorResponse })
-@ApiHeader({ name: 'X-User-Id', description: 'User ID', required: true })
+@ApiSecurity('user-id')
+@Serialize(AccountResponseDto)
 export class AccountsController {
-  constructor(private readonly svc: AccountsService) {}
+  constructor(
+    private readonly svc: AccountsService,
+    private readonly ownershipService: OwnershipService,
+  ) {}
 
   @Post()
   @ApiCreatedResponse({ type: AccountResponseDto })
   async create(
     @Body() dto: CreateAndUpdateAccountDto,
-    @CurrentUser() userId: string,
-  ): Promise<AccountResponseDto> {
-    const created = await this.svc.create(dto, userId)
-    return plainToInstance(AccountResponseDto, created, { excludeExtraneousValues: true })
+    @AuthUser() user: AuthenticatedUser,
+  ) {
+    this.ownershipService.assertSameUserOrAdmin(dto.userId, user)
+    return this.svc.create(dto, user)
   }
 
   @Get()
   @ApiOkResponse({ type: AccountResponseDto, isArray: true })
-  async findAll(@CurrentUser() userId: string): Promise<AccountResponseDto[]> {
-    const list = await this.svc.findAll(userId)
-    return list.map(e => plainToInstance(AccountResponseDto, e, { excludeExtraneousValues: true }))
+  async findAll(@AuthUser() user: AuthenticatedUser) {
+    return this.svc.findAll(user)
   }
 
   @Get(':id')
   @ApiOkResponse({ type: AccountResponseDto })
   async findOne(
     @Param('id') id: string,
-    @CurrentUser() userId: string,
-  ): Promise<AccountResponseDto> {
-    const e = await this.svc.findOne(id, userId)
-    return plainToInstance(AccountResponseDto, e, { excludeExtraneousValues: true })
+    @AuthUser() user: AuthenticatedUser,
+  ) {
+    return this.svc.findOne(id, user)
   }
 
   @Patch(':id')
@@ -46,19 +50,18 @@ export class AccountsController {
   async update(
     @Param('id') id: string,
     @Body() dto: CreateAndUpdateAccountDto,
-    @CurrentUser() userId: string,
-  ): Promise<AccountResponseDto> {
-    const e = await this.svc.update(id, dto, userId)
-    return plainToInstance(AccountResponseDto, e, { excludeExtraneousValues: true })
+    @AuthUser() user: AuthenticatedUser,
+  ) {
+    this.ownershipService.assertSameUserOrAdmin(dto.userId, user)
+    return this.svc.update(id, dto, user)
   }
 
   @Delete(':id')
   @ApiOkResponse({ type: AccountResponseDto })
   async remove(
     @Param('id') id: string,
-    @CurrentUser() userId: string,
-  ): Promise<AccountResponseDto> {
-    const e = await this.svc.remove(id, userId)
-    return plainToInstance(AccountResponseDto, e, { excludeExtraneousValues: true })
+    @AuthUser() user: AuthenticatedUser,
+  ) {
+    return this.svc.remove(id, user)
   }
 }
