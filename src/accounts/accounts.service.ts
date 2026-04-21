@@ -4,6 +4,7 @@ import { Account, AccountType, Currency, GlAccountType, Prisma } from '@prisma/c
 import { PrismaService } from '../prisma.service'
 import { CreateAndUpdateAccountDto } from './dto/account.createAndUpdate.dto'
 import { OwnershipService } from '../common/services/ownership.service'
+import { UserContext } from '../common/types/auth-user'
 import { SUPPORTED_BROKER } from './account-broker.constants'
 
 type DbClient = Prisma.TransactionClient | PrismaService
@@ -100,15 +101,10 @@ export class AccountsService {
     })
   }
 
-  async create(dto: CreateAndUpdateAccountDto, userId: string) {
-    // Validate user exists
+  async create(dto: CreateAndUpdateAccountDto, _user: UserContext) {
+    // Controller is responsible for `assertSameUserOrAdmin(dto.userId, user)`
+    // before reaching here. We still verify the target user exists.
     await this.ownershipService.validateUserExists(dto.userId)
-    
-    // Ensure the DTO userId matches the authenticated user (unless admin)
-    const isAdmin = await this.ownershipService.isAdmin(userId)
-    if (!isAdmin && dto.userId !== userId) {
-      throw new NotFoundException('User ID mismatch')
-    }
 
     return this.prisma.$transaction(async (db) => {
       const account = await db.account.create({ data: this.buildAccountData(dto) })
@@ -117,33 +113,24 @@ export class AccountsService {
     })
   }
 
-  async findAll(userId: string) {
-    // Admins can see all accounts, regular users only their own
-    const isAdmin = await this.ownershipService.isAdmin(userId)
+  async findAll(user: UserContext) {
+    const { userId, isAdmin } = await this.ownershipService.resolveUser(user)
     return this.prisma.account.findMany({
       where: isAdmin ? undefined : { userId },
       orderBy: { createdAt: 'desc' },
     })
   }
 
-  async findOne(id: string, userId: string) {
-    // Validate ownership
-    await this.ownershipService.validateAccountOwnership(id, userId)
-    
+  async findOne(id: string, user: UserContext) {
+    await this.ownershipService.validateAccountOwnership(id, user)
+
     const acc = await this.prisma.account.findUnique({ where: { id } })
     if (!acc) throw new NotFoundException('Account not found')
     return acc
   }
 
-  async update(id: string, dto: CreateAndUpdateAccountDto, userId: string) {
-    // Validate ownership (admins can update any account)
-    await this.ownershipService.validateAccountOwnership(id, userId)
-    
-    // Ensure the DTO userId matches the authenticated user (unless admin)
-    const isAdmin = await this.ownershipService.isAdmin(userId)
-    if (!isAdmin && dto.userId !== userId) {
-      throw new NotFoundException('User ID mismatch')
-    }
+  async update(id: string, dto: CreateAndUpdateAccountDto, user: UserContext) {
+    await this.ownershipService.validateAccountOwnership(id, user)
 
     return this.prisma.$transaction(async (db) => {
       const account = await db.account.update({
@@ -155,10 +142,9 @@ export class AccountsService {
     })
   }
 
-  async remove(id: string, userId: string) {
-    // Validate ownership
-    await this.ownershipService.validateAccountOwnership(id, userId)
-    
+  async remove(id: string, user: UserContext) {
+    await this.ownershipService.validateAccountOwnership(id, user)
+
     return this.prisma.account.delete({ where: { id } })
   }
 }

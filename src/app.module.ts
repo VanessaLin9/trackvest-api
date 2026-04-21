@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { APP_GUARD } from '@nestjs/core'
+import { AuthGuard } from './common/guards/auth.guard'
 import { HealthController } from './health/health.controller'
 import { PrismaService } from './prisma.service'
 import { TransactionsController } from './transactions/transactions.controller'
@@ -43,6 +45,10 @@ import { FxRateService } from './fx/fx-rate.service'
     PostingService,
     OwnershipService,
     GlService,
+    {
+      provide: APP_GUARD,
+      useClass: AuthGuard,
+    },
   ],
   exports: [OwnershipService], // Export so it can be used in other modules if needed
 })

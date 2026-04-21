@@ -9,7 +9,9 @@ import { ImportTransactionsDto } from './dto/import-transactions.dto'
 import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
 import { plainToInstance } from 'class-transformer'
 import { ErrorResponse } from 'src/common/dto'
+import { AuthUser } from '../common/decorators/auth-user.decorator'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
+import { AuthenticatedUser } from '../common/types/auth-user'
 
 @ApiTags('transactions')
 @Controller('transactions')
@@ -41,9 +43,9 @@ export class TransactionsController {
   @ApiOkResponse({ type: TransactionResponseDto, isArray: true })
   async findAll(
     @Query() q: FindTransactionsDto,
-    @CurrentUser() userId: string,
+    @AuthUser() user: AuthenticatedUser,
   ) {
-    return this.svc.findAll(q, userId)
+    return this.svc.findAll(q, user)
   }
 
   @Get(':id')

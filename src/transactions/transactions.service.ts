@@ -6,6 +6,7 @@ import { CreateTransactionDto } from './dto/create-transaction.dto'
 import { CreateAndUpdateTransactionDto } from './dto/transaction.createAndUpdate.dto'
 import { PostingService } from '../gl/posting.service'
 import { OwnershipService } from '../common/services/ownership.service'
+import { UserContext } from '../common/types/auth-user'
 import { ImportTransactionsDto } from './dto/import-transactions.dto'
 import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
 import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
@@ -1089,25 +1090,25 @@ export class TransactionsService {
     await this.syncPositionOnCreate(prisma, nextTransaction)
   }
 
-  async findAll(q: FindTransactionsDto, userId: string) {
-    const isAdmin = await this.ownershipService.isAdmin(userId)
-    
+  async findAll(q: FindTransactionsDto, user: UserContext) {
+    const { userId, isAdmin } = await this.ownershipService.resolveUser(user)
+
     const where: Prisma.TransactionWhereInput = {}
-    
+
     // Admins can see all transactions, regular users only their own
     if (!isAdmin) {
       where.account = {
         userId,
       }
     }
-    
+
     // 軟刪過濾
     const includeDeleted = q.includeDeleted === 'true'
     if (!includeDeleted) where.isDeleted = false
 
     if (q.accountId) {
       // Validate account belongs to user (or admin can access any)
-      await this.ownershipService.validateAccountOwnership(q.accountId, userId)
+      await this.ownershipService.validateAccountOwnership(q.accountId, user)
       where.accountId = q.accountId
     }
     if (q.assetId) where.assetId = q.assetId
