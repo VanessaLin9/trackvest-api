@@ -1,25 +1,22 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
-import { AccountsService } from '../accounts/accounts.service'
-import { OwnershipService } from '../common/services/ownership.service'
-import { GlService } from '../gl/services/gl.service'
-import { PostingService } from '../gl/posting.service'
-import { PrismaService } from '../prisma.service'
-import { TransactionsService } from '../transactions/transactions.service'
+import { AccountsModule } from '../accounts/accounts.module'
+import { CommonModule } from '../common/common.module'
+import { GlModule } from '../gl/gl.module'
+import { PrismaModule } from '../prisma.module'
+import { TransactionsModule } from '../transactions/transactions.module'
 import { TrackvestMcpServer } from './mcp.server'
 import { PortfolioQueryService } from './services/portfolio-query.service'
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true })],
-  providers: [
-    PrismaService,
-    OwnershipService,
-    GlService,
-    PostingService,
-    AccountsService,
-    TransactionsService,
-    PortfolioQueryService,
-    TrackvestMcpServer,
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    PrismaModule,
+    CommonModule,
+    AccountsModule,
+    TransactionsModule,
+    GlModule,
   ],
+  providers: [PortfolioQueryService, TrackvestMcpServer],
 })
 export class McpModule {}
