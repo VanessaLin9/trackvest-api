@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config'
 import { APP_FILTER, APP_GUARD } from '@nestjs/core'
 import { AccountsModule } from './accounts/accounts.module'
 import { AssetsModule } from './assets/assets.module'
+import { AuthModule } from './auth/auth.module'
 import { CommonModule } from './common/common.module'
 import { PrismaClientExceptionFilter } from './common/filters/prisma-exception.filter'
 import { AuthGuard } from './common/guards/auth.guard'
@@ -20,6 +21,7 @@ import { UsersModule } from './users/users.module'
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     CommonModule,
+    AuthModule,
     HealthModule,
     UsersModule,
     AssetsModule,

@@ -1,9 +1,12 @@
 import { GlAccountPurpose, PrismaClient } from '@prisma/client'
+import bcrypt from 'bcrypt'
 
 const prisma = new PrismaClient()
 
 const DEMO_USER_ID = '5f9b7d4a-69d4-4a78-98f4-bc82eeac1001'
 const DEMO_USER_EMAIL = 'demo@trackvest.local'
+const DEMO_USER_PASSWORD = process.env.DEMO_USER_PASSWORD ?? 'demo-password'
+const BCRYPT_ROUNDS = 10
 
 const BANK_ACCOUNT_ID = '497f9b9a-7788-4fb5-93a2-4c8d3f0d5e01'
 const BROKER_ACCOUNT_ID = 'f0a6c5d2-4f9d-4d4d-b7fb-3c5ef0ddc201'
@@ -97,13 +100,19 @@ async function wipeAllData() {
 async function main() {
   await wipeAllData()
 
+  const demoPasswordHash = await bcrypt.hash(DEMO_USER_PASSWORD, BCRYPT_ROUNDS)
+
   const demoUser = await prisma.user.create({
     data: {
       id: DEMO_USER_ID,
       email: DEMO_USER_EMAIL,
-      passwordHash: '!',
+      passwordHash: demoPasswordHash,
     },
   })
+
+  console.log(
+    `Seeded demo user ${DEMO_USER_EMAIL} (password: ${DEMO_USER_PASSWORD})`,
+  )
 
   await prisma.account.createMany({
     data: [

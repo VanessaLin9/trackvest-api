@@ -1,10 +1,12 @@
 import { ValidationPipe, type INestApplication } from '@nestjs/common'
 import { Test, type TestingModule } from '@nestjs/testing'
 import { AssetType, Currency, GlAccountPurpose, GlAccountType } from '@prisma/client'
-import * as request from 'supertest'
+import cookieParser from 'cookie-parser'
+import request from 'supertest'
 import type { App } from 'supertest/types'
 import { AppModule } from '../src/app.module'
 import { PrismaService } from '../src/prisma.service'
+import { authCookieFor } from './helpers/auth'
 import {
   clearDatabase,
   createTestDatabaseConfig,
@@ -27,6 +29,7 @@ describe('Portfolio overview (e2e)', () => {
     }).compile()
 
     app = moduleFixture.createNestApplication()
+    app.use(cookieParser())
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }))
     await app.init()
 
@@ -46,7 +49,7 @@ describe('Portfolio overview (e2e)', () => {
   })
 
   function auth(userId: string) {
-    return { 'X-User-Id': userId }
+    return { Cookie: authCookieFor(app, { id: userId }) }
   }
 
   async function createTransaction(

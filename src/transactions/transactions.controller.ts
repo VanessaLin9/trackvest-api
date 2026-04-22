@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common'
-import { ApiBadRequestResponse, ApiCreatedResponse, ApiOkResponse, ApiSecurity, ApiTags } from '@nestjs/swagger'
+import { ApiBadRequestResponse, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger'
 import { TransactionsService } from './transactions.service'
 import { FindTransactionsDto } from './dto/find-transaction.dto'
 import { CreateTransactionDto } from './dto/create-transaction.dto'
@@ -16,7 +16,7 @@ import { AuthenticatedUser } from '../common/types/auth-user'
 @ApiTags('transactions')
 @Controller('transactions')
 @ApiBadRequestResponse({ type: ErrorResponse })
-@ApiSecurity('user-id')
+@ApiCookieAuth('access_token')
 export class TransactionsController {
   constructor(private readonly svc: TransactionsService) {}
 

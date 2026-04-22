@@ -7,7 +7,9 @@ import {
 } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { UserRole } from '@prisma/client'
-import { PrismaService } from '../../prisma.service'
+import type { Request } from 'express'
+import { ACCESS_TOKEN_COOKIE } from '../../auth/auth.config'
+import { AccessTokenService } from '../../auth/tokens/access-token.service'
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator'
 import { ROLES_KEY } from '../decorators/roles.decorator'
 import { AuthenticatedUser } from '../types/auth-user'
@@ -15,54 +17,45 @@ import { AuthenticatedUser } from '../types/auth-user'
 /**
  * Global request-level authentication guard.
  *
- * Current implementation (dev-mode):
- *   - Reads the user id from the `X-User-Id` header (or `userId` query
- *     parameter as a fallback, kept for parity with the legacy
- *     `CurrentUser` decorator).
- *   - Looks up the user once and attaches `{ id, role }` to `req.user`.
+ * Verifies a JWT access token carried in the `access_token` httpOnly
+ * cookie and attaches `{ id, role }` to `req.user`. Routes marked with
+ * `@Public()` bypass this, and `@Roles()` further restricts to specific
+ * roles.
  *
- * This is a deliberate seam: when real authentication (JWT / session) is
- * added, only this guard needs to change. Downstream controllers/services
- * keep relying on `req.user`.
+ * The guard only decodes the token — no DB round-trip — so requests cost
+ * one signature verification plus whatever downstream Prisma calls the
+ * handler makes. Fresh role changes take effect at most `accessTtlSec`
+ * later, which is an explicit trade-off.
  */
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    private readonly prisma: PrismaService,
+    private readonly accessTokens: AccessTokenService,
   ) {}
 
-  async canActivate(ctx: ExecutionContext): Promise<boolean> {
+  canActivate(ctx: ExecutionContext): boolean {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       ctx.getHandler(),
       ctx.getClass(),
     ])
     if (isPublic) return true
 
-    const request = ctx.switchToHttp().getRequest()
-    const userId = this.extractUserId(request)
-    if (!userId) {
-      throw new UnauthorizedException(
-        'User ID is required. Provide it via X-User-Id header or userId query parameter.',
-      )
+    const request = ctx.switchToHttp().getRequest<Request & { user?: AuthenticatedUser }>()
+    const token = this.extractAccessToken(request)
+    if (!token) {
+      throw new UnauthorizedException('Authentication required')
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, role: true },
-    })
-    if (!user) {
-      throw new UnauthorizedException('Invalid user')
-    }
-
-    const authenticatedUser: AuthenticatedUser = { id: user.id, role: user.role }
+    const payload = this.accessTokens.verify(token)
+    const authenticatedUser: AuthenticatedUser = { id: payload.sub, role: payload.role }
     request.user = authenticatedUser
 
     const requiredRoles = this.reflector.getAllAndOverride<UserRole[] | undefined>(
       ROLES_KEY,
       [ctx.getHandler(), ctx.getClass()],
     )
-    if (requiredRoles && requiredRoles.length > 0 && !requiredRoles.includes(user.role)) {
+    if (requiredRoles && requiredRoles.length > 0 && !requiredRoles.includes(payload.role)) {
       throw new ForbiddenException(
         `Requires role(s): ${requiredRoles.join(', ')}`,
       )
@@ -71,14 +64,15 @@ export class AuthGuard implements CanActivate {
     return true
   }
 
-  private extractUserId(request: { headers?: Record<string, unknown>; query?: Record<string, unknown> } | undefined): string | null {
-    if (!request) return null
-    const headerValue = request.headers?.['x-user-id']
-    const queryValue = request.query?.userId
-    const raw = headerValue ?? queryValue
-    if (Array.isArray(raw)) {
-      return typeof raw[0] === 'string' ? raw[0] : null
+  private extractAccessToken(request: Request): string | null {
+    const fromCookie = request.cookies?.[ACCESS_TOKEN_COOKIE]
+    if (typeof fromCookie === 'string' && fromCookie.length > 0) {
+      return fromCookie
     }
-    return typeof raw === 'string' ? raw : null
+    // Bearer is intentionally not accepted in this iteration: clients
+    // must use the httpOnly cookie flow. If we ever need programmatic
+    // access (CLI, webhooks), add a dedicated token type here rather
+    // than reusing the user access token.
+    return null
   }
 }

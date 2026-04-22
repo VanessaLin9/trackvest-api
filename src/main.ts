@@ -2,7 +2,9 @@
 import { NestFactory } from '@nestjs/core'
 import { ValidationPipe } from '@nestjs/common'
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'
+import cookieParser from 'cookie-parser'
 import { AppModule } from './app.module'
+import { REFRESH_TOKEN_COOKIE } from './auth/auth.config'
 
 
 async function bootstrap() {
@@ -10,13 +12,20 @@ async function bootstrap() {
   const port = process.env.PORT || 3000
   app.enableShutdownHooks()
 
-  // Enable CORS for frontend
+  app.use(cookieParser())
+
+  // Cookie-based auth requires credentials and an explicit origin list.
+  // Supports `CORS_ORIGINS` (comma-separated) with `FRONTEND_URL` as the
+  // single-origin fallback for parity with older configs.
+  const origins = (process.env.CORS_ORIGINS ?? process.env.FRONTEND_URL ?? 'http://localhost:3001')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+    origin: origins,
     credentials: true,
   })
 
-  // 全域驗證（DTO）
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -26,23 +35,16 @@ async function bootstrap() {
   )
 
 
-  // Swagger（/docs）— X-User-Id is a dev-mode auth header consumed by AuthGuard.
-  // Declaring it as an apiKey security scheme gives Swagger UI a single
-  // Authorize dialog where developers can set the acting user for every
-  // request, matching how the real AuthGuard validates requests.
+  // Swagger（/docs）— cookie-based auth. Users can login via POST /auth/login
+  // and the browser's cookie jar will carry the httpOnly access_token on
+  // subsequent Try-it-out requests (same-origin).
   const swaggerCfg = new DocumentBuilder()
     .setTitle('Trackvest API')
     .setDescription('API for investment bookkeeping')
-    .setVersion('0.1.0')
-    .addApiKey(
-      {
-        type: 'apiKey',
-        in: 'header',
-        name: 'X-User-Id',
-        description: 'UUID of the acting user (dev-mode authentication)',
-      },
-      'user-id',
-    )
+    .setVersion('0.2.0')
+    .addCookieAuth('access_token', { type: 'apiKey', in: 'cookie', name: 'access_token' })
+    .addCookieAuth(REFRESH_TOKEN_COOKIE, { type: 'apiKey', in: 'cookie', name: REFRESH_TOKEN_COOKIE })
+    .addTag('auth', 'Login / refresh / logout / me')
     .addTag('health', 'Health check')
     .addTag('users', 'User management')
     .addTag('accounts', 'Cash/Broker/Bank accounts')
@@ -53,6 +55,7 @@ async function bootstrap() {
   const swaggerDoc = SwaggerModule.createDocument(app, swaggerCfg)
   SwaggerModule.setup('docs', app, swaggerDoc, {
     jsonDocumentUrl: 'docs/json',
+    swaggerOptions: { withCredentials: true },
   })
 
   await app.listen(port)
