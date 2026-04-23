@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
+const INSECURE_PRODUCTION_JWT_SECRETS = new Set([
+  'dev_dev_dev_change_me',
+  'change_me_in_prod',
+])
+
 /**
  * Centralized auth/cookie settings. Keeping this thin wrapper makes it
  * easier to swap implementations or defaults without touching every
@@ -21,7 +26,7 @@ export class AuthConfig {
     if (!secret) {
       throw new Error('JWT_SECRET is required')
     }
-    if (process.env.NODE_ENV === 'production' && secret === 'dev_dev_dev_change_me') {
+    if (process.env.NODE_ENV === 'production' && INSECURE_PRODUCTION_JWT_SECRETS.has(secret)) {
       throw new Error('JWT_SECRET must be changed from its dev default in production')
     }
     this.jwtSecret = secret
