@@ -20,7 +20,9 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "ts-node prisma/seed.ts",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "finmind:smoke": "ts-node scripts/finmind-smoke-test.ts",
+    "prices:sync-tw": "ts-node scripts/sync-taiwan-prices.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",

@@ -154,14 +154,25 @@ enum TxType {
   fee
 }
 
+/// Daily market quote per asset (one row per asset per trade date).
+/// `price` mirrors `close` for portfolio valuation; TW fields map FinMind TaiwanStockPrice.
 model Price {
-  id      String   @id @default(uuid())
-  assetId String
-  price   Decimal
-  asOf    DateTime
-  source  String
-  asset   Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  id             String   @id @default(uuid())
+  assetId        String
+  asOf           DateTime
+  source         String
+  price          Decimal
+  open           Decimal?
+  high           Decimal?
+  low            Decimal?
+  volume         Decimal?
+  turnoverAmount Decimal?
+  changeRate     Decimal?
+  tradeCount     Decimal?
+  adjClose       Decimal?
+  asset          Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
+  @@unique([assetId, asOf])
   @@index([assetId, asOf(sort: Desc)])
 }
 
