@@ -5,11 +5,14 @@ import {
   DEFAULT_BACKFILL_MAX_ASSETS_PER_RUN,
   TAIWAN_MARKET_TIME_ZONE,
   TW_DAILY_LOOKBACK_DAYS,
+  US_DAILY_LOOKBACK_DAYS,
+  US_MARKET_TIME_ZONE,
 } from './market-price.constants'
 import {
+  StockDailyPrice,
+  StockPriceProvider,
   TAIWAN_STOCK_PRICE_PROVIDER,
-  TaiwanStockDailyPrice,
-  TaiwanStockPriceProvider,
+  US_STOCK_PRICE_PROVIDER,
 } from './market-price.types'
 import {
   shiftIsoDate,
@@ -18,19 +21,28 @@ import {
   tradeTimeToIsoDate,
 } from './utils/market-price-date.util'
 
-export type TaiwanPriceSyncMode = 'daily' | 'backfill'
+export type MarketPriceMarket = 'tw' | 'us'
 
-export type SyncTaiwanPricesInput = {
-  mode?: TaiwanPriceSyncMode
+/** @deprecated Use MarketPriceSyncMode */
+export type TaiwanPriceSyncMode = MarketPriceSyncMode
+
+export type MarketPriceSyncMode = 'daily' | 'backfill'
+
+export type SyncMarketPricesInput = {
+  market?: MarketPriceMarket
+  mode?: MarketPriceSyncMode
   startDate?: string
   endDate?: string
   assetIds?: string[]
   maxAssetsPerRun?: number
 }
 
-export type SyncTaiwanPricesResult = {
-  market: 'tw'
-  mode: TaiwanPriceSyncMode
+/** @deprecated Use SyncMarketPricesInput */
+export type SyncTaiwanPricesInput = Omit<SyncMarketPricesInput, 'market'>
+
+export type SyncMarketPricesResult = {
+  market: MarketPriceMarket
+  mode: MarketPriceSyncMode
   startDate: string
   endDate: string
   assetsRequested: number
@@ -46,9 +58,21 @@ export type SyncTaiwanPricesResult = {
   }>
 }
 
-type TaiwanEverHeldAsset = {
+/** @deprecated Use SyncMarketPricesResult */
+export type SyncTaiwanPricesResult = SyncMarketPricesResult
+
+type EverHeldAsset = {
   id: string
   symbol: string
+}
+
+type MarketRuntime = {
+  market: MarketPriceMarket
+  baseCurrency: 'TWD' | 'USD'
+  timeZone: string
+  dailyLookbackDays: number
+  provider: StockPriceProvider
+  logLabel: string
 }
 
 @Injectable()
@@ -58,29 +82,53 @@ export class MarketPriceService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(TAIWAN_STOCK_PRICE_PROVIDER)
-    private readonly taiwanPriceProvider: TaiwanStockPriceProvider,
+    private readonly taiwanPriceProvider: StockPriceProvider,
+    @Inject(US_STOCK_PRICE_PROVIDER)
+    private readonly usPriceProvider: StockPriceProvider,
   ) {}
 
-  async syncTaiwanPrices(input: SyncTaiwanPricesInput = {}): Promise<SyncTaiwanPricesResult> {
+  async syncMarketPrices(input: SyncMarketPricesInput = {}): Promise<SyncMarketPricesResult> {
+    const runtime = this.resolveMarketRuntime(input.market ?? 'tw')
     const mode = input.mode ?? 'daily'
     if (mode === 'backfill') {
-      return this.syncTwBackfill(input)
+      return this.syncBackfill(runtime, input)
     }
-    return this.syncTwDaily(input)
+    return this.syncDaily(runtime, input)
   }
 
-  async syncTwDaily(input: SyncTaiwanPricesInput = {}): Promise<SyncTaiwanPricesResult> {
-    const endDate = input.endDate ?? this.todayInTaiwan()
+  async syncTaiwanPrices(input: SyncTaiwanPricesInput = {}): Promise<SyncMarketPricesResult> {
+    return this.syncMarketPrices({ ...input, market: 'tw' })
+  }
+
+  async syncUsPrices(input: SyncTaiwanPricesInput = {}): Promise<SyncMarketPricesResult> {
+    return this.syncMarketPrices({ ...input, market: 'us' })
+  }
+
+  /** @deprecated Use syncDaily via syncMarketPrices */
+  async syncTwDaily(input: SyncTaiwanPricesInput = {}): Promise<SyncMarketPricesResult> {
+    return this.syncMarketPrices({ ...input, market: 'tw', mode: 'daily' })
+  }
+
+  /** @deprecated Use syncBackfill via syncMarketPrices */
+  async syncTwBackfill(input: SyncTaiwanPricesInput = {}): Promise<SyncMarketPricesResult> {
+    return this.syncMarketPrices({ ...input, market: 'tw', mode: 'backfill' })
+  }
+
+  private async syncDaily(
+    runtime: MarketRuntime,
+    input: SyncMarketPricesInput,
+  ): Promise<SyncMarketPricesResult> {
+    const endDate = input.endDate ?? this.todayInMarket(runtime.timeZone)
     const startDate =
       input.startDate ??
-      shiftIsoDate(endDate, -(Math.max(TW_DAILY_LOOKBACK_DAYS, 1) - 1))
+      shiftIsoDate(endDate, -(Math.max(runtime.dailyLookbackDays, 1) - 1))
 
-    const assets = await this.resolveTaiwanEverHeldAssets(input.assetIds)
+    const assets = await this.resolveEverHeldAssets(runtime.baseCurrency, input.assetIds)
     this.logger.log(
-      `TW daily sync ${startDate}→${endDate} for ${assets.length} ever-held asset(s)`,
+      `${runtime.logLabel} daily sync ${startDate}→${endDate} for ${assets.length} ever-held asset(s)`,
     )
 
-    return this.syncAssetsInRange(assets, {
+    return this.syncAssetsInRange(runtime, assets, {
       mode: 'daily',
       startDate,
       endDate,
@@ -88,14 +136,20 @@ export class MarketPriceService {
     })
   }
 
-  async syncTwBackfill(input: SyncTaiwanPricesInput = {}): Promise<SyncTaiwanPricesResult> {
-    const endDate = input.endDate ?? this.todayInTaiwan()
+  private async syncBackfill(
+    runtime: MarketRuntime,
+    input: SyncMarketPricesInput,
+  ): Promise<SyncMarketPricesResult> {
+    const endDate = input.endDate ?? this.todayInMarket(runtime.timeZone)
     const maxAssetsPerRun = input.maxAssetsPerRun ?? this.getBackfillMaxAssetsPerRun()
-    const assets = await this.resolveTaiwanEverHeldAssets(input.assetIds)
-    const firstBuyByAssetId = await this.loadFirstBuyDates(assets.map((asset) => asset.id))
+    const assets = await this.resolveEverHeldAssets(runtime.baseCurrency, input.assetIds)
+    const firstBuyByAssetId = await this.loadFirstBuyDates(
+      assets.map((asset) => asset.id),
+      runtime.timeZone,
+    )
 
     const candidates: Array<{
-      asset: TaiwanEverHeldAsset
+      asset: EverHeldAsset
       startDate: string
       reason: string
     }> = []
@@ -122,14 +176,14 @@ export class MarketPriceService {
     const skippedCount = assets.length - selected.length
 
     this.logger.log(
-      `TW backfill ${endDate}: ${selected.length} asset(s) to process, ${skippedCount} skipped (complete or over limit ${maxAssetsPerRun})`,
+      `${runtime.logLabel} backfill ${endDate}: ${selected.length} asset(s) to process, ${skippedCount} skipped (complete or over limit ${maxAssetsPerRun})`,
     )
 
     let rowsUpserted = 0
-    const perAsset: SyncTaiwanPricesResult['perAsset'] = []
+    const perAsset: SyncMarketPricesResult['perAsset'] = []
 
     for (const { asset, startDate, reason } of selected) {
-      const rows = await this.fetchAndUpsertRange(asset, startDate, endDate)
+      const rows = await this.fetchAndUpsertRange(runtime.provider, asset, startDate, endDate)
       rowsUpserted += rows
       perAsset.push({
         assetId: asset.id,
@@ -137,7 +191,9 @@ export class MarketPriceService {
         rows,
         reason,
       })
-      this.logger.log(`TW backfill ${asset.symbol}: upserted ${rows} row(s) (${reason})`)
+      this.logger.log(
+        `${runtime.logLabel} backfill ${asset.symbol}: upserted ${rows} row(s) (${reason})`,
+      )
     }
 
     for (const asset of assets) {
@@ -169,7 +225,7 @@ export class MarketPriceService {
     perAsset.sort((left, right) => left.symbol.localeCompare(right.symbol))
 
     return {
-      market: 'tw',
+      market: runtime.market,
       mode: 'backfill',
       startDate: selected[0]?.startDate ?? endDate,
       endDate,
@@ -182,19 +238,25 @@ export class MarketPriceService {
   }
 
   private async syncAssetsInRange(
-    assets: TaiwanEverHeldAsset[],
+    runtime: MarketRuntime,
+    assets: EverHeldAsset[],
     input: {
-      mode: TaiwanPriceSyncMode
+      mode: MarketPriceSyncMode
       startDate: string
       endDate: string
       assetsRequested: number
     },
-  ): Promise<SyncTaiwanPricesResult> {
+  ): Promise<SyncMarketPricesResult> {
     let rowsUpserted = 0
-    const perAsset: SyncTaiwanPricesResult['perAsset'] = []
+    const perAsset: SyncMarketPricesResult['perAsset'] = []
 
     for (const asset of assets) {
-      const rows = await this.fetchAndUpsertRange(asset, input.startDate, input.endDate)
+      const rows = await this.fetchAndUpsertRange(
+        runtime.provider,
+        asset,
+        input.startDate,
+        input.endDate,
+      )
       rowsUpserted += rows
       perAsset.push({
         assetId: asset.id,
@@ -204,7 +266,7 @@ export class MarketPriceService {
     }
 
     return {
-      market: 'tw',
+      market: runtime.market,
       mode: input.mode,
       startDate: input.startDate,
       endDate: input.endDate,
@@ -217,25 +279,29 @@ export class MarketPriceService {
   }
 
   private async fetchAndUpsertRange(
-    asset: TaiwanEverHeldAsset,
+    provider: StockPriceProvider,
+    asset: EverHeldAsset,
     startDate: string,
     endDate: string,
   ): Promise<number> {
-    const rows = await this.taiwanPriceProvider.getDailyPrices({
+    const rows = await provider.getDailyPrices({
       stockId: asset.symbol,
       startDate,
       endDate,
     })
 
     for (const row of rows) {
-      await this.upsertTaiwanDailyPrice(asset.id, row)
+      await this.upsertDailyPrice(asset.id, row)
     }
 
     return rows.length
   }
 
-  /** TWD assets that appear in any non-deleted buy/sell transaction (ever held). */
-  async resolveTaiwanEverHeldAssets(assetIds?: string[]): Promise<TaiwanEverHeldAsset[]> {
+  /** Assets with buy/sell history for the given quote currency (ever held). */
+  async resolveEverHeldAssets(
+    baseCurrency: 'TWD' | 'USD',
+    assetIds?: string[],
+  ): Promise<EverHeldAsset[]> {
     const grouped = await this.prisma.transaction.groupBy({
       by: ['assetId'],
       where: {
@@ -244,7 +310,7 @@ export class MarketPriceService {
         assetId: { not: null },
         ...(assetIds && assetIds.length > 0 ? { assetId: { in: assetIds } } : {}),
         asset: {
-          baseCurrency: 'TWD',
+          baseCurrency,
         },
       },
     })
@@ -260,7 +326,7 @@ export class MarketPriceService {
     return this.prisma.asset.findMany({
       where: {
         id: { in: resolvedAssetIds },
-        baseCurrency: 'TWD',
+        baseCurrency,
       },
       select: {
         id: true,
@@ -272,7 +338,15 @@ export class MarketPriceService {
     })
   }
 
-  private async loadFirstBuyDates(assetIds: string[]): Promise<Map<string, string>> {
+  /** @deprecated Use resolveEverHeldAssets('TWD') */
+  async resolveTaiwanEverHeldAssets(assetIds?: string[]): Promise<EverHeldAsset[]> {
+    return this.resolveEverHeldAssets('TWD', assetIds)
+  }
+
+  private async loadFirstBuyDates(
+    assetIds: string[],
+    timeZone: string,
+  ): Promise<Map<string, string>> {
     if (assetIds.length === 0) {
       return new Map()
     }
@@ -294,7 +368,7 @@ export class MarketPriceService {
       if (!row.assetId || !row._min.tradeTime) {
         continue
       }
-      result.set(row.assetId, tradeTimeToIsoDate(row._min.tradeTime, TAIWAN_MARKET_TIME_ZONE))
+      result.set(row.assetId, tradeTimeToIsoDate(row._min.tradeTime, timeZone))
     }
 
     return result
@@ -338,7 +412,7 @@ export class MarketPriceService {
     }
   }
 
-  private async upsertTaiwanDailyPrice(assetId: string, row: TaiwanStockDailyPrice) {
+  private async upsertDailyPrice(assetId: string, row: StockDailyPrice) {
     const asOf = toTradeDateUtc(row.date)
     const data = this.toPriceWriteInput(row)
 
@@ -363,7 +437,7 @@ export class MarketPriceService {
   }
 
   private toPriceWriteInput(
-    row: TaiwanStockDailyPrice,
+    row: StockDailyPrice,
   ): Omit<Prisma.PriceCreateInput, 'asset' | 'assetId' | 'asOf' | 'source'> {
     return {
       price: row.close,
@@ -374,11 +448,34 @@ export class MarketPriceService {
       turnoverAmount: row.turnoverAmount,
       changeRate: row.changeRate,
       tradeCount: row.tradeCount,
+      adjClose: row.adjClose,
     }
   }
 
-  private todayInTaiwan(): string {
-    return toTimeZoneIsoDate(new Date(), TAIWAN_MARKET_TIME_ZONE)
+  private resolveMarketRuntime(market: MarketPriceMarket): MarketRuntime {
+    if (market === 'us') {
+      return {
+        market: 'us',
+        baseCurrency: 'USD',
+        timeZone: US_MARKET_TIME_ZONE,
+        dailyLookbackDays: US_DAILY_LOOKBACK_DAYS,
+        provider: this.usPriceProvider,
+        logLabel: 'US',
+      }
+    }
+
+    return {
+      market: 'tw',
+      baseCurrency: 'TWD',
+      timeZone: TAIWAN_MARKET_TIME_ZONE,
+      dailyLookbackDays: TW_DAILY_LOOKBACK_DAYS,
+      provider: this.taiwanPriceProvider,
+      logLabel: 'TW',
+    }
+  }
+
+  private todayInMarket(timeZone: string): string {
+    return toTimeZoneIsoDate(new Date(), timeZone)
   }
 
   private getBackfillMaxAssetsPerRun(): number {

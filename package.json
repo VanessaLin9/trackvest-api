@@ -19,7 +19,8 @@
     "prisma:seed": "ts-node prisma/seed.ts",
     "db:seed": "prisma db seed",
     "finmind:smoke": "ts-node scripts/finmind-smoke-test.ts",
-    "prices:sync-tw": "ts-node -r tsconfig-paths/register scripts/sync-taiwan-prices.ts"
+    "prices:sync-tw": "ts-node -r tsconfig-paths/register scripts/sync-taiwan-prices.ts",
+    "prices:sync-us": "ts-node -r tsconfig-paths/register scripts/sync-us-prices.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",

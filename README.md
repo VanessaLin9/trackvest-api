@@ -130,9 +130,9 @@ The local seed creates:
 
 Demo `0050` includes pre/post-split buy and sell transactions (ledger not split-adjusted) for a future corporate-actions feature.
 
-Seeded `Price` rows are **market snapshots** (valuation / trends). `pnpm prices:sync-tw` upserts `Price` from FinMind when `FIN_MIND_TOKEN` is set; it does **not** change `Transaction`, `Position`, or lot costs.
+Seeded `Price` rows are **market snapshots** (valuation / trends). FinMind sync upserts `Price` when `FIN_MIND_TOKEN` is set; it does **not** change `Transaction`, `Position`, or lot costs.
 
-## Taiwan market prices (FinMind)
+## Market prices (FinMind)
 
 Optional env (see `.env.example`):
 
@@ -143,11 +143,17 @@ BACKFILL_MAX_ASSETS_PER_RUN=10
 
 ```bash
 pnpm finmind:smoke
+# Taiwan (TWD ever-held)
 pnpm prices:sync-tw -- --mode=daily
 pnpm prices:sync-tw -- --mode=backfill
+# US (USD ever-held)
+pnpm prices:sync-us -- --mode=daily
+pnpm prices:sync-us -- --mode=backfill
 ```
 
-Admin HTTP: `POST /prices/sync/taiwan` (requires admin role).
+Admin HTTP (admin role): `POST /prices/sync/taiwan`, `POST /prices/sync/us`.
+
+Portfolio valuation uses `Close` for US symbols; `adjClose` is stored for future trend/split work.
 
 ## HTTP API
 
