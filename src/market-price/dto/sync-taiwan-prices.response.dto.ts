@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 
 class SyncTaiwanPricesPerAssetDto {
   @ApiProperty()
@@ -9,11 +9,20 @@ class SyncTaiwanPricesPerAssetDto {
 
   @ApiProperty()
   rows!: number
+
+  @ApiPropertyOptional()
+  skipped?: boolean
+
+  @ApiPropertyOptional()
+  reason?: string
 }
 
 export class SyncTaiwanPricesResponseDto {
   @ApiProperty({ example: 'tw' })
   market!: 'tw'
+
+  @ApiProperty({ enum: ['daily', 'backfill'] })
+  mode!: 'daily' | 'backfill'
 
   @ApiProperty()
   startDate!: string
@@ -23,6 +32,12 @@ export class SyncTaiwanPricesResponseDto {
 
   @ApiProperty()
   assetsRequested!: number
+
+  @ApiProperty()
+  assetsProcessed!: number
+
+  @ApiProperty()
+  assetsSkipped!: number
 
   @ApiProperty()
   rowsUpserted!: number

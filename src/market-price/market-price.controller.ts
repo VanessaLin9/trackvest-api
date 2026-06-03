@@ -16,6 +16,12 @@ export class MarketPriceController {
   @Roles(UserRole.admin)
   @ApiCreatedResponse({ type: SyncTaiwanPricesResponseDto })
   syncTaiwanPrices(@Body() body: SyncTaiwanPricesDto): Promise<SyncTaiwanPricesResponseDto> {
-    return this.marketPriceService.syncTaiwanPrices(body)
+    return this.marketPriceService.syncTaiwanPrices({
+      mode: body.mode,
+      startDate: body.startDate,
+      endDate: body.endDate,
+      assetIds: body.assetIds,
+      maxAssetsPerRun: body.maxAssetsPerRun,
+    })
   }
 }

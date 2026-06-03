@@ -22,7 +22,7 @@
     "prisma:seed": "ts-node prisma/seed.ts",
     "db:seed": "prisma db seed",
     "finmind:smoke": "ts-node scripts/finmind-smoke-test.ts",
-    "prices:sync-tw": "ts-node scripts/sync-taiwan-prices.ts"
+    "prices:sync-tw": "ts-node -r tsconfig-paths/register scripts/sync-taiwan-prices.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",
@@ -36,6 +36,7 @@
     "@nestjs/mapped-types": "^2.1.0",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/platform-fastify": "^11.1.6",
+    "@nestjs/schedule": "^6.1.3",
     "@nestjs/swagger": "^11.2.0",
     "@prisma/client": "^6.16.3",
     "bcrypt": "^6.0.0",
