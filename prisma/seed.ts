@@ -40,7 +40,9 @@ const TRANSACTION_IDS = {
   depositBroker: '675676e8-3f24-4cbc-b210-b5efea213001',
   buyYuanta50Lot1: '4df6b893-c1c0-4d99-aaf3-ebf79b863002',
   buyYuanta50Lot2: '6de8e1ec-9f1a-4e88-983f-c4d400953003',
-  sellYuanta50: 'e6f7ecf7-bf11-4f48-b80f-af6c7d1f3004',
+  sellYuanta50PreSplit: 'e6f7ecf7-bf11-4f48-b80f-af6c7d1f3004',
+  sellYuanta50PostSplit: 'a1b2c3d4-1111-4222-8333-444455560014',
+  buyYuanta50PostSplit: 'b2c3d4e5-2222-4333-9444-555566670015',
   buyTsmc: '97efded6-3c65-4247-a8c9-31d4aaed3005',
   dividendTsmc: 'c8d77c1e-e276-4ae9-8ed6-c2f359f43006',
   buySgov: 'a92f36f1-0455-4c8f-8b29-0b6a31623007',
@@ -59,6 +61,7 @@ const POSITION_IDS = {
 const LOT_IDS = {
   yuanta50Lot1: '62955b50-bcb6-4707-bb83-12e195a55001',
   yuanta50Lot2: 'a758bf8b-f4d1-4d6f-a29c-2a7f17765002',
+  yuanta50Lot3: 'c3d4e5f6-3333-4444-a555-666677780016',
   tsmcLot1: 'f8f2cf31-a8bc-4ef7-8d5d-85b6dc6d5003',
   sgovLot1: '9b9b2eef-7cc6-4fd3-a6de-a74506a65004',
   aaplLot1: '1b86f70b-c782-4b1b-97d1-d546f43d5005',
@@ -66,20 +69,45 @@ const LOT_IDS = {
 } as const
 
 const SELL_MATCH_IDS = {
-  yuanta50Lot1: '5b100242-ec32-4b11-bff5-09a9a34f6001',
-  yuanta50Lot2: 'b1410ef7-5486-4614-b89f-9e86b2526002',
+  yuanta50PreLot1: '5b100242-ec32-4b11-bff5-09a9a34f6001',
+  yuanta50PostLot1: 'b1410ef7-5486-4614-b89f-9e86b2526002',
+  yuanta50PostLot2: 'd2521fa8-6597-4725-9ac0-af97c3637003',
 } as const
 
 const GL_ENTRY_IDS = {
   depositBroker: 'aa8ab17f-f599-4f3f-bb7d-9fd8c85f7001',
   buyYuanta50Lot1: 'ea0d111c-8061-414b-a30a-af7b9d857002',
   buyYuanta50Lot2: '2a7f25be-e16b-4468-83f9-51bd73a67003',
-  sellYuanta50: '3668d8c6-63b5-4d95-a4d2-e26a23857004',
+  sellYuanta50PreSplit: '3668d8c6-63b5-4d95-a4d2-e26a23857004',
+  sellYuanta50PostSplit: '4779e9d7-74c6-5ea6-b5e3-f37b34968105',
+  buyYuanta50PostSplit: '5880fae8-85d7-6fb7-c6f4-048c45a79206',
   buyTsmc: 'b74a55e1-80f0-41a3-9c09-a7428a027005',
   dividendTsmc: '31c1480d-7d43-4cc1-a31a-f58171be7006',
 } as const
 
-/** Demo market prices aligned to transaction dates (post-2025/06 0050 split scale). */
+/**
+ * 0050 split regression fixture (FinMind TaiwanStockPrice closes).
+ *
+ * Timeline: pre-split buys → pre-split sell → post-split sell → post-split buy.
+ * Ledger qty/cost are NOT split-adjusted, so mixed lots + market prices stress-test
+ * corporate-action handling later.
+ */
+const YUANTA50_FINMIND_CLOSES = {
+  buyLot1: { tradeDate: '2025-03-03', close: 188.05 },
+  buyLot2: { tradeDate: '2025-03-10', close: 185.25 },
+  sellPreSplit: { tradeDate: '2025-05-20', close: 180.8 },
+  sellPostSplit: { tradeDate: '2025-07-02', close: 48.65 },
+  buyPostSplit: { tradeDate: '2025-07-10', close: 49.41 },
+  latestDemo: { asOf: '2026-06-03', close: 107.6 },
+} as const
+
+const YUANTA50_UNIT_COSTS = {
+  lot1: 188.25,
+  lot2: 185.45,
+  lot3: 49.91,
+} as const
+
+/** Demo market prices aligned to transaction dates. */
 function buildSeedPrice(input: {
   assetId: string
   asOf: string
@@ -309,42 +337,70 @@ async function main() {
         accountId: BROKER_ACCOUNT_ID,
         assetId: ASSET_IDS.yuanta50,
         type: 'buy',
-        amount: 10220,
+        amount: 18825,
         quantity: 100,
-        price: 102,
+        price: YUANTA50_FINMIND_CLOSES.buyLot1.close,
         fee: 20,
         tax: 0,
-        brokerOrderNo: 'D202603020001',
-        tradeTime: new Date('2026-03-02T09:00:00.000Z'),
-        note: '0050 首批建倉（100 股）',
+        brokerOrderNo: 'D202503030001',
+        tradeTime: new Date('2025-03-03T09:00:00.000Z'),
+        note: '0050 首批建倉（100 股，分割前 FinMind 收盤價）',
       },
       {
         id: TRANSACTION_IDS.buyYuanta50Lot2,
         accountId: BROKER_ACCOUNT_ID,
         assetId: ASSET_IDS.yuanta50,
         type: 'buy',
-        amount: 5410,
+        amount: 9272.5,
         quantity: 50,
-        price: 108,
+        price: YUANTA50_FINMIND_CLOSES.buyLot2.close,
         fee: 10,
         tax: 0,
-        brokerOrderNo: 'D202603080001',
-        tradeTime: new Date('2026-03-08T09:00:00.000Z'),
-        note: '0050 逢低加碼（50 股）',
+        brokerOrderNo: 'D202503100001',
+        tradeTime: new Date('2025-03-10T09:00:00.000Z'),
+        note: '0050 逢低加碼（50 股，分割前 FinMind 收盤價）',
       },
       {
-        id: TRANSACTION_IDS.sellYuanta50,
+        id: TRANSACTION_IDS.sellYuanta50PreSplit,
         accountId: BROKER_ACCOUNT_ID,
         assetId: ASSET_IDS.yuanta50,
         type: 'sell',
-        amount: 13386,
-        quantity: 120,
-        price: 112,
-        fee: 30,
-        tax: 24,
-        brokerOrderNo: 'D202603180001',
-        tradeTime: new Date('2026-03-18T09:00:00.000Z'),
-        note: '0050 部分獲利了結（120 股）',
+        amount: 14428,
+        quantity: 80,
+        price: YUANTA50_FINMIND_CLOSES.sellPreSplit.close,
+        fee: 20,
+        tax: 16,
+        brokerOrderNo: 'D202505200001',
+        tradeTime: new Date('2025-05-20T09:00:00.000Z'),
+        note: '0050 分割前減碼（80 股）',
+      },
+      {
+        id: TRANSACTION_IDS.sellYuanta50PostSplit,
+        accountId: BROKER_ACCOUNT_ID,
+        assetId: ASSET_IDS.yuanta50,
+        type: 'sell',
+        amount: 1919,
+        quantity: 40,
+        price: YUANTA50_FINMIND_CLOSES.sellPostSplit.close,
+        fee: 15,
+        tax: 12,
+        brokerOrderNo: 'D202507020001',
+        tradeTime: new Date('2025-07-02T09:00:00.000Z'),
+        note: '0050 分割後減碼（40 股，仍以分割前成本 FIFO）',
+      },
+      {
+        id: TRANSACTION_IDS.buyYuanta50PostSplit,
+        accountId: BROKER_ACCOUNT_ID,
+        assetId: ASSET_IDS.yuanta50,
+        type: 'buy',
+        amount: 998.2,
+        quantity: 20,
+        price: YUANTA50_FINMIND_CLOSES.buyPostSplit.close,
+        fee: 10,
+        tax: 0,
+        brokerOrderNo: 'D202507100001',
+        tradeTime: new Date('2025-07-10T09:00:00.000Z'),
+        note: '0050 分割後加碼（20 股）',
       },
       {
         id: TRANSACTION_IDS.buyTsmc,
@@ -422,9 +478,9 @@ async function main() {
         id: POSITION_IDS.yuanta50,
         accountId: BROKER_ACCOUNT_ID,
         assetId: ASSET_IDS.yuanta50,
-        quantity: 30,
-        avgCost: 108.2,
-        openedAt: new Date('2026-03-02T09:00:00.000Z'),
+        quantity: 50,
+        avgCost: 131.23,
+        openedAt: new Date('2025-03-03T09:00:00.000Z'),
       },
       {
         id: POSITION_IDS.tsmc,
@@ -470,9 +526,9 @@ async function main() {
         sourceTransactionId: TRANSACTION_IDS.buyYuanta50Lot1,
         originalQuantity: 100,
         remainingQuantity: 0,
-        unitCost: 102.2,
-        openedAt: new Date('2026-03-02T09:00:00.000Z'),
-        closedAt: new Date('2026-03-18T09:00:00.000Z'),
+        unitCost: YUANTA50_UNIT_COSTS.lot1,
+        openedAt: new Date('2025-03-03T09:00:00.000Z'),
+        closedAt: new Date('2025-07-02T09:00:00.000Z'),
       },
       {
         id: LOT_IDS.yuanta50Lot2,
@@ -481,8 +537,18 @@ async function main() {
         sourceTransactionId: TRANSACTION_IDS.buyYuanta50Lot2,
         originalQuantity: 50,
         remainingQuantity: 30,
-        unitCost: 108.2,
-        openedAt: new Date('2026-03-08T09:00:00.000Z'),
+        unitCost: YUANTA50_UNIT_COSTS.lot2,
+        openedAt: new Date('2025-03-10T09:00:00.000Z'),
+      },
+      {
+        id: LOT_IDS.yuanta50Lot3,
+        accountId: BROKER_ACCOUNT_ID,
+        assetId: ASSET_IDS.yuanta50,
+        sourceTransactionId: TRANSACTION_IDS.buyYuanta50PostSplit,
+        originalQuantity: 20,
+        remainingQuantity: 20,
+        unitCost: YUANTA50_UNIT_COSTS.lot3,
+        openedAt: new Date('2025-07-10T09:00:00.000Z'),
       },
       {
         id: LOT_IDS.tsmcLot1,
@@ -530,28 +596,61 @@ async function main() {
   await prisma.sellLotMatch.createMany({
     data: [
       {
-        id: SELL_MATCH_IDS.yuanta50Lot1,
-        sellTransactionId: TRANSACTION_IDS.sellYuanta50,
+        id: SELL_MATCH_IDS.yuanta50PreLot1,
+        sellTransactionId: TRANSACTION_IDS.sellYuanta50PreSplit,
         buyLotId: LOT_IDS.yuanta50Lot1,
-        quantity: 100,
-        unitCost: 102.2,
+        quantity: 80,
+        unitCost: YUANTA50_UNIT_COSTS.lot1,
       },
       {
-        id: SELL_MATCH_IDS.yuanta50Lot2,
-        sellTransactionId: TRANSACTION_IDS.sellYuanta50,
+        id: SELL_MATCH_IDS.yuanta50PostLot1,
+        sellTransactionId: TRANSACTION_IDS.sellYuanta50PostSplit,
+        buyLotId: LOT_IDS.yuanta50Lot1,
+        quantity: 20,
+        unitCost: YUANTA50_UNIT_COSTS.lot1,
+      },
+      {
+        id: SELL_MATCH_IDS.yuanta50PostLot2,
+        sellTransactionId: TRANSACTION_IDS.sellYuanta50PostSplit,
         buyLotId: LOT_IDS.yuanta50Lot2,
         quantity: 20,
-        unitCost: 108.2,
+        unitCost: YUANTA50_UNIT_COSTS.lot2,
       },
     ],
   })
 
   await prisma.price.createMany({
     data: [
-      buildSeedPrice({ assetId: ASSET_IDS.yuanta50, asOf: '2026-03-02', close: 102 }),
-      buildSeedPrice({ assetId: ASSET_IDS.yuanta50, asOf: '2026-03-08', close: 108 }),
-      buildSeedPrice({ assetId: ASSET_IDS.yuanta50, asOf: '2026-03-18', close: 112 }),
-      buildSeedPrice({ assetId: ASSET_IDS.yuanta50, asOf: '2026-03-27', close: 115 }),
+      buildSeedPrice({
+        assetId: ASSET_IDS.yuanta50,
+        asOf: YUANTA50_FINMIND_CLOSES.buyLot1.tradeDate,
+        close: YUANTA50_FINMIND_CLOSES.buyLot1.close,
+      }),
+      buildSeedPrice({
+        assetId: ASSET_IDS.yuanta50,
+        asOf: YUANTA50_FINMIND_CLOSES.buyLot2.tradeDate,
+        close: YUANTA50_FINMIND_CLOSES.buyLot2.close,
+      }),
+      buildSeedPrice({
+        assetId: ASSET_IDS.yuanta50,
+        asOf: YUANTA50_FINMIND_CLOSES.sellPreSplit.tradeDate,
+        close: YUANTA50_FINMIND_CLOSES.sellPreSplit.close,
+      }),
+      buildSeedPrice({
+        assetId: ASSET_IDS.yuanta50,
+        asOf: YUANTA50_FINMIND_CLOSES.sellPostSplit.tradeDate,
+        close: YUANTA50_FINMIND_CLOSES.sellPostSplit.close,
+      }),
+      buildSeedPrice({
+        assetId: ASSET_IDS.yuanta50,
+        asOf: YUANTA50_FINMIND_CLOSES.buyPostSplit.tradeDate,
+        close: YUANTA50_FINMIND_CLOSES.buyPostSplit.close,
+      }),
+      buildSeedPrice({
+        assetId: ASSET_IDS.yuanta50,
+        asOf: YUANTA50_FINMIND_CLOSES.latestDemo.asOf,
+        close: YUANTA50_FINMIND_CLOSES.latestDemo.close,
+      }),
       buildSeedPrice({ assetId: ASSET_IDS.tsmc, asOf: '2026-03-20', close: 1000 }),
       buildSeedPrice({ assetId: ASSET_IDS.tsmc, asOf: '2026-03-27', close: 1080 }),
       {
@@ -611,7 +710,7 @@ async function main() {
       {
         id: GL_ENTRY_IDS.buyYuanta50Lot1,
         userId: demoUser.id,
-        date: new Date('2026-03-02T09:00:00.000Z'),
+        date: new Date('2025-03-03T09:00:00.000Z'),
         memo: '0050 首批建倉',
         source: 'auto:transaction:buy',
         refTxId: TRANSACTION_IDS.buyYuanta50Lot1,
@@ -619,18 +718,34 @@ async function main() {
       {
         id: GL_ENTRY_IDS.buyYuanta50Lot2,
         userId: demoUser.id,
-        date: new Date('2026-03-08T09:00:00.000Z'),
+        date: new Date('2025-03-10T09:00:00.000Z'),
         memo: '0050 逢低加碼',
         source: 'auto:transaction:buy',
         refTxId: TRANSACTION_IDS.buyYuanta50Lot2,
       },
       {
-        id: GL_ENTRY_IDS.sellYuanta50,
+        id: GL_ENTRY_IDS.sellYuanta50PreSplit,
         userId: demoUser.id,
-        date: new Date('2026-03-18T09:00:00.000Z'),
-        memo: '0050 部分獲利了結',
+        date: new Date('2025-05-20T09:00:00.000Z'),
+        memo: '0050 分割前減碼',
         source: 'auto:transaction:sell',
-        refTxId: TRANSACTION_IDS.sellYuanta50,
+        refTxId: TRANSACTION_IDS.sellYuanta50PreSplit,
+      },
+      {
+        id: GL_ENTRY_IDS.sellYuanta50PostSplit,
+        userId: demoUser.id,
+        date: new Date('2025-07-02T09:00:00.000Z'),
+        memo: '0050 分割後減碼',
+        source: 'auto:transaction:sell',
+        refTxId: TRANSACTION_IDS.sellYuanta50PostSplit,
+      },
+      {
+        id: GL_ENTRY_IDS.buyYuanta50PostSplit,
+        userId: demoUser.id,
+        date: new Date('2025-07-10T09:00:00.000Z'),
+        memo: '0050 分割後加碼',
+        source: 'auto:transaction:buy',
+        refTxId: TRANSACTION_IDS.buyYuanta50PostSplit,
       },
       {
         id: GL_ENTRY_IDS.buyTsmc,
@@ -672,7 +787,7 @@ async function main() {
       {
         entryId: GL_ENTRY_IDS.buyYuanta50Lot1,
         glAccountId: GL_ACCOUNT_IDS.investment,
-        amount: 10220,
+        amount: 18825,
         side: 'debit',
         currency: 'TWD',
         note: 'buy cost(+fee)',
@@ -680,7 +795,7 @@ async function main() {
       {
         entryId: GL_ENTRY_IDS.buyYuanta50Lot1,
         glAccountId: GL_ACCOUNT_IDS.brokerCash,
-        amount: 10220,
+        amount: 18825,
         side: 'credit',
         currency: 'TWD',
         note: 'cash out',
@@ -688,7 +803,7 @@ async function main() {
       {
         entryId: GL_ENTRY_IDS.buyYuanta50Lot2,
         glAccountId: GL_ACCOUNT_IDS.investment,
-        amount: 5410,
+        amount: 9272.5,
         side: 'debit',
         currency: 'TWD',
         note: 'buy cost(+fee)',
@@ -696,42 +811,90 @@ async function main() {
       {
         entryId: GL_ENTRY_IDS.buyYuanta50Lot2,
         glAccountId: GL_ACCOUNT_IDS.brokerCash,
-        amount: 5410,
+        amount: 9272.5,
         side: 'credit',
         currency: 'TWD',
         note: 'cash out',
       },
       {
-        entryId: GL_ENTRY_IDS.sellYuanta50,
+        entryId: GL_ENTRY_IDS.sellYuanta50PreSplit,
         glAccountId: GL_ACCOUNT_IDS.brokerCash,
-        amount: 13386,
+        amount: 14428,
         side: 'debit',
         currency: 'TWD',
         note: 'sell proceeds in',
       },
       {
-        entryId: GL_ENTRY_IDS.sellYuanta50,
+        entryId: GL_ENTRY_IDS.sellYuanta50PreSplit,
         glAccountId: GL_ACCOUNT_IDS.investment,
-        amount: 12384,
+        amount: 15060,
         side: 'credit',
         currency: 'TWD',
         note: 'sell cost basis out',
       },
       {
-        entryId: GL_ENTRY_IDS.sellYuanta50,
+        entryId: GL_ENTRY_IDS.sellYuanta50PreSplit,
         glAccountId: GL_ACCOUNT_IDS.feeExpense,
-        amount: 54,
+        amount: 36,
         side: 'debit',
         currency: 'TWD',
         note: 'sell fee and tax',
       },
       {
-        entryId: GL_ENTRY_IDS.sellYuanta50,
-        glAccountId: GL_ACCOUNT_IDS.realizedGain,
-        amount: 948,
+        entryId: GL_ENTRY_IDS.sellYuanta50PreSplit,
+        glAccountId: GL_ACCOUNT_IDS.realizedLoss,
+        amount: 668,
+        side: 'debit',
+        currency: 'TWD',
+        note: 'realized loss',
+      },
+      {
+        entryId: GL_ENTRY_IDS.sellYuanta50PostSplit,
+        glAccountId: GL_ACCOUNT_IDS.brokerCash,
+        amount: 1919,
+        side: 'debit',
+        currency: 'TWD',
+        note: 'sell proceeds in',
+      },
+      {
+        entryId: GL_ENTRY_IDS.sellYuanta50PostSplit,
+        glAccountId: GL_ACCOUNT_IDS.investment,
+        amount: 7474,
         side: 'credit',
         currency: 'TWD',
-        note: 'realized gain',
+        note: 'sell cost basis out',
+      },
+      {
+        entryId: GL_ENTRY_IDS.sellYuanta50PostSplit,
+        glAccountId: GL_ACCOUNT_IDS.feeExpense,
+        amount: 27,
+        side: 'debit',
+        currency: 'TWD',
+        note: 'sell fee and tax',
+      },
+      {
+        entryId: GL_ENTRY_IDS.sellYuanta50PostSplit,
+        glAccountId: GL_ACCOUNT_IDS.realizedLoss,
+        amount: 5582,
+        side: 'debit',
+        currency: 'TWD',
+        note: 'realized loss',
+      },
+      {
+        entryId: GL_ENTRY_IDS.buyYuanta50PostSplit,
+        glAccountId: GL_ACCOUNT_IDS.investment,
+        amount: 998.2,
+        side: 'debit',
+        currency: 'TWD',
+        note: 'buy cost(+fee)',
+      },
+      {
+        entryId: GL_ENTRY_IDS.buyYuanta50PostSplit,
+        glAccountId: GL_ACCOUNT_IDS.brokerCash,
+        amount: 998.2,
+        side: 'credit',
+        currency: 'TWD',
+        note: 'cash out',
       },
       {
         entryId: GL_ENTRY_IDS.buyTsmc,
@@ -769,6 +932,9 @@ async function main() {
   })
 
   console.log('Seed completed successfully for demo user:', DEMO_USER_EMAIL)
+  console.log(
+    'Demo 0050 split fixture: pre/post-split sells + post-split buy; ledger unadjusted (50 shares, mixed lots).',
+  )
   console.log(
     'Demo TW holdings use share quantity (股), not 張. Re-run seed after FinMind sync if demo prices drift.',
   )
