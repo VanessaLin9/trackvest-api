@@ -79,6 +79,29 @@ const GL_ENTRY_IDS = {
   dividendTsmc: '31c1480d-7d43-4cc1-a31a-f58171be7006',
 } as const
 
+/** Demo market prices aligned to transaction dates (post-2025/06 0050 split scale). */
+function buildSeedPrice(input: {
+  assetId: string
+  asOf: string
+  close: number
+  volume?: number
+}) {
+  const spread = Number((input.close * 0.008).toFixed(2))
+  return {
+    assetId: input.assetId,
+    asOf: new Date(`${input.asOf}T00:00:00.000Z`),
+    source: 'seed',
+    price: input.close,
+    open: input.close - 0.5,
+    high: input.close + 0.8,
+    low: input.close - 1.2,
+    volume: input.volume ?? 1_000_000,
+    turnoverAmount: input.close * (input.volume ?? 1_000_000),
+    changeRate: spread,
+    tradeCount: 10_000,
+  }
+}
+
 async function wipeAllData() {
   await prisma.glLine.deleteMany()
   await prisma.glEntry.deleteMany()
@@ -286,56 +309,56 @@ async function main() {
         accountId: BROKER_ACCOUNT_ID,
         assetId: ASSET_IDS.yuanta50,
         type: 'buy',
-        amount: 18020,
+        amount: 10220,
         quantity: 100,
-        price: 180,
+        price: 102,
         fee: 20,
         tax: 0,
         brokerOrderNo: 'D202603020001',
         tradeTime: new Date('2026-03-02T09:00:00.000Z'),
-        note: '0050 首批建倉',
+        note: '0050 首批建倉（100 股）',
       },
       {
         id: TRANSACTION_IDS.buyYuanta50Lot2,
         accountId: BROKER_ACCOUNT_ID,
         assetId: ASSET_IDS.yuanta50,
         type: 'buy',
-        amount: 9510,
+        amount: 5410,
         quantity: 50,
-        price: 190,
+        price: 108,
         fee: 10,
         tax: 0,
         brokerOrderNo: 'D202603080001',
         tradeTime: new Date('2026-03-08T09:00:00.000Z'),
-        note: '0050 逢低加碼',
+        note: '0050 逢低加碼（50 股）',
       },
       {
         id: TRANSACTION_IDS.sellYuanta50,
         accountId: BROKER_ACCOUNT_ID,
         assetId: ASSET_IDS.yuanta50,
         type: 'sell',
-        amount: 23946,
+        amount: 13386,
         quantity: 120,
-        price: 200,
+        price: 112,
         fee: 30,
         tax: 24,
         brokerOrderNo: 'D202603180001',
         tradeTime: new Date('2026-03-18T09:00:00.000Z'),
-        note: '0050 部分獲利了結',
+        note: '0050 部分獲利了結（120 股）',
       },
       {
         id: TRANSACTION_IDS.buyTsmc,
         accountId: BROKER_ACCOUNT_ID,
         assetId: ASSET_IDS.tsmc,
         type: 'buy',
-        amount: 18020,
+        amount: 20020,
         quantity: 20,
-        price: 900,
+        price: 1000,
         fee: 20,
         tax: 0,
         brokerOrderNo: 'D202603200001',
         tradeTime: new Date('2026-03-20T09:00:00.000Z'),
-        note: '台積電長期配置',
+        note: '台積電長期配置（20 股）',
       },
       {
         id: TRANSACTION_IDS.dividendTsmc,
@@ -400,7 +423,7 @@ async function main() {
         accountId: BROKER_ACCOUNT_ID,
         assetId: ASSET_IDS.yuanta50,
         quantity: 30,
-        avgCost: 190.2,
+        avgCost: 108.2,
         openedAt: new Date('2026-03-02T09:00:00.000Z'),
       },
       {
@@ -408,7 +431,7 @@ async function main() {
         accountId: BROKER_ACCOUNT_ID,
         assetId: ASSET_IDS.tsmc,
         quantity: 20,
-        avgCost: 901,
+        avgCost: 1001,
         openedAt: new Date('2026-03-20T09:00:00.000Z'),
       },
       {
@@ -447,7 +470,7 @@ async function main() {
         sourceTransactionId: TRANSACTION_IDS.buyYuanta50Lot1,
         originalQuantity: 100,
         remainingQuantity: 0,
-        unitCost: 180.2,
+        unitCost: 102.2,
         openedAt: new Date('2026-03-02T09:00:00.000Z'),
         closedAt: new Date('2026-03-18T09:00:00.000Z'),
       },
@@ -458,7 +481,7 @@ async function main() {
         sourceTransactionId: TRANSACTION_IDS.buyYuanta50Lot2,
         originalQuantity: 50,
         remainingQuantity: 30,
-        unitCost: 190.2,
+        unitCost: 108.2,
         openedAt: new Date('2026-03-08T09:00:00.000Z'),
       },
       {
@@ -468,7 +491,7 @@ async function main() {
         sourceTransactionId: TRANSACTION_IDS.buyTsmc,
         originalQuantity: 20,
         remainingQuantity: 20,
-        unitCost: 901,
+        unitCost: 1001,
         openedAt: new Date('2026-03-20T09:00:00.000Z'),
       },
       {
@@ -511,32 +534,26 @@ async function main() {
         sellTransactionId: TRANSACTION_IDS.sellYuanta50,
         buyLotId: LOT_IDS.yuanta50Lot1,
         quantity: 100,
-        unitCost: 180.2,
+        unitCost: 102.2,
       },
       {
         id: SELL_MATCH_IDS.yuanta50Lot2,
         sellTransactionId: TRANSACTION_IDS.sellYuanta50,
         buyLotId: LOT_IDS.yuanta50Lot2,
         quantity: 20,
-        unitCost: 190.2,
+        unitCost: 108.2,
       },
     ],
   })
 
   await prisma.price.createMany({
     data: [
-      {
-        assetId: ASSET_IDS.yuanta50,
-        price: 205,
-        asOf: new Date('2026-03-27T09:00:00.000Z'),
-        source: 'seed',
-      },
-      {
-        assetId: ASSET_IDS.tsmc,
-        price: 950,
-        asOf: new Date('2026-03-27T09:00:00.000Z'),
-        source: 'seed',
-      },
+      buildSeedPrice({ assetId: ASSET_IDS.yuanta50, asOf: '2026-03-02', close: 102 }),
+      buildSeedPrice({ assetId: ASSET_IDS.yuanta50, asOf: '2026-03-08', close: 108 }),
+      buildSeedPrice({ assetId: ASSET_IDS.yuanta50, asOf: '2026-03-18', close: 112 }),
+      buildSeedPrice({ assetId: ASSET_IDS.yuanta50, asOf: '2026-03-27', close: 115 }),
+      buildSeedPrice({ assetId: ASSET_IDS.tsmc, asOf: '2026-03-20', close: 1000 }),
+      buildSeedPrice({ assetId: ASSET_IDS.tsmc, asOf: '2026-03-27', close: 1080 }),
       {
         assetId: ASSET_IDS.fubon50,
         price: 112,
@@ -655,7 +672,7 @@ async function main() {
       {
         entryId: GL_ENTRY_IDS.buyYuanta50Lot1,
         glAccountId: GL_ACCOUNT_IDS.investment,
-        amount: 18020,
+        amount: 10220,
         side: 'debit',
         currency: 'TWD',
         note: 'buy cost(+fee)',
@@ -663,7 +680,7 @@ async function main() {
       {
         entryId: GL_ENTRY_IDS.buyYuanta50Lot1,
         glAccountId: GL_ACCOUNT_IDS.brokerCash,
-        amount: 18020,
+        amount: 10220,
         side: 'credit',
         currency: 'TWD',
         note: 'cash out',
@@ -671,7 +688,7 @@ async function main() {
       {
         entryId: GL_ENTRY_IDS.buyYuanta50Lot2,
         glAccountId: GL_ACCOUNT_IDS.investment,
-        amount: 9510,
+        amount: 5410,
         side: 'debit',
         currency: 'TWD',
         note: 'buy cost(+fee)',
@@ -679,7 +696,7 @@ async function main() {
       {
         entryId: GL_ENTRY_IDS.buyYuanta50Lot2,
         glAccountId: GL_ACCOUNT_IDS.brokerCash,
-        amount: 9510,
+        amount: 5410,
         side: 'credit',
         currency: 'TWD',
         note: 'cash out',
@@ -687,7 +704,7 @@ async function main() {
       {
         entryId: GL_ENTRY_IDS.sellYuanta50,
         glAccountId: GL_ACCOUNT_IDS.brokerCash,
-        amount: 23946,
+        amount: 13386,
         side: 'debit',
         currency: 'TWD',
         note: 'sell proceeds in',
@@ -695,7 +712,7 @@ async function main() {
       {
         entryId: GL_ENTRY_IDS.sellYuanta50,
         glAccountId: GL_ACCOUNT_IDS.investment,
-        amount: 21824,
+        amount: 12384,
         side: 'credit',
         currency: 'TWD',
         note: 'sell cost basis out',
@@ -711,7 +728,7 @@ async function main() {
       {
         entryId: GL_ENTRY_IDS.sellYuanta50,
         glAccountId: GL_ACCOUNT_IDS.realizedGain,
-        amount: 2176,
+        amount: 948,
         side: 'credit',
         currency: 'TWD',
         note: 'realized gain',
@@ -719,7 +736,7 @@ async function main() {
       {
         entryId: GL_ENTRY_IDS.buyTsmc,
         glAccountId: GL_ACCOUNT_IDS.investment,
-        amount: 18020,
+        amount: 20020,
         side: 'debit',
         currency: 'TWD',
         note: 'buy cost(+fee)',
@@ -727,7 +744,7 @@ async function main() {
       {
         entryId: GL_ENTRY_IDS.buyTsmc,
         glAccountId: GL_ACCOUNT_IDS.brokerCash,
-        amount: 18020,
+        amount: 20020,
         side: 'credit',
         currency: 'TWD',
         note: 'cash out',
@@ -752,6 +769,9 @@ async function main() {
   })
 
   console.log('Seed completed successfully for demo user:', DEMO_USER_EMAIL)
+  console.log(
+    'Demo TW holdings use share quantity (股), not 張. Re-run seed after FinMind sync if demo prices drift.',
+  )
 }
 
 main()
