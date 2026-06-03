@@ -128,6 +128,27 @@ The local seed creates:
   - `3711` 日月光投控
 - seeded GL accounts required by current investment flows
 
+Demo `0050` includes pre/post-split buy and sell transactions (ledger not split-adjusted) for a future corporate-actions feature.
+
+Seeded `Price` rows are **market snapshots** (valuation / trends). `pnpm prices:sync-tw` upserts `Price` from FinMind when `FIN_MIND_TOKEN` is set; it does **not** change `Transaction`, `Position`, or lot costs.
+
+## Taiwan market prices (FinMind)
+
+Optional env (see `.env.example`):
+
+```env
+FIN_MIND_TOKEN=
+BACKFILL_MAX_ASSETS_PER_RUN=10
+```
+
+```bash
+pnpm finmind:smoke
+pnpm prices:sync-tw -- --mode=daily
+pnpm prices:sync-tw -- --mode=backfill
+```
+
+Admin HTTP: `POST /prices/sync/taiwan` (requires admin role).
+
 ## HTTP API
 
 The HTTP API is still useful for:
@@ -176,16 +197,24 @@ See [docs/mcp.md](/Users/vanessa/develop/trackvest-api/docs/mcp.md) for:
 
 ## Validation and testing
 
+There is no `pnpm test` script yet. Run Jest directly.
+
 Build:
 
 ```bash
 pnpm build
 ```
 
-Unit tests:
+All unit tests:
 
 ```bash
 npx jest --runInBand
+```
+
+Market price module only (FinMind sync):
+
+```bash
+npx jest src/market-price --runInBand
 ```
 
 HTTP e2e tests:
