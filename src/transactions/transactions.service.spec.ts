@@ -95,10 +95,15 @@ describe('TransactionsService', () => {
       validateTransactionOwnership: jest.fn(),
     }
 
+    const corpActionService = {
+      reapplySplitsForScope: jest.fn(),
+    }
+
     const service = new TransactionsService(
       prisma as never,
       postingService as never,
       ownershipService as never,
+      corpActionService as never,
     )
 
     txClient.transaction.findFirst.mockResolvedValue(null)
