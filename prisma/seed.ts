@@ -133,6 +133,8 @@ function buildSeedPrice(input: {
 async function wipeAllData() {
   await prisma.glLine.deleteMany()
   await prisma.glEntry.deleteMany()
+  await prisma.corporateActionApplication.deleteMany()
+  await prisma.corporateAction.deleteMany()
   await prisma.sellLotMatch.deleteMany()
   await prisma.positionLot.deleteMany()
   await prisma.position.deleteMany()
