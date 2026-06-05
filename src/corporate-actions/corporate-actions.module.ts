@@ -8,14 +8,12 @@ import {
 } from './corp-action.types'
 import { FinmindTwSplitProvider } from './providers/finmind-tw-split.provider'
 import { UsSplitInferProvider } from './providers/us-split-infer.provider'
-import { SplitLedgerService } from './split-ledger.service'
 
 @Module({
   controllers: [CorpActionController],
   providers: [
     CorpActionService,
     CorpActionScheduler,
-    SplitLedgerService,
     FinmindTwSplitProvider,
     UsSplitInferProvider,
     {
@@ -27,6 +25,6 @@ import { SplitLedgerService } from './split-ledger.service'
       useExisting: UsSplitInferProvider,
     },
   ],
-  exports: [CorpActionService, SplitLedgerService],
+  exports: [CorpActionService],
 })
 export class CorporateActionsModule {}
