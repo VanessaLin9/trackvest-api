@@ -10,18 +10,10 @@ import {
   TW_SPLIT_EVENT_PROVIDER,
   US_SPLIT_EVENT_PROVIDER,
 } from './corp-action.types'
-import { SplitLedgerService } from './split-ledger.service'
-
-type PositionScope = {
-  accountId: string
-  assetId: string
-}
-
 @Injectable()
 export class CorpActionService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly splitLedgerService: SplitLedgerService,
     @Inject(TW_SPLIT_EVENT_PROVIDER)
     private readonly twSplitProvider: SplitEventProvider,
     @Inject(US_SPLIT_EVENT_PROVIDER)
@@ -63,12 +55,8 @@ export class CorpActionService {
         })
 
         for (const event of events) {
-          const corporateAction = await this.upsertCorporateAction(asset.id, provider, event)
+          await this.upsertCorporateAction(asset.id, provider, event)
           eventsUpserted += 1
-
-          const applyStats = await this.applyCorporateActionToAccounts(corporateAction)
-          applicationsCreated += applyStats.created
-          applicationsSkipped += applyStats.skipped
         }
       }
     }
@@ -79,28 +67,6 @@ export class CorpActionService {
       eventsUpserted,
       applicationsCreated,
       applicationsSkipped,
-    }
-  }
-
-  async reapplySplitsForScope(
-    prisma: Prisma.TransactionClient,
-    scope: PositionScope,
-  ): Promise<void> {
-    const actions = await prisma.corporateAction.findMany({
-      where: { assetId: scope.assetId },
-      orderBy: [{ exDate: 'asc' }, { id: 'asc' }],
-    })
-
-    for (const action of actions) {
-      const adjusted = await this.splitLedgerService.applyCorporateAction(
-        prisma,
-        action,
-        scope.accountId,
-      )
-
-      if (adjusted) {
-        await this.splitLedgerService.markApplied(prisma, action.id, scope.accountId)
-      }
     }
   }
 
@@ -157,51 +123,6 @@ export class CorpActionService {
         afterPrice: event.afterPrice,
       },
     })
-  }
-
-  private async applyCorporateActionToAccounts(
-    action: CorporateAction,
-  ): Promise<{ created: number; skipped: number }> {
-    let created = 0
-    let skipped = 0
-
-    const accountIds = await this.prisma.positionLot.findMany({
-      where: {
-        assetId: action.assetId,
-        openedAt: { lt: action.exDate },
-        remainingQuantity: { gt: 0 },
-      },
-      select: { accountId: true },
-      distinct: ['accountId'],
-    })
-
-    for (const { accountId } of accountIds) {
-      const alreadyApplied = await this.splitLedgerService.isAlreadyApplied(
-        this.prisma,
-        action.id,
-        accountId,
-      )
-      if (alreadyApplied) {
-        skipped += 1
-        continue
-      }
-
-      const adjusted = await this.prisma.$transaction(async (tx) => {
-        const didAdjust = await this.splitLedgerService.applyCorporateAction(tx, action, accountId)
-        if (didAdjust) {
-          await this.splitLedgerService.markApplied(tx, action.id, accountId)
-        }
-        return didAdjust
-      })
-
-      if (adjusted) {
-        created += 1
-      } else {
-        skipped += 1
-      }
-    }
-
-    return { created, skipped }
   }
 
   private defaultLookbackStart(endDate: string): string {
