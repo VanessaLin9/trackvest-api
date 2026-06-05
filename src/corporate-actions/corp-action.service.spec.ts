@@ -7,7 +7,7 @@ describe('CorpActionService', () => {
   const assetId = 'yuanta50-asset'
   const accountId = 'broker-account'
   const exDate = new Date('2025-06-18T00:00:00.000Z')
-  const ratio = 188.65 / 47.16
+  const ratio = 4
 
   function createHarness() {
     const splitLedgerService = new SplitLedgerService()
@@ -109,14 +109,14 @@ describe('CorpActionService', () => {
     const { service, prisma, splitLedgerService } = createHarness()
 
     prisma.corporateAction.findMany.mockResolvedValue([
-      { id: 'corp-action-1', assetId, exDate, ratio },
+      { id: 'corp-action-1', assetId, exDate, ratio, market: 'tw' },
     ])
 
     await service.reapplySplitsForScope(prisma as never, { accountId, assetId })
 
     expect(splitLedgerService.applyCorporateAction).toHaveBeenCalledWith(
       prisma,
-      { id: 'corp-action-1', assetId, exDate, ratio },
+      { id: 'corp-action-1', assetId, exDate, ratio, market: 'tw' },
       accountId,
     )
     expect(splitLedgerService.markApplied).toHaveBeenCalledWith(

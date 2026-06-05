@@ -36,7 +36,7 @@ describe('FinmindTwSplitProvider', () => {
         stockId: '0050',
         exDate: '2025-06-18',
         direction: 'split',
-        ratio: 188.65 / 47.16,
+        ratio: 4,
         beforePrice: 188.65,
         afterPrice: 47.16,
         sourceKey: '0050:2025-06-18:分割',

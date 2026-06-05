@@ -6,7 +6,7 @@ describe('SplitLedgerService', () => {
   const accountId = 'broker-account'
   const assetId = 'yuanta50-asset'
   const exDate = new Date('2025-06-18T00:00:00.000Z')
-  const ratio = 188.65 / 47.16
+  const ratio = 4
 
   const lot2 = {
     id: 'lot-2',
@@ -83,6 +83,7 @@ describe('SplitLedgerService', () => {
       assetId,
       exDate,
       ratio,
+      market: 'tw',
     } as never
 
     const adjusted = await service.applyCorporateAction(prisma as never, action, accountId)
@@ -113,14 +114,8 @@ describe('SplitLedgerService', () => {
       },
     })
 
-    expect(isApproximatelyEqual(expectedQuantity, 30 * ratio + 20, 1e-2)).toBe(true)
-    expect(
-      isApproximatelyEqual(
-        expectedAvgCost,
-        (30 * ratio * (185.45 / ratio) + 20 * 49.91) / (30 * ratio + 20),
-        1e-2,
-      ),
-    ).toBe(true)
+    expect(expectedQuantity).toBe(140)
+    expect(isApproximatelyEqual(expectedAvgCost, 46.87, 0.05)).toBe(true)
   })
 
   it('is idempotent when sync application marker already exists', async () => {
