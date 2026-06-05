@@ -95,10 +95,15 @@ describe('TransactionsService', () => {
       validateTransactionOwnership: jest.fn(),
     }
 
+    const positionReplayService = {
+      replayAndPersistScope: jest.fn().mockResolvedValue([]),
+    }
+
     const service = new TransactionsService(
       prisma as never,
       postingService as never,
       ownershipService as never,
+      positionReplayService as never,
     )
 
     txClient.transaction.findFirst.mockResolvedValue(null)
@@ -113,6 +118,7 @@ describe('TransactionsService', () => {
       txClient,
       postingService,
       ownershipService,
+      positionReplayService,
     }
   }
 
@@ -443,7 +449,7 @@ describe('TransactionsService', () => {
   })
 
   it('rebuilds the scope when creating a backdated buy before later sells', async () => {
-    const { service, txClient, postingService } = createHarness()
+    const { service, txClient, postingService, positionReplayService } = createHarness()
     const createdTransaction = buildCreatedTransaction({
       id: 'buy-backfill-1',
       amount: 800,
@@ -484,18 +490,7 @@ describe('TransactionsService', () => {
       laterBuy,
       laterSell,
     ])
-    txClient.position.create.mockResolvedValue({
-      id: 'rebuilt-position',
-      accountId,
-      assetId,
-      quantity: 10,
-      avgCost: 80,
-      openedAt: createdTransaction.tradeTime,
-      closedAt: null,
-    })
-    txClient.positionLot.create
-      .mockResolvedValueOnce({ id: 'lot-backfill' })
-      .mockResolvedValueOnce({ id: 'lot-later-buy' })
+    positionReplayService.replayAndPersistScope.mockResolvedValue(['sell-later-1'])
     postingService.postTransaction.mockResolvedValue({ id: 'entry-rebuilt-sell' })
 
     await service.create(
@@ -520,23 +515,15 @@ describe('TransactionsService', () => {
     expect(txClient.positionLot.deleteMany).toHaveBeenCalledWith({
       where: { accountId, assetId },
     })
-    expect(txClient.positionLot.update).toHaveBeenCalledWith({
-      where: { id: 'lot-backfill' },
-      data: {
-        remainingQuantity: 5,
-        closedAt: null,
-      },
-    })
-    expect(txClient.sellLotMatch.createMany).toHaveBeenCalledWith({
-      data: [
-        {
-          sellTransactionId: 'sell-later-1',
-          buyLotId: 'lot-backfill',
-          quantity: 5,
-          unitCost: 80,
-        },
-      ],
-    })
+    expect(positionReplayService.replayAndPersistScope).toHaveBeenCalledWith(
+      txClient,
+      { accountId, assetId },
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'buy-backfill-1', type: 'buy' }),
+        expect.objectContaining({ id: 'buy-later-1', type: 'buy' }),
+        expect.objectContaining({ id: 'sell-later-1', type: 'sell' }),
+      ]),
+    )
     expect(postingService.postTransaction).toHaveBeenNthCalledWith(1, {
       userId,
       transaction: laterSell,
@@ -550,7 +537,7 @@ describe('TransactionsService', () => {
   })
 
   it('rebuilds the scope when creating a backdated sell before later buys', async () => {
-    const { service, txClient, postingService } = createHarness()
+    const { service, txClient, postingService, positionReplayService } = createHarness()
     const createdTransaction = buildCreatedTransaction({
       id: 'sell-backfill-1',
       type: 'sell',
@@ -588,18 +575,7 @@ describe('TransactionsService', () => {
       createdTransaction,
       laterBuy,
     ])
-    txClient.position.create.mockResolvedValue({
-      id: 'rebuilt-position',
-      accountId,
-      assetId,
-      quantity: 10,
-      avgCost: 100,
-      openedAt: earlierBuy.tradeTime,
-      closedAt: null,
-    })
-    txClient.positionLot.create
-      .mockResolvedValueOnce({ id: 'lot-1' })
-      .mockResolvedValueOnce({ id: 'lot-2' })
+    positionReplayService.replayAndPersistScope.mockResolvedValue(['sell-backfill-1'])
     postingService.postTransaction.mockResolvedValue({ id: 'entry-backdated-sell' })
 
     await service.create(
@@ -618,23 +594,15 @@ describe('TransactionsService', () => {
       userId,
     )
 
-    expect(txClient.positionLot.update).toHaveBeenCalledWith({
-      where: { id: 'lot-1' },
-      data: {
-        remainingQuantity: 6,
-        closedAt: null,
-      },
-    })
-    expect(txClient.sellLotMatch.createMany).toHaveBeenCalledWith({
-      data: [
-        {
-          sellTransactionId: 'sell-backfill-1',
-          buyLotId: 'lot-1',
-          quantity: 4,
-          unitCost: 100,
-        },
-      ],
-    })
+    expect(positionReplayService.replayAndPersistScope).toHaveBeenCalledWith(
+      txClient,
+      { accountId, assetId },
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'buy-1', type: 'buy' }),
+        expect.objectContaining({ id: 'sell-backfill-1', type: 'sell' }),
+        expect.objectContaining({ id: 'buy-2', type: 'buy' }),
+      ]),
+    )
     expect(postingService.postTransaction).toHaveBeenCalledTimes(1)
     expect(postingService.postTransaction).toHaveBeenCalledWith({
       userId,
@@ -1038,7 +1006,8 @@ describe('TransactionsService', () => {
   })
 
   it('rebuilds FIFO lots and reposts sells when updating a buy that is before later sells', async () => {
-    const { service, prisma, txClient, postingService } = createHarness()
+    const { service, prisma, txClient, postingService, positionReplayService } =
+      createHarness()
     const existingTransaction = buildCreatedTransaction({
       id: 'buy-1',
       amount: 1000,
@@ -1083,16 +1052,7 @@ describe('TransactionsService', () => {
       updatedTransaction,
       laterSell,
     ])
-    txClient.position.create.mockResolvedValue({
-      id: 'rebuilt-position',
-      accountId,
-      assetId,
-      quantity: 10,
-      avgCost: 90,
-      openedAt: updatedTransaction.tradeTime,
-      closedAt: null,
-    })
-    txClient.positionLot.create.mockResolvedValue({ id: 'lot-1' })
+    positionReplayService.replayAndPersistScope.mockResolvedValue(['sell-1'])
     postingService.postTransaction.mockResolvedValue({ id: 'entry-updated' })
 
     await service.update(
@@ -1108,23 +1068,14 @@ describe('TransactionsService', () => {
       userId,
     )
 
-    expect(txClient.positionLot.update).toHaveBeenCalledWith({
-      where: { id: 'lot-1' },
-      data: {
-        remainingQuantity: 6,
-        closedAt: null,
-      },
-    })
-    expect(txClient.sellLotMatch.createMany).toHaveBeenCalledWith({
-      data: [
-        {
-          sellTransactionId: 'sell-1',
-          buyLotId: 'lot-1',
-          quantity: 4,
-          unitCost: 90,
-        },
-      ],
-    })
+    expect(positionReplayService.replayAndPersistScope).toHaveBeenCalledWith(
+      txClient,
+      { accountId, assetId },
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'buy-1', type: 'buy' }),
+        expect.objectContaining({ id: 'sell-1', type: 'sell' }),
+      ]),
+    )
     expect(postingService.postTransaction).toHaveBeenNthCalledWith(1, {
       userId,
       transaction: laterSell,
@@ -1177,7 +1128,8 @@ describe('TransactionsService', () => {
   })
 
   it('rebuilds FIFO lots and reposts sell GL when updating a sell transaction', async () => {
-    const { service, prisma, txClient, postingService } = createHarness()
+    const { service, prisma, txClient, postingService, positionReplayService } =
+      createHarness()
     const buyTransaction = buildCreatedTransaction({
       id: 'buy-1',
       amount: 1000,
@@ -1217,20 +1169,9 @@ describe('TransactionsService', () => {
       updatedTransaction,
     ])
     txClient.position.deleteMany.mockResolvedValue({ count: 1 })
-    txClient.position.create.mockResolvedValue({
-      id: 'rebuilt-position',
-      accountId,
-      assetId,
-      quantity: 10,
-      avgCost: 100,
-      openedAt: buyTransaction.tradeTime,
-      closedAt: null,
-    })
     txClient.positionLot.deleteMany.mockResolvedValue({ count: 1 })
-    txClient.positionLot.create.mockResolvedValue({
-      id: 'lot-1',
-    })
     txClient.sellLotMatch.deleteMany.mockResolvedValue({ count: 1 })
+    positionReplayService.replayAndPersistScope.mockResolvedValue(['tx-sell-1'])
     postingService.postTransaction.mockResolvedValue({ id: 'entry-sell-1' })
 
     await service.update(
@@ -1256,23 +1197,14 @@ describe('TransactionsService', () => {
     expect(txClient.position.deleteMany).toHaveBeenCalledWith({
       where: { accountId, assetId },
     })
-    expect(txClient.positionLot.update).toHaveBeenCalledWith({
-      where: { id: 'lot-1' },
-      data: {
-        remainingQuantity: 7,
-        closedAt: null,
-      },
-    })
-    expect(txClient.sellLotMatch.createMany).toHaveBeenCalledWith({
-      data: [
-        {
-          sellTransactionId: 'tx-sell-1',
-          buyLotId: 'lot-1',
-          quantity: 3,
-          unitCost: 100,
-        },
-      ],
-    })
+    expect(positionReplayService.replayAndPersistScope).toHaveBeenCalledWith(
+      txClient,
+      { accountId, assetId },
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'buy-1', type: 'buy' }),
+        expect.objectContaining({ id: 'tx-sell-1', type: 'sell' }),
+      ]),
+    )
     expect(postingService.postTransaction).toHaveBeenCalledWith({
       userId,
       transaction: updatedTransaction,
@@ -1440,7 +1372,7 @@ describe('TransactionsService', () => {
   })
 
   it('rebuilds FIFO lots and reposts sells when removing a buy that is before later sells', async () => {
-    const { service, txClient, postingService } = createHarness()
+    const { service, txClient, postingService, positionReplayService } = createHarness()
     const removedTransaction = buildCreatedTransaction({
       id: 'buy-1',
       amount: 1000,
@@ -1490,16 +1422,7 @@ describe('TransactionsService', () => {
       laterBuy,
       laterSell,
     ])
-    txClient.position.create.mockResolvedValue({
-      id: 'rebuilt-position',
-      accountId,
-      assetId,
-      quantity: 10,
-      avgCost: 90,
-      openedAt: laterBuy.tradeTime,
-      closedAt: null,
-    })
-    txClient.positionLot.create.mockResolvedValue({ id: 'lot-2' })
+    positionReplayService.replayAndPersistScope.mockResolvedValue(['sell-1'])
     postingService.postTransaction.mockResolvedValue({ id: 'entry-reposted-sell' })
 
     await service.remove('buy-1', userId)
@@ -1509,13 +1432,15 @@ describe('TransactionsService', () => {
       'buy-1',
       txClient,
     )
-    expect(txClient.positionLot.update).toHaveBeenCalledWith({
-      where: { id: 'lot-2' },
-      data: {
-        remainingQuantity: 6,
-        closedAt: null,
-      },
-    })
+    expect(positionReplayService.replayAndPersistScope).toHaveBeenCalledWith(
+      txClient,
+      { accountId, assetId },
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'buy-1', type: 'buy', isDeleted: true }),
+        expect.objectContaining({ id: 'buy-2', type: 'buy' }),
+        expect.objectContaining({ id: 'sell-1', type: 'sell' }),
+      ]),
+    )
     expect(postingService.postTransaction).toHaveBeenCalledWith({
       userId,
       transaction: laterSell,
@@ -1584,7 +1509,7 @@ describe('TransactionsService', () => {
   })
 
   it('rebuilds FIFO lots and reposts sells when hard deleting a buy that is before later sells', async () => {
-    const { service, txClient, postingService } = createHarness()
+    const { service, txClient, postingService, positionReplayService } = createHarness()
     const existingTransaction = buildCreatedTransaction({
       id: 'buy-1',
       amount: 1000,
@@ -1627,16 +1552,7 @@ describe('TransactionsService', () => {
       laterBuy,
       laterSell,
     ])
-    txClient.position.create.mockResolvedValue({
-      id: 'rebuilt-position',
-      accountId,
-      assetId,
-      quantity: 10,
-      avgCost: 90,
-      openedAt: laterBuy.tradeTime,
-      closedAt: null,
-    })
-    txClient.positionLot.create.mockResolvedValue({ id: 'lot-2' })
+    positionReplayService.replayAndPersistScope.mockResolvedValue(['sell-1'])
     postingService.postTransaction.mockResolvedValue({ id: 'entry-reposted-sell' })
 
     await service.hardDelete('buy-1', userId)
@@ -1649,13 +1565,14 @@ describe('TransactionsService', () => {
       'buy-1',
       txClient,
     )
-    expect(txClient.positionLot.update).toHaveBeenCalledWith({
-      where: { id: 'lot-2' },
-      data: {
-        remainingQuantity: 6,
-        closedAt: null,
-      },
-    })
+    expect(positionReplayService.replayAndPersistScope).toHaveBeenCalledWith(
+      txClient,
+      { accountId, assetId },
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'buy-2', type: 'buy' }),
+        expect.objectContaining({ id: 'sell-1', type: 'sell' }),
+      ]),
+    )
     expect(postingService.postTransaction).toHaveBeenCalledWith({
       userId,
       transaction: laterSell,
