@@ -6,6 +6,7 @@ import {
   requireFinMindString,
 } from '../../market-price/providers/finmind-api.util'
 import type { FinMindRow } from '../../market-price/providers/finmind-api.util'
+import { snapTwSplitRatio } from '../corp-action-ratio.util'
 import {
   CorpActionMarket,
   SplitDirection,
@@ -46,7 +47,7 @@ export class FinmindTwSplitProvider implements SplitEventProvider {
       throw new Error(`FinMind split after_price must be positive for ${expectedStockId} on ${exDate}`)
     }
 
-    const ratio = beforePrice / afterPrice
+    const ratio = snapTwSplitRatio(beforePrice, afterPrice, direction)
     const sourceKey = `${expectedStockId}:${exDate}:${rawType}`
 
     return {

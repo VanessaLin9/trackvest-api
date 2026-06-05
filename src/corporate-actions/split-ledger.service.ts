@@ -1,8 +1,12 @@
 import { Injectable } from '@nestjs/common'
 import { CorporateAction, Prisma } from '@prisma/client'
 import { toNumber } from '../common/utils/number.util'
+import { roundTwShareQuantity } from './corp-action-ratio.util'
 
-type SplitLedgerAction = Pick<CorporateAction, 'id' | 'assetId' | 'exDate' | 'ratio'>
+type SplitLedgerAction = Pick<
+  CorporateAction,
+  'id' | 'assetId' | 'exDate' | 'ratio' | 'market'
+>
 
 @Injectable()
 export class SplitLedgerService {
@@ -31,8 +35,12 @@ export class SplitLedgerService {
     }
 
     for (const lot of eligibleLots) {
-      const remainingQuantity = toNumber(lot.remainingQuantity) * ratio
-      const originalQuantity = toNumber(lot.originalQuantity) * ratio
+      let remainingQuantity = toNumber(lot.remainingQuantity) * ratio
+      let originalQuantity = toNumber(lot.originalQuantity) * ratio
+      if (action.market === 'tw') {
+        remainingQuantity = roundTwShareQuantity(remainingQuantity)
+        originalQuantity = roundTwShareQuantity(originalQuantity)
+      }
       const unitCost = toNumber(lot.unitCost) / ratio
 
       await prisma.positionLot.update({
