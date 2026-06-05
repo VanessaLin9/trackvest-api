@@ -10,9 +10,9 @@ export class SyncSplitsResponseDto {
   @ApiProperty()
   eventsUpserted!: number
 
-  @ApiProperty()
-  applicationsCreated!: number
-
-  @ApiProperty()
-  applicationsSkipped!: number
+  @ApiProperty({
+    description:
+      'True when split events were stored but holdings replay has not run yet.',
+  })
+  replayPending!: boolean
 }

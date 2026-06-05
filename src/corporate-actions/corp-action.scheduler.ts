@@ -15,7 +15,7 @@ export class CorpActionScheduler {
     try {
       const result = await this.corpActionService.syncSplits({ market: 'tw' })
       this.logger.log(
-        `TW split cron done: ${result.eventsUpserted} event(s), ${result.applicationsCreated} applied, ${result.applicationsSkipped} skipped`,
+        `TW split cron done: ${result.eventsUpserted} event(s) upserted, replayPending=${result.replayPending}`,
       )
     } catch (error) {
       this.logger.error(
@@ -32,7 +32,7 @@ export class CorpActionScheduler {
     try {
       const result = await this.corpActionService.syncSplits({ market: 'us' })
       this.logger.log(
-        `US split cron done: ${result.eventsUpserted} event(s), ${result.applicationsCreated} applied, ${result.applicationsSkipped} skipped`,
+        `US split cron done: ${result.eventsUpserted} event(s) upserted, replayPending=${result.replayPending}`,
       )
     } catch (error) {
       this.logger.error(

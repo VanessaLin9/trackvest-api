@@ -32,8 +32,6 @@ export class CorpActionService {
 
     let assetsProcessed = 0
     let eventsUpserted = 0
-    let applicationsCreated = 0
-    let applicationsSkipped = 0
 
     const providers: SplitEventProvider[] = []
     if (market === 'all' || market === 'tw') {
@@ -65,8 +63,7 @@ export class CorpActionService {
       market,
       assetsProcessed,
       eventsUpserted,
-      applicationsCreated,
-      applicationsSkipped,
+      replayPending: eventsUpserted > 0,
     }
   }
 

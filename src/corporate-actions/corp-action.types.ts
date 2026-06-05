@@ -29,6 +29,5 @@ export type SyncSplitsResult = {
   market: CorpActionMarket | 'all'
   assetsProcessed: number
   eventsUpserted: number
-  applicationsCreated: number
-  applicationsSkipped: number
+  replayPending: boolean
 }

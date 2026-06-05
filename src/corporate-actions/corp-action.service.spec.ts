@@ -62,8 +62,7 @@ describe('CorpActionService', () => {
       market: 'tw',
       assetsProcessed: 1,
       eventsUpserted: 1,
-      applicationsCreated: 0,
-      applicationsSkipped: 0,
+      replayPending: true,
     })
     expect(prisma.corporateAction.upsert).toHaveBeenCalledTimes(1)
   })
