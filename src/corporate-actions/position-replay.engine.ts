@@ -98,8 +98,7 @@ export function replayScopeLedger(input: ReplayScopeInput): ReplayLedgerResult {
   const sellMatches: ReplaySellLotMatch[] = []
   const sellTransactionIds: string[] = []
   let lotSequence = 0
-  let firstOpenedAt: Date | null = null
-  let lastClosedAt: Date | null = null
+  let positionOpenedAt: Date | null = null
 
   for (const event of buildTimeline(input)) {
     if (event.kind === 'split') {
@@ -111,8 +110,8 @@ export function replayScopeLedger(input: ReplayScopeInput): ReplayLedgerResult {
       const quantity = toNumber(event.quantity)
       const unitCost = toNumber(event.amount) / quantity
       const openedAt = event.sortTime
-      if (!firstOpenedAt) {
-        firstOpenedAt = openedAt
+      if (sumOpenQuantity(lots) <= 1e-9) {
+        positionOpenedAt = openedAt
       }
 
       lots.push({
@@ -157,17 +156,12 @@ export function replayScopeLedger(input: ReplayScopeInput): ReplayLedgerResult {
     if (remainingToSell > 1e-9) {
       throw new Error('sell quantity exceeds open lots during replay')
     }
-
-    const openQuantity = sumOpenQuantity(lots)
-    if (openQuantity <= 1e-9) {
-      lastClosedAt = event.sortTime
-    }
   }
 
   const openQuantity = sumOpenQuantity(lots)
   const openCost = sumOpenCost(lots)
 
-  if (openQuantity <= 1e-9 || !firstOpenedAt) {
+  if (openQuantity <= 1e-9 || !positionOpenedAt) {
     return {
       lots,
       sellMatches,
@@ -182,8 +176,8 @@ export function replayScopeLedger(input: ReplayScopeInput): ReplayLedgerResult {
     position: {
       quantity: openQuantity,
       avgCost: openCost / openQuantity,
-      openedAt: firstOpenedAt,
-      closedAt: lastClosedAt,
+      openedAt: positionOpenedAt,
+      closedAt: null,
     },
     sellTransactionIds,
   }

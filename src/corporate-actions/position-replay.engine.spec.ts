@@ -47,6 +47,45 @@ describe('position-replay.engine', () => {
     )
   })
 
+  it('reopens position with null closedAt after a full close and later buy', () => {
+    const firstBuyDate = new Date('2025-01-10T09:00:00.000Z')
+    const sellDate = new Date('2025-02-10T09:00:00.000Z')
+    const secondBuyDate = new Date('2025-03-10T09:00:00.000Z')
+    const ledger = replayScopeLedger({
+      transactions: [
+        {
+          id: 'buy-1',
+          type: 'buy',
+          tradeTime: firstBuyDate,
+          quantity: 10,
+          amount: 1000,
+        },
+        {
+          id: 'sell-1',
+          type: 'sell',
+          tradeTime: sellDate,
+          quantity: 10,
+          amount: 1100,
+        },
+        {
+          id: 'buy-2',
+          type: 'buy',
+          tradeTime: secondBuyDate,
+          quantity: 5,
+          amount: 550,
+        },
+      ],
+      corporateActions: [],
+    })
+
+    expect(ledger.position).toEqual({
+      quantity: 5,
+      avgCost: 110,
+      openedAt: secondBuyDate,
+      closedAt: null,
+    })
+  })
+
   it('is deterministic when replaying the same fixture twice', () => {
     const fixture = buildYuanta50ReplayFixture()
     const first = replayScopeLedger(fixture)
