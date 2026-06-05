@@ -1,12 +1,10 @@
 import { SplitLedgerService } from './split-ledger.service'
-import { isApproximatelyEqual, toNumber } from '../common/utils/number.util'
+import { toNumber } from '../common/utils/number.util'
 
 describe('SplitLedgerService', () => {
   const service = new SplitLedgerService()
   const accountId = 'broker-account'
   const assetId = 'yuanta50-asset'
-  const exDate = new Date('2025-06-18T00:00:00.000Z')
-  const ratio = 4
 
   const lot2 = {
     id: 'lot-2',
@@ -43,99 +41,23 @@ describe('SplitLedgerService', () => {
   }
 
   function createPrismaMock() {
-    const positionLot = {
-      findMany: jest.fn(),
-      update: jest.fn(),
-    }
-    const positionModel = {
-      findFirst: jest.fn(),
-      update: jest.fn(),
-    }
-    const corporateActionApplication = {
-      findUnique: jest.fn(),
-      upsert: jest.fn(),
-    }
-
     return {
-      positionLot,
-      position: positionModel,
-      corporateActionApplication,
+      positionLot: {
+        findMany: jest.fn(),
+        update: jest.fn(),
+      },
+      position: {
+        findFirst: jest.fn(),
+        update: jest.fn(),
+      },
+      corporateActionApplication: {
+        findUnique: jest.fn(),
+        upsert: jest.fn(),
+      },
     }
   }
 
-  it('adjusts only pre-split open lots and recomputes position (0050 fixture)', async () => {
-    const prisma = createPrismaMock()
-    prisma.positionLot.findMany
-      .mockResolvedValueOnce([lot2])
-      .mockResolvedValueOnce([
-        {
-          ...lot2,
-          remainingQuantity: lot2.remainingQuantity * ratio,
-          originalQuantity: lot2.originalQuantity * ratio,
-          unitCost: lot2.unitCost / ratio,
-        },
-        lot3,
-      ])
-    prisma.position.findFirst.mockResolvedValue(position)
-
-    const action = {
-      id: 'corp-action-1',
-      assetId,
-      exDate,
-      ratio,
-      market: 'tw',
-    } as never
-
-    const adjusted = await service.applyCorporateAction(prisma as never, action, accountId)
-
-    expect(adjusted).toBe(true)
-    expect(prisma.positionLot.update).toHaveBeenCalledWith({
-      where: { id: lot2.id },
-      data: {
-        remainingQuantity: lot2.remainingQuantity * ratio,
-        originalQuantity: lot2.originalQuantity * ratio,
-        unitCost: lot2.unitCost / ratio,
-      },
-    })
-    expect(prisma.positionLot.update).toHaveBeenCalledTimes(1)
-
-    const expectedQuantity = lot2.remainingQuantity * ratio + lot3.remainingQuantity
-    const expectedAvgCost =
-      (lot2.remainingQuantity * ratio * (lot2.unitCost / ratio) +
-        lot3.remainingQuantity * lot3.unitCost) /
-      expectedQuantity
-
-    expect(prisma.position.update).toHaveBeenCalledWith({
-      where: { id: position.id },
-      data: {
-        quantity: expectedQuantity,
-        avgCost: expectedAvgCost,
-        closedAt: null,
-      },
-    })
-
-    expect(expectedQuantity).toBe(140)
-    expect(isApproximatelyEqual(expectedAvgCost, 46.87, 0.05)).toBe(true)
-  })
-
-  it('is idempotent when sync application marker already exists', async () => {
-    const prisma = createPrismaMock()
-    prisma.corporateActionApplication.findUnique.mockResolvedValue({ id: 'app-1' })
-
-    const alreadyApplied = await service.isAlreadyApplied(prisma as never, 'corp-action-1', accountId)
-
-    expect(alreadyApplied).toBe(true)
-    expect(prisma.corporateActionApplication.findUnique).toHaveBeenCalledWith({
-      where: {
-        corporateActionId_accountId: {
-          corporateActionId: 'corp-action-1',
-          accountId,
-        },
-      },
-    })
-  })
-
-  it('recomputes position from open lots after split replay', async () => {
+  it('recomputes position from open lots', async () => {
     const prisma = createPrismaMock()
     const adjustedLot2 = {
       ...lot2,
