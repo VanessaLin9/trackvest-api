@@ -11,7 +11,6 @@ import { ImportTransactionsDto } from './dto/import-transactions.dto'
 import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
 import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
 import { toNumber } from '../common/utils/number.util'
-import { CorpActionService } from '../corporate-actions/corp-action.service'
 
 type SellLotConsumptionPlan = {
   positionId: string
@@ -53,7 +52,6 @@ export class TransactionsService {
     private prisma: PrismaService,
     private postingService: PostingService,
     private ownershipService: OwnershipService,
-    private corpActionService: CorpActionService,
   ) {}
 
   private readonly importHeaderMap = {
@@ -948,8 +946,6 @@ export class TransactionsService {
 
       sellTransactionsToRepost.push(transaction)
     }
-
-    await this.corpActionService.reapplySplitsForScope(prisma, scope)
 
     return sellTransactionsToRepost
   }
