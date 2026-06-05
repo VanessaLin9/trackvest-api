@@ -1,11 +1,11 @@
 /**
- * CLI: sync Taiwan daily prices from FinMind into Price table.
+ * CLI: sync US daily prices from FinMind into Price table.
  *
  * Usage:
- *   pnpm prices:sync-tw
- *   pnpm prices:sync-tw -- --mode=daily
- *   pnpm prices:sync-tw -- --mode=backfill
- *   pnpm prices:sync-tw -- --mode=backfill --max-assets=5
+ *   pnpm prices:sync-us
+ *   pnpm prices:sync-us -- --mode=daily
+ *   pnpm prices:sync-us -- --mode=backfill
+ *   pnpm prices:sync-us -- --mode=backfill --max-assets=5
  */
 
 import { NestFactory } from '@nestjs/core'
@@ -38,14 +38,14 @@ async function main() {
     const maxAssetsRaw = readArg('max-assets')
     const maxAssetsPerRun = maxAssetsRaw ? Number(maxAssetsRaw) : undefined
 
-    const result = await service.syncTaiwanPrices({
+    const result = await service.syncUsPrices({
       mode,
       startDate,
       endDate,
       maxAssetsPerRun: Number.isFinite(maxAssetsPerRun) ? maxAssetsPerRun : undefined,
     })
 
-    console.log('Taiwan price sync complete:')
+    console.log('US price sync complete:')
     console.log(JSON.stringify(result, null, 2))
   } finally {
     await app.close()
@@ -53,6 +53,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('Taiwan price sync failed:', error instanceof Error ? error.message : error)
+  console.error('US price sync failed:', error instanceof Error ? error.message : error)
   process.exit(1)
 })

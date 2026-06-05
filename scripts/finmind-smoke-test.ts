@@ -1,5 +1,5 @@
 /**
- * Smoke test FinMind TaiwanStockPrice API (full daily fields).
+ * Smoke test FinMind TaiwanStockPrice and USStockPrice APIs.
  *
  * Usage:
  *   pnpm finmind:smoke
@@ -58,14 +58,15 @@ function loadFinMindTokenFromDotEnv(): string | undefined {
   return undefined
 }
 
-async function fetchTaiwanStockPrice(input: {
+async function fetchFinMindDataset(input: {
   token: string
+  dataset: string
   dataId: string
   startDate: string
   endDate: string
 }): Promise<FinMindResponse> {
   const url = new URL(FINMIND_DATA_URL)
-  url.searchParams.set('dataset', 'TaiwanStockPrice')
+  url.searchParams.set('dataset', input.dataset)
   url.searchParams.set('data_id', input.dataId)
   url.searchParams.set('start_date', input.startDate)
   url.searchParams.set('end_date', input.endDate)
@@ -81,33 +82,20 @@ async function fetchTaiwanStockPrice(input: {
 
   if (!response.ok) {
     throw new Error(
-      `FinMind TaiwanStockPrice/${input.dataId} HTTP ${response.status}: ${payload.msg ?? 'unknown error'}`,
+      `FinMind ${input.dataset}/${input.dataId} HTTP ${response.status}: ${payload.msg ?? 'unknown error'}`,
     )
   }
 
   if (payload.status != null && payload.status !== 200) {
     throw new Error(
-      `FinMind TaiwanStockPrice/${input.dataId} status ${payload.status}: ${payload.msg ?? 'unknown error'}`,
+      `FinMind ${input.dataset}/${input.dataId} status ${payload.status}: ${payload.msg ?? 'unknown error'}`,
     )
   }
 
   return payload
 }
 
-function printSampleRow(row: FinMindRow) {
-  const fields = [
-    'date',
-    'stock_id',
-    'open',
-    'max',
-    'min',
-    'close',
-    'spread',
-    'Trading_Volume',
-    'Trading_money',
-    'Trading_turnover',
-  ] as const
-
+function printSampleRow(row: FinMindRow, fields: readonly string[]) {
   for (const field of fields) {
     console.log(`    ${field}: ${row[field] ?? '(n/a)'}`)
   }
@@ -126,24 +114,58 @@ async function main() {
   const startDate = start.toISOString().slice(0, 10)
   const endDateStr = endDate.toISOString().slice(0, 10)
 
-  console.log(`FinMind Taiwan smoke test (${startDate} → ${endDateStr})`)
+  console.log(`FinMind smoke test (${startDate} → ${endDateStr})`)
   console.log(`API: ${FINMIND_DATA_URL}\n`)
 
-  const payload = await fetchTaiwanStockPrice({
+  const twPayload = await fetchFinMindDataset({
     token,
+    dataset: 'TaiwanStockPrice',
     dataId: '2330',
     startDate,
     endDate: endDateStr,
   })
-
-  const rows = payload.data ?? []
-  console.log(`TW 2330 rows: ${rows.length}`)
-  if (rows.length > 0) {
+  const twRows = twPayload.data ?? []
+  console.log(`TW 2330 rows: ${twRows.length}`)
+  if (twRows.length > 0) {
     console.log('  latest row:')
-    printSampleRow(rows[rows.length - 1]!)
+    printSampleRow(twRows[twRows.length - 1]!, [
+      'date',
+      'stock_id',
+      'open',
+      'max',
+      'min',
+      'close',
+      'spread',
+      'Trading_Volume',
+      'Trading_money',
+      'Trading_turnover',
+    ])
   }
 
-  console.log('\nOK — FinMind TaiwanStockPrice full-field fetch succeeded.')
+  const usPayload = await fetchFinMindDataset({
+    token,
+    dataset: 'USStockPrice',
+    dataId: 'AAPL',
+    startDate,
+    endDate: endDateStr,
+  })
+  const usRows = usPayload.data ?? []
+  console.log(`\nUS AAPL rows: ${usRows.length}`)
+  if (usRows.length > 0) {
+    console.log('  latest row:')
+    printSampleRow(usRows[usRows.length - 1]!, [
+      'date',
+      'stock_id',
+      'Open',
+      'High',
+      'Low',
+      'Close',
+      'Adj_Close',
+      'Volume',
+    ])
+  }
+
+  console.log('\nOK — FinMind Taiwan + US price fetch succeeded.')
 }
 
 main().catch((error) => {

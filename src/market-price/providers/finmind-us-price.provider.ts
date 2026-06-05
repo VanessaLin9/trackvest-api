@@ -3,18 +3,19 @@ import { StockDailyPrice, StockPriceProvider, StockPriceQuery } from '../market-
 import {
   assertFinMindStockId,
   fetchFinMindDataset,
+  optionalFinMindNumber,
   requireFinMindNumber,
   requireFinMindString,
 } from './finmind-api.util'
 import type { FinMindRow } from './finmind-api.util'
 
 @Injectable()
-export class FinmindTaiwanPriceProvider implements StockPriceProvider {
+export class FinmindUsPriceProvider implements StockPriceProvider {
   readonly providerKey = 'finmind'
 
   async getDailyPrices(query: StockPriceQuery): Promise<StockDailyPrice[]> {
     const rows = await fetchFinMindDataset({
-      dataset: 'TaiwanStockPrice',
+      dataset: 'USStockPrice',
       dataId: query.stockId,
       startDate: query.startDate,
       endDate: query.endDate,
@@ -29,14 +30,12 @@ export class FinmindTaiwanPriceProvider implements StockPriceProvider {
     return {
       date: requireFinMindString(row, 'date'),
       stockId: expectedStockId,
-      open: requireFinMindNumber(row, 'open'),
-      high: requireFinMindNumber(row, 'max'),
-      low: requireFinMindNumber(row, 'min'),
-      close: requireFinMindNumber(row, 'close'),
-      volume: requireFinMindNumber(row, 'Trading_Volume'),
-      turnoverAmount: requireFinMindNumber(row, 'Trading_money'),
-      changeRate: requireFinMindNumber(row, 'spread'),
-      tradeCount: requireFinMindNumber(row, 'Trading_turnover'),
+      open: requireFinMindNumber(row, 'Open'),
+      high: requireFinMindNumber(row, 'High'),
+      low: requireFinMindNumber(row, 'Low'),
+      close: requireFinMindNumber(row, 'Close'),
+      volume: optionalFinMindNumber(row, 'Volume'),
+      adjClose: optionalFinMindNumber(row, 'Adj_Close'),
       provider: this.providerKey,
     }
   }
