@@ -85,6 +85,9 @@ const GL_ENTRY_IDS = {
   dividendTsmc: '31c1480d-7d43-4cc1-a31a-f58171be7006',
 } as const
 
+/** Demo TWD broker initial deposit date (before first 0050 buy on 2025-03-03). */
+const BROKER_TWD_DEPOSIT_DATE = '2025-03-01'
+
 /**
  * 0050 split regression fixture (FinMind TaiwanStockPrice closes).
  *
@@ -331,7 +334,7 @@ async function main() {
         amount: 200000,
         fee: 0,
         tax: 0,
-        tradeTime: new Date('2026-03-01T09:00:00.000Z'),
+        tradeTime: new Date(`${BROKER_TWD_DEPOSIT_DATE}T09:00:00.000Z`),
         note: '初始入金',
       },
       {
@@ -704,7 +707,7 @@ async function main() {
       {
         id: GL_ENTRY_IDS.depositBroker,
         userId: demoUser.id,
-        date: new Date('2026-03-01T09:00:00.000Z'),
+        date: new Date(`${BROKER_TWD_DEPOSIT_DATE}T09:00:00.000Z`),
         memo: '初始入金',
         source: 'auto:transaction:deposit',
         refTxId: TRANSACTION_IDS.depositBroker,
