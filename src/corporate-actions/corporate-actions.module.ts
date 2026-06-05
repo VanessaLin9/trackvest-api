@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 import { CorpActionController } from './corp-action.controller'
 import { CorpActionScheduler } from './corp-action.scheduler'
 import { CorpActionService } from './corp-action.service'
+import { PositionReplayService } from './position-replay.service'
 import {
   TW_SPLIT_EVENT_PROVIDER,
   US_SPLIT_EVENT_PROVIDER,
@@ -14,6 +15,7 @@ import { UsSplitInferProvider } from './providers/us-split-infer.provider'
   providers: [
     CorpActionService,
     CorpActionScheduler,
+    PositionReplayService,
     FinmindTwSplitProvider,
     UsSplitInferProvider,
     {
@@ -25,6 +27,6 @@ import { UsSplitInferProvider } from './providers/us-split-infer.provider'
       useExisting: UsSplitInferProvider,
     },
   ],
-  exports: [CorpActionService],
+  exports: [CorpActionService, PositionReplayService],
 })
 export class CorporateActionsModule {}
