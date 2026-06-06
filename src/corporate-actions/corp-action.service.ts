@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common'
-import { CorporateAction, Prisma } from '@prisma/client'
+import { CorporateAction, Prisma, Transaction } from '@prisma/client'
+import { PostingService } from '../gl/posting.service'
 import { PrismaService } from '../prisma.service'
 import { toTradeDateUtc } from '../market-price/utils/market-price-date.util'
 import { toAffectedScopes } from './corp-action-affected-scope.util'
@@ -21,6 +22,7 @@ export class CorpActionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly positionReplayService: PositionReplayService,
+    private readonly postingService: PostingService,
     @Inject(TW_SPLIT_EVENT_PROVIDER)
     private readonly twSplitProvider: SplitEventProvider,
     @Inject(US_SPLIT_EVENT_PROVIDER)
@@ -96,8 +98,9 @@ export class CorpActionService {
     for (const scope of scopes) {
       const corporateActionIds = upsertedActionsByAsset.get(scope.assetId) ?? []
       await this.prisma.$transaction(async (tx) => {
-        await this.positionReplayService.rebuildScope(tx, scope)
+        const sellTransactionIds = await this.positionReplayService.rebuildScope(tx, scope)
         await this.recordSplitApplications(tx, scope.accountId, corporateActionIds)
+        await this.repostSellTransactions(tx, sellTransactionIds)
       })
       scopesReplayed += 1
     }
@@ -120,6 +123,45 @@ export class CorpActionService {
     })
 
     return toAffectedScopes(rows)
+  }
+
+  private async repostSellTransactions(
+    prisma: Prisma.TransactionClient,
+    sellTransactionIds: string[],
+  ): Promise<void> {
+    if (sellTransactionIds.length === 0) {
+      return
+    }
+
+    const sellTransactions = await prisma.transaction.findMany({
+      where: {
+        id: { in: sellTransactionIds },
+        type: 'sell',
+        isDeleted: false,
+      },
+      include: {
+        account: {
+          select: { userId: true },
+        },
+      },
+    })
+
+    const transactionsById = new Map(
+      sellTransactions.map((transaction) => [transaction.id, transaction]),
+    )
+
+    for (const sellTransactionId of sellTransactionIds) {
+      const sellTransaction = transactionsById.get(sellTransactionId)
+      if (!sellTransaction) {
+        continue
+      }
+
+      await this.postingService.postTransaction({
+        userId: sellTransaction.account.userId,
+        transaction: sellTransaction as Transaction,
+        db: prisma,
+      })
+    }
   }
 
   private async recordSplitApplications(
