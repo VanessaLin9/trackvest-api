@@ -275,7 +275,7 @@ model CorporateAction {
   @@index([assetId, exDate])
 }
 
-/// Per-account idempotency marker after a split is applied to open lots.
+/// Per-account marker recording that a corporate action replay ran for the account.
 model CorporateActionApplication {
   id                String          @id @default(uuid())
   corporateActionId String
