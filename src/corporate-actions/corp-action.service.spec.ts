@@ -47,9 +47,14 @@ describe('CorpActionService', () => {
       rebuildScope: jest.fn().mockResolvedValue([]),
     }
 
+    const postingService = {
+      postTransaction: jest.fn(),
+    }
+
     const service = new CorpActionService(
       prisma as never,
       positionReplayService as never,
+      postingService as never,
       twSplitProvider,
       usSplitProvider,
     )
@@ -66,7 +71,7 @@ describe('CorpActionService', () => {
       },
     ])
 
-    return { service, prisma, txClient, positionReplayService }
+    return { service, prisma, txClient, positionReplayService, postingService }
   }
 
   it('syncSplits upserts corporate actions without mutating position lots directly', async () => {
@@ -140,6 +145,62 @@ describe('CorpActionService', () => {
     expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
       accountId: accountWithHistoryOnly,
       assetId,
+    })
+  })
+
+  it('reposts sell GL from rebuilt SellLotMatch after scope replay', async () => {
+    const { service, prisma, txClient, positionReplayService, postingService } = createHarness()
+    const userId = 'user-1'
+    const sellTransaction = {
+      id: 'sell-post-split',
+      accountId: accountWithHistoryOnly,
+      assetId,
+      type: 'sell',
+      amount: 1919,
+      quantity: 40,
+      price: 47.98,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2025-07-02T09:00:00.000Z'),
+      isDeleted: false,
+      account: { userId },
+    }
+
+    prisma.asset.findMany.mockResolvedValue([{ id: assetId, symbol: '0050' }])
+    prisma.corporateAction.upsert.mockResolvedValue({
+      id: corporateActionId,
+      assetId,
+      exDate,
+      ratio,
+    })
+    prisma.transaction.findMany.mockResolvedValue([
+      { accountId: accountWithHistoryOnly, assetId },
+    ])
+    positionReplayService.rebuildScope.mockResolvedValue(['sell-post-split'])
+    txClient.transaction.findMany.mockResolvedValue([sellTransaction])
+
+    await service.syncSplits({
+      market: 'tw',
+      startDate: '2025-06-01',
+      endDate: '2025-07-31',
+    })
+
+    expect(txClient.transaction.findMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['sell-post-split'] },
+        type: 'sell',
+        isDeleted: false,
+      },
+      include: {
+        account: {
+          select: { userId: true },
+        },
+      },
+    })
+    expect(postingService.postTransaction).toHaveBeenCalledWith({
+      userId,
+      transaction: sellTransaction,
+      db: txClient,
     })
   })
 
