@@ -96,7 +96,7 @@ describe('TransactionsService', () => {
     }
 
     const positionReplayService = {
-      replayAndPersistScope: jest.fn().mockResolvedValue([]),
+      rebuildScope: jest.fn().mockResolvedValue([]),
     }
 
     const service = new TransactionsService(
@@ -490,7 +490,7 @@ describe('TransactionsService', () => {
       laterBuy,
       laterSell,
     ])
-    positionReplayService.replayAndPersistScope.mockResolvedValue(['sell-later-1'])
+    positionReplayService.rebuildScope.mockResolvedValue(['sell-later-1'])
     postingService.postTransaction.mockResolvedValue({ id: 'entry-rebuilt-sell' })
 
     await service.create(
@@ -509,21 +509,10 @@ describe('TransactionsService', () => {
       userId,
     )
 
-    expect(txClient.position.deleteMany).toHaveBeenCalledWith({
-      where: { accountId, assetId },
+    expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+      accountId,
+      assetId,
     })
-    expect(txClient.positionLot.deleteMany).toHaveBeenCalledWith({
-      where: { accountId, assetId },
-    })
-    expect(positionReplayService.replayAndPersistScope).toHaveBeenCalledWith(
-      txClient,
-      { accountId, assetId },
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'buy-backfill-1', type: 'buy' }),
-        expect.objectContaining({ id: 'buy-later-1', type: 'buy' }),
-        expect.objectContaining({ id: 'sell-later-1', type: 'sell' }),
-      ]),
-    )
     expect(postingService.postTransaction).toHaveBeenNthCalledWith(1, {
       userId,
       transaction: laterSell,
@@ -575,7 +564,7 @@ describe('TransactionsService', () => {
       createdTransaction,
       laterBuy,
     ])
-    positionReplayService.replayAndPersistScope.mockResolvedValue(['sell-backfill-1'])
+    positionReplayService.rebuildScope.mockResolvedValue(['sell-backfill-1'])
     postingService.postTransaction.mockResolvedValue({ id: 'entry-backdated-sell' })
 
     await service.create(
@@ -594,15 +583,10 @@ describe('TransactionsService', () => {
       userId,
     )
 
-    expect(positionReplayService.replayAndPersistScope).toHaveBeenCalledWith(
-      txClient,
-      { accountId, assetId },
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'buy-1', type: 'buy' }),
-        expect.objectContaining({ id: 'sell-backfill-1', type: 'sell' }),
-        expect.objectContaining({ id: 'buy-2', type: 'buy' }),
-      ]),
-    )
+    expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+      accountId,
+      assetId,
+    })
     expect(postingService.postTransaction).toHaveBeenCalledTimes(1)
     expect(postingService.postTransaction).toHaveBeenCalledWith({
       userId,
@@ -1052,7 +1036,7 @@ describe('TransactionsService', () => {
       updatedTransaction,
       laterSell,
     ])
-    positionReplayService.replayAndPersistScope.mockResolvedValue(['sell-1'])
+    positionReplayService.rebuildScope.mockResolvedValue(['sell-1'])
     postingService.postTransaction.mockResolvedValue({ id: 'entry-updated' })
 
     await service.update(
@@ -1068,14 +1052,10 @@ describe('TransactionsService', () => {
       userId,
     )
 
-    expect(positionReplayService.replayAndPersistScope).toHaveBeenCalledWith(
-      txClient,
-      { accountId, assetId },
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'buy-1', type: 'buy' }),
-        expect.objectContaining({ id: 'sell-1', type: 'sell' }),
-      ]),
-    )
+    expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+      accountId,
+      assetId,
+    })
     expect(postingService.postTransaction).toHaveBeenNthCalledWith(1, {
       userId,
       transaction: laterSell,
@@ -1171,7 +1151,7 @@ describe('TransactionsService', () => {
     txClient.position.deleteMany.mockResolvedValue({ count: 1 })
     txClient.positionLot.deleteMany.mockResolvedValue({ count: 1 })
     txClient.sellLotMatch.deleteMany.mockResolvedValue({ count: 1 })
-    positionReplayService.replayAndPersistScope.mockResolvedValue(['tx-sell-1'])
+    positionReplayService.rebuildScope.mockResolvedValue(['tx-sell-1'])
     postingService.postTransaction.mockResolvedValue({ id: 'entry-sell-1' })
 
     await service.update(
@@ -1187,24 +1167,10 @@ describe('TransactionsService', () => {
       userId,
     )
 
-    expect(txClient.sellLotMatch.deleteMany).toHaveBeenCalledWith({
-      where: {
-        sellTransactionId: {
-          in: ['buy-1', 'tx-sell-1'],
-        },
-      },
+    expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+      accountId,
+      assetId,
     })
-    expect(txClient.position.deleteMany).toHaveBeenCalledWith({
-      where: { accountId, assetId },
-    })
-    expect(positionReplayService.replayAndPersistScope).toHaveBeenCalledWith(
-      txClient,
-      { accountId, assetId },
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'buy-1', type: 'buy' }),
-        expect.objectContaining({ id: 'tx-sell-1', type: 'sell' }),
-      ]),
-    )
     expect(postingService.postTransaction).toHaveBeenCalledWith({
       userId,
       transaction: updatedTransaction,
@@ -1422,7 +1388,7 @@ describe('TransactionsService', () => {
       laterBuy,
       laterSell,
     ])
-    positionReplayService.replayAndPersistScope.mockResolvedValue(['sell-1'])
+    positionReplayService.rebuildScope.mockResolvedValue(['sell-1'])
     postingService.postTransaction.mockResolvedValue({ id: 'entry-reposted-sell' })
 
     await service.remove('buy-1', userId)
@@ -1432,15 +1398,10 @@ describe('TransactionsService', () => {
       'buy-1',
       txClient,
     )
-    expect(positionReplayService.replayAndPersistScope).toHaveBeenCalledWith(
-      txClient,
-      { accountId, assetId },
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'buy-1', type: 'buy', isDeleted: true }),
-        expect.objectContaining({ id: 'buy-2', type: 'buy' }),
-        expect.objectContaining({ id: 'sell-1', type: 'sell' }),
-      ]),
-    )
+    expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+      accountId,
+      assetId,
+    })
     expect(postingService.postTransaction).toHaveBeenCalledWith({
       userId,
       transaction: laterSell,
@@ -1552,7 +1513,7 @@ describe('TransactionsService', () => {
       laterBuy,
       laterSell,
     ])
-    positionReplayService.replayAndPersistScope.mockResolvedValue(['sell-1'])
+    positionReplayService.rebuildScope.mockResolvedValue(['sell-1'])
     postingService.postTransaction.mockResolvedValue({ id: 'entry-reposted-sell' })
 
     await service.hardDelete('buy-1', userId)
@@ -1565,14 +1526,10 @@ describe('TransactionsService', () => {
       'buy-1',
       txClient,
     )
-    expect(positionReplayService.replayAndPersistScope).toHaveBeenCalledWith(
-      txClient,
-      { accountId, assetId },
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'buy-2', type: 'buy' }),
-        expect.objectContaining({ id: 'sell-1', type: 'sell' }),
-      ]),
-    )
+    expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+      accountId,
+      assetId,
+    })
     expect(postingService.postTransaction).toHaveBeenCalledWith({
       userId,
       transaction: laterSell,
