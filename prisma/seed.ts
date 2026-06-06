@@ -92,8 +92,10 @@ const BROKER_TWD_DEPOSIT_DATE = '2025-03-01'
  * 0050 split regression fixture (FinMind TaiwanStockPrice closes).
  *
  * Timeline: pre-split buys → pre-split sell → post-split sell → post-split buy.
- * Ledger qty/cost are NOT split-adjusted, so mixed lots + market prices stress-test
- * corporate-action handling later.
+ * Transaction rows keep user-entered quantities (100/50/80/40/20).
+ * Seeded Position / PositionLot / SellLotMatch / sell GL reflect pre-split-sync FIFO
+ * (50 open shares). After `pnpm corp-actions:sync-splits tw`, chronological replay
+ * should leave 260 open shares with split-adjusted avgCost (~47 TWD).
  */
 const YUANTA50_FINMIND_CLOSES = {
   buyLot1: { tradeDate: '2025-03-03', close: 188.05 },
@@ -391,7 +393,7 @@ async function main() {
         tax: 12,
         brokerOrderNo: 'D202507020001',
         tradeTime: new Date('2025-07-02T09:00:00.000Z'),
-        note: '0050 分割後減碼（40 股，仍以分割前成本 FIFO）',
+        note: '0050 分割後減碼（40 股，broker 登錄股數）',
       },
       {
         id: TRANSACTION_IDS.buyYuanta50PostSplit,
@@ -938,7 +940,10 @@ async function main() {
 
   console.log('Seed completed successfully for demo user:', DEMO_USER_EMAIL)
   console.log(
-    'Demo 0050 split fixture: pre/post-split sells + post-split buy; ledger unadjusted (50 shares, mixed lots).',
+    '0050 fixture: user-entered txs 100/50/80/40/20; seeded ledger is pre-split-sync baseline (50 open shares).',
+  )
+  console.log(
+    'Run `pnpm corp-actions:sync-splits tw` then `pnpm corp-actions:verify-0050` for 260-share acceptance.',
   )
   console.log(
     'Demo TW holdings use share quantity (股), not 張. Re-run seed after FinMind sync if demo prices drift.',
