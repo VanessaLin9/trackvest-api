@@ -24,6 +24,65 @@ type ActiveReplayTransaction = {
 
 @Injectable()
 export class PositionReplayService {
+  async rebuildScope(
+    prisma: Prisma.TransactionClient,
+    scope: PositionReplayScope,
+  ): Promise<string[]> {
+    const scopedTransactions = await prisma.transaction.findMany({
+      where: {
+        accountId: scope.accountId,
+        assetId: scope.assetId,
+        type: { in: ['buy', 'sell'] },
+      },
+      orderBy: [{ tradeTime: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        type: true,
+        tradeTime: true,
+        quantity: true,
+        amount: true,
+        isDeleted: true,
+      },
+    })
+
+    const scopedTransactionIds = scopedTransactions.map((transaction) => transaction.id)
+    if (scopedTransactionIds.length > 0) {
+      await prisma.sellLotMatch.deleteMany({
+        where: {
+          sellTransactionId: {
+            in: scopedTransactionIds,
+          },
+        },
+      })
+    }
+
+    await prisma.positionLot.deleteMany({
+      where: {
+        accountId: scope.accountId,
+        assetId: scope.assetId,
+      },
+    })
+    await prisma.position.deleteMany({
+      where: {
+        accountId: scope.accountId,
+        assetId: scope.assetId,
+      },
+    })
+
+    return this.replayAndPersistScope(
+      prisma,
+      scope,
+      scopedTransactions.map((transaction) => ({
+        id: transaction.id,
+        type: transaction.type as 'buy' | 'sell',
+        tradeTime: transaction.tradeTime,
+        quantity: toNumber(transaction.quantity),
+        amount: toNumber(transaction.amount),
+        isDeleted: transaction.isDeleted,
+      })),
+    )
+  }
+
   async replayAndPersistScope(
     prisma: Prisma.TransactionClient,
     scope: PositionReplayScope,
