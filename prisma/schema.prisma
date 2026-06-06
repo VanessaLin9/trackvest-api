@@ -59,6 +59,7 @@ model Account {
   positionLots PositionLot[]
   txs       Transaction[]
   glAccount GlAccount?    @relation("AccountToGlAccount")
+  corporateActionApplications CorporateActionApplication[]
 
   @@index([userId])
 }
@@ -77,17 +78,18 @@ enum AccountType {
 }
 
 model Asset {
-  id           String        @id @default(uuid())
-  symbol       String        @unique
-  name         String
-  type         AssetType
-  assetClass   AssetClass
-  baseCurrency String
-  prices       Price[]
-  positions    Position[]
-  positionLots PositionLot[]
-  txs          Transaction[]
-  aliases      AssetAlias[]
+  id               String            @id @default(uuid())
+  symbol           String            @unique
+  name             String
+  type             AssetType
+  assetClass       AssetClass
+  baseCurrency     String
+  prices           Price[]
+  positions        Position[]
+  positionLots     PositionLot[]
+  txs              Transaction[]
+  aliases          AssetAlias[]
+  corporateActions CorporateAction[]
 }
 
 enum AssetType {
@@ -252,6 +254,38 @@ model SellLotMatch {
 
   @@index([sellTransactionId])
   @@index([buyLotId])
+}
+
+/// Recorded stock split / reverse-split events (market-specific sources).
+model CorporateAction {
+  id           String   @id @default(uuid())
+  assetId      String
+  market       String
+  type         String
+  exDate       DateTime
+  ratio        Decimal
+  source       String
+  sourceKey    String
+  beforePrice  Decimal?
+  afterPrice   Decimal?
+  asset        Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  applications CorporateActionApplication[]
+
+  @@unique([assetId, exDate, type, source])
+  @@index([assetId, exDate])
+}
+
+/// Per-account marker recording that a corporate action replay ran for the account.
+model CorporateActionApplication {
+  id                String          @id @default(uuid())
+  corporateActionId String
+  accountId         String
+  appliedAt         DateTime        @default(now())
+  corporateAction   CorporateAction @relation(fields: [corporateActionId], references: [id], onDelete: Cascade)
+  account           Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([corporateActionId, accountId])
+  @@index([accountId])
 }
 
 // 科目表（Chart of Accounts）

@@ -11,6 +11,7 @@ import { ImportTransactionsDto } from './dto/import-transactions.dto'
 import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
 import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
 import { toNumber } from '../common/utils/number.util'
+import { PositionReplayService } from '../corporate-actions/position-replay.service'
 
 type SellLotConsumptionPlan = {
   positionId: string
@@ -52,6 +53,7 @@ export class TransactionsService {
     private prisma: PrismaService,
     private postingService: PostingService,
     private ownershipService: OwnershipService,
+    private positionReplayService: PositionReplayService,
   ) {}
 
   private readonly importHeaderMap = {
@@ -765,189 +767,12 @@ export class TransactionsService {
       },
     }) as RebuildTransaction[]
 
-    const scopedTransactionIds = scopedTransactions.map((transaction) => transaction.id)
-    if (scopedTransactionIds.length > 0) {
-      await prisma.sellLotMatch.deleteMany({
-        where: {
-          sellTransactionId: {
-            in: scopedTransactionIds,
-          },
-        },
-      })
-    }
+    const sellTransactionIds = await this.positionReplayService.rebuildScope(prisma, scope)
+    const sellTransactionIdSet = new Set(sellTransactionIds)
 
-    await prisma.positionLot.deleteMany({
-      where: {
-        accountId: scope.accountId,
-        assetId: scope.assetId,
-      },
-    })
-    await prisma.position.deleteMany({
-      where: {
-        accountId: scope.accountId,
-        assetId: scope.assetId,
-      },
-    })
-
-    const activeTransactions = scopedTransactions.filter((transaction) => !transaction.isDeleted)
-    let currentPosition: { id: string; quantity: number; avgCost: number } | null = null
-    const openLots: Array<{ id: string; remainingQuantity: number; unitCost: number }> = []
-    const sellTransactionsToRepost: RebuildTransaction[] = []
-
-    for (const transaction of activeTransactions) {
-      if (!transaction.assetId) {
-        continue
-      }
-
-      if (transaction.type === 'buy') {
-        const quantity = toNumber(transaction.quantity)
-        const totalCost = toNumber(transaction.amount)
-        const unitCost = totalCost / quantity
-
-        if (!currentPosition) {
-          const createdPosition = await prisma.position.create({
-            data: {
-              accountId: scope.accountId,
-              assetId: scope.assetId,
-              quantity,
-              avgCost: unitCost,
-              openedAt: transaction.tradeTime,
-            },
-          })
-
-          currentPosition = {
-            id: createdPosition.id,
-            quantity,
-            avgCost: unitCost,
-          }
-        } else {
-          const nextQuantity = currentPosition.quantity + quantity
-          const nextAvgCost =
-            (currentPosition.quantity * currentPosition.avgCost + totalCost) /
-            nextQuantity
-
-          await prisma.position.update({
-            where: { id: currentPosition.id },
-            data: {
-              quantity: nextQuantity,
-              avgCost: nextAvgCost,
-              closedAt: null,
-            },
-          })
-
-          currentPosition = {
-            ...currentPosition,
-            quantity: nextQuantity,
-            avgCost: nextAvgCost,
-          }
-        }
-
-        const createdLot = await prisma.positionLot.create({
-          data: {
-            accountId: scope.accountId,
-            assetId: scope.assetId,
-            sourceTransactionId: transaction.id,
-            originalQuantity: quantity,
-            remainingQuantity: quantity,
-            unitCost,
-            openedAt: transaction.tradeTime,
-          },
-        })
-
-        openLots.push({
-          id: createdLot.id,
-          remainingQuantity: quantity,
-          unitCost,
-        })
-        continue
-      }
-
-      if (!currentPosition) {
-        throw new NotFoundException('Active position not found for sell transaction')
-      }
-
-      let remainingToSell = toNumber(transaction.quantity)
-      const lotMatches: Array<{
-        sellTransactionId: string
-        buyLotId: string
-        quantity: number
-        unitCost: number
-      }> = []
-
-      for (const lot of openLots) {
-        if (remainingToSell <= 1e-9) {
-          break
-        }
-
-        if (lot.remainingQuantity <= 1e-9) {
-          continue
-        }
-
-        const consumedQuantity = Math.min(lot.remainingQuantity, remainingToSell)
-        lot.remainingQuantity -= consumedQuantity
-        remainingToSell -= consumedQuantity
-
-        await prisma.positionLot.update({
-          where: { id: lot.id },
-          data: {
-            remainingQuantity: lot.remainingQuantity,
-            closedAt: lot.remainingQuantity <= 1e-9 ? transaction.tradeTime : null,
-          },
-        })
-
-        lotMatches.push({
-          sellTransactionId: transaction.id,
-          buyLotId: lot.id,
-          quantity: consumedQuantity,
-          unitCost: lot.unitCost,
-        })
-      }
-
-      if (remainingToSell > 1e-9) {
-        throw new BadRequestException('sell quantity exceeds the remaining open position lots')
-      }
-
-      await prisma.sellLotMatch.createMany({
-        data: lotMatches,
-      })
-
-      const nextQuantity = openLots.reduce(
-        (sum, lot) => sum + (lot.remainingQuantity > 1e-9 ? lot.remainingQuantity : 0),
-        0,
-      )
-      const nextCost = openLots.reduce(
-        (sum, lot) =>
-          sum +
-          (lot.remainingQuantity > 1e-9
-            ? lot.remainingQuantity * lot.unitCost
-            : 0),
-        0,
-      )
-      const nextAvgCost = nextQuantity > 1e-9 ? nextCost / nextQuantity : 0
-
-      await prisma.position.update({
-        where: { id: currentPosition.id },
-        data: {
-          quantity: nextQuantity,
-          avgCost: nextAvgCost,
-          closedAt: nextQuantity > 1e-9 ? null : transaction.tradeTime,
-        },
-      })
-
-      if (nextQuantity > 1e-9) {
-        currentPosition = {
-          ...currentPosition,
-          quantity: nextQuantity,
-          avgCost: nextAvgCost,
-        }
-      } else {
-        currentPosition = null
-      }
-
-      sellTransactionsToRepost.push(transaction)
-    }
-
-    return sellTransactionsToRepost
+    return scopedTransactions.filter((transaction) =>
+      sellTransactionIdSet.has(transaction.id),
+    )
   }
 
   private async rebuildAndRepostSellScopes(

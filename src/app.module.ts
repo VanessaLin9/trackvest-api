@@ -9,6 +9,7 @@ import { PrismaClientExceptionFilter } from './common/filters/prisma-exception.f
 import { AuthGuard } from './common/guards/auth.guard'
 import { DashboardModule } from './dashboard/dashboard.module'
 import { FxModule } from './fx/fx.module'
+import { CorporateActionsModule } from './corporate-actions/corporate-actions.module'
 import { MarketPriceModule } from './market-price/market-price.module'
 import { GlModule } from './gl/gl.module'
 import { HealthModule } from './health/health.module'
@@ -28,6 +29,7 @@ import { UsersModule } from './users/users.module'
     AssetsModule,
     FxModule,
     MarketPriceModule,
+    CorporateActionsModule,
     AccountsModule,
     GlModule,
     TransactionsModule,
