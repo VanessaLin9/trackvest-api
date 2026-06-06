@@ -16,6 +16,7 @@ Current implemented investment behavior:
 
 - `deposit`, `withdraw`, `buy`, `sell`, `dividend`, and `fee` transactions exist in the domain
 - `sell` now uses FIFO lots via `PositionLot` and `SellLotMatch`
+- TW stock splits sync from FinMind, replay affected scopes chronologically, and repost sell GL
 - transaction create/update/delete keeps GL entries in sync
 - backdated buy/sell changes rebuild affected position scopes
 - CSV import currently supports Cathay-style broker exports
@@ -128,9 +129,47 @@ The local seed creates:
   - `3711` 日月光投控
 - seeded GL accounts required by current investment flows
 
-Demo `0050` includes pre/post-split buy and sell transactions (ledger not split-adjusted) for a future corporate-actions feature.
+Demo `0050` includes a split regression fixture (pre/post-split buys and sells). Fresh seed loads a **pre-split-sync** ledger baseline (50 open shares). Run corporate-action sync to replay splits and align holdings to **260 shares** — see [Corporate actions (TW splits)](#corporate-actions-tw-splits).
 
-Seeded `Price` rows are **market snapshots** (valuation / trends). FinMind sync upserts `Price` when `FIN_MIND_TOKEN` is set; it does **not** change `Transaction`, `Position`, or lot costs.
+Seeded `Price` rows are **market snapshots** (valuation / trends). FinMind sync upserts `Price` when `FIN_MIND_TOKEN` is set; it does **not** change `Transaction` rows. Split sync rebuilds `Position`, lots, matches, and sell GL from the same transactions.
+
+## Corporate actions (TW splits)
+
+FinMind `TaiwanStockSplitPrice` feeds `CorporateAction` rows. Sync upserts split events, replays every affected account–asset scope that has buy/sell history, records `CorporateActionApplication` markers, and reposts sell GL from rebuilt `SellLotMatch` cost basis.
+
+Requires `FIN_MIND_TOKEN` in `.env` (same token as market-price sync).
+
+CLI:
+
+```bash
+# all TW ever-held assets, default 5y lookback through today
+pnpm corp-actions:sync-splits tw
+
+# optional window
+pnpm corp-actions:sync-splits tw 2025-06-01 2025-07-31
+```
+
+Admin HTTP (admin role): `POST /corp-actions/sync/splits`
+
+Scheduled crons: TW weekdays 18:00 Taipei; US placeholder weekdays 18:30 New York.
+
+### 0050 acceptance (local)
+
+After reset/seed, sync the demo split and verify holdings:
+
+```bash
+pnpm db:seed
+pnpm corp-actions:sync-splits tw 2025-06-01 2025-07-31
+pnpm corp-actions:verify-0050
+```
+
+Expected: **260** open `0050` shares on demo `Broker TWD`, avgCost ~**47** TWD, with a `CorporateAction` row for the 2025-06-18 1:4 split. `Transaction` quantities stay 100/50/80/40/20.
+
+Unit tests for replay engine:
+
+```bash
+pnpm exec jest src/corporate-actions --runInBand
+```
 
 ## Market prices (FinMind)
 
@@ -221,6 +260,12 @@ Market price module only (FinMind sync):
 
 ```bash
 npx jest src/market-price --runInBand
+```
+
+Corporate actions / split replay:
+
+```bash
+npx jest src/corporate-actions --runInBand
 ```
 
 HTTP e2e tests:
