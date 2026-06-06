@@ -767,42 +767,7 @@ export class TransactionsService {
       },
     }) as RebuildTransaction[]
 
-    const scopedTransactionIds = scopedTransactions.map((transaction) => transaction.id)
-    if (scopedTransactionIds.length > 0) {
-      await prisma.sellLotMatch.deleteMany({
-        where: {
-          sellTransactionId: {
-            in: scopedTransactionIds,
-          },
-        },
-      })
-    }
-
-    await prisma.positionLot.deleteMany({
-      where: {
-        accountId: scope.accountId,
-        assetId: scope.assetId,
-      },
-    })
-    await prisma.position.deleteMany({
-      where: {
-        accountId: scope.accountId,
-        assetId: scope.assetId,
-      },
-    })
-
-    const sellTransactionIds = await this.positionReplayService.replayAndPersistScope(
-      prisma,
-      scope,
-      scopedTransactions.map((transaction) => ({
-        id: transaction.id,
-        type: transaction.type as 'buy' | 'sell',
-        tradeTime: transaction.tradeTime,
-        quantity: toNumber(transaction.quantity),
-        amount: toNumber(transaction.amount),
-        isDeleted: transaction.isDeleted,
-      })),
-    )
+    const sellTransactionIds = await this.positionReplayService.rebuildScope(prisma, scope)
     const sellTransactionIdSet = new Set(sellTransactionIds)
 
     return scopedTransactions.filter((transaction) =>

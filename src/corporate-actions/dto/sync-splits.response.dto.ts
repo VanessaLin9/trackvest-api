@@ -10,9 +10,12 @@ export class SyncSplitsResponseDto {
   @ApiProperty()
   eventsUpserted!: number
 
+  @ApiProperty()
+  scopesReplayed!: number
+
   @ApiProperty({
     description:
-      'True when split events were stored but holdings replay has not run yet.',
+      'True when split events were stored but affected-scope replay has not run yet.',
   })
   replayPending!: boolean
 }

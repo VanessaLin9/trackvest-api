@@ -2,6 +2,11 @@ import { Inject, Injectable } from '@nestjs/common'
 import { CorporateAction, Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma.service'
 import { toTradeDateUtc } from '../market-price/utils/market-price-date.util'
+import { toAffectedScopes } from './corp-action-affected-scope.util'
+import {
+  PositionReplayScope,
+  PositionReplayService,
+} from './position-replay.service'
 import {
   CorpActionMarket,
   SplitEvent,
@@ -10,10 +15,12 @@ import {
   TW_SPLIT_EVENT_PROVIDER,
   US_SPLIT_EVENT_PROVIDER,
 } from './corp-action.types'
+
 @Injectable()
 export class CorpActionService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly positionReplayService: PositionReplayService,
     @Inject(TW_SPLIT_EVENT_PROVIDER)
     private readonly twSplitProvider: SplitEventProvider,
     @Inject(US_SPLIT_EVENT_PROVIDER)
@@ -32,6 +39,7 @@ export class CorpActionService {
 
     let assetsProcessed = 0
     let eventsUpserted = 0
+    const upsertedActionsByAsset = new Map<string, string[]>()
 
     const providers: SplitEventProvider[] = []
     if (market === 'all' || market === 'tw') {
@@ -53,17 +61,88 @@ export class CorpActionService {
         })
 
         for (const event of events) {
-          await this.upsertCorporateAction(asset.id, provider, event)
+          const corporateAction = await this.upsertCorporateAction(asset.id, provider, event)
           eventsUpserted += 1
+
+          const actionIds = upsertedActionsByAsset.get(asset.id) ?? []
+          actionIds.push(corporateAction.id)
+          upsertedActionsByAsset.set(asset.id, actionIds)
         }
       }
     }
+
+    const scopesReplayed = await this.replayAffectedScopes(upsertedActionsByAsset)
 
     return {
       market,
       assetsProcessed,
       eventsUpserted,
-      replayPending: eventsUpserted > 0,
+      scopesReplayed,
+      replayPending: eventsUpserted > 0 && scopesReplayed === 0,
+    }
+  }
+
+  private async replayAffectedScopes(
+    upsertedActionsByAsset: Map<string, string[]>,
+  ): Promise<number> {
+    const assetIds = [...upsertedActionsByAsset.keys()]
+    if (assetIds.length === 0) {
+      return 0
+    }
+
+    const scopes = await this.resolveAffectedScopes(assetIds)
+    let scopesReplayed = 0
+
+    for (const scope of scopes) {
+      const corporateActionIds = upsertedActionsByAsset.get(scope.assetId) ?? []
+      await this.prisma.$transaction(async (tx) => {
+        await this.positionReplayService.rebuildScope(tx, scope)
+        await this.recordSplitApplications(tx, scope.accountId, corporateActionIds)
+      })
+      scopesReplayed += 1
+    }
+
+    return scopesReplayed
+  }
+
+  private async resolveAffectedScopes(assetIds: string[]): Promise<PositionReplayScope[]> {
+    const rows = await this.prisma.transaction.findMany({
+      where: {
+        assetId: { in: assetIds },
+        type: { in: ['buy', 'sell'] },
+        isDeleted: false,
+      },
+      distinct: ['accountId', 'assetId'],
+      select: {
+        accountId: true,
+        assetId: true,
+      },
+    })
+
+    return toAffectedScopes(rows)
+  }
+
+  private async recordSplitApplications(
+    prisma: Prisma.TransactionClient,
+    accountId: string,
+    corporateActionIds: string[],
+  ): Promise<void> {
+    for (const corporateActionId of corporateActionIds) {
+      await prisma.corporateActionApplication.upsert({
+        where: {
+          corporateActionId_accountId: {
+            corporateActionId,
+            accountId,
+          },
+        },
+        create: {
+          corporateActionId,
+          accountId,
+        },
+        update: {
+          appliedAt: new Date(),
+        },
+      })
     }
   }
 
