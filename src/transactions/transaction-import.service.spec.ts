@@ -107,23 +107,18 @@ describe('TransactionImportService', () => {
       rebuildPolicy,
     )
 
-    const transactionsServiceRef: { current?: TransactionsService } = {}
-    const importService = new TransactionImportService(
-      prisma as never,
-      ownershipService as never,
-      {
-        create: (dto, uid) => transactionsServiceRef.current!.create(dto, uid),
-      } as TransactionsService,
-    )
-
     const transactionsService = new TransactionsService(
       prisma as never,
       postingService as never,
       ownershipService as never,
       transactionPositionOrchestrator as never,
-      importService as never,
     )
-    transactionsServiceRef.current = transactionsService
+
+    const importService = new TransactionImportService(
+      prisma as never,
+      ownershipService as never,
+      transactionsService,
+    )
 
     txClient.transaction.findFirst.mockResolvedValue(null)
     txClient.transaction.findMany.mockResolvedValue([])

@@ -1,4 +1,4 @@
-import { BadRequestException, forwardRef, Inject, Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import { AccountType, Currency, Prisma } from '@prisma/client'
 import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
 import { OwnershipService } from '../common/services/ownership.service'
@@ -13,7 +13,6 @@ export class TransactionImportService {
   constructor(
     private prisma: PrismaService,
     private ownershipService: OwnershipService,
-    @Inject(forwardRef(() => TransactionsService))
     private transactionsService: TransactionsService,
   ) {}
 

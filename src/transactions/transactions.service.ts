@@ -7,9 +7,6 @@ import { CreateAndUpdateTransactionDto } from './dto/transaction.createAndUpdate
 import { PostingService } from '../gl/posting.service'
 import { OwnershipService } from '../common/services/ownership.service'
 import { UserContext } from '../common/types/auth-user'
-import { ImportTransactionsDto } from './dto/import-transactions.dto'
-import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
-import { TransactionImportService } from './transaction-import.service'
 import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
 
 @Injectable()
@@ -19,15 +16,7 @@ export class TransactionsService {
     private postingService: PostingService,
     private ownershipService: OwnershipService,
     private transactionPositionOrchestrator: TransactionPositionOrchestratorService,
-    private transactionImportService: TransactionImportService,
   ) {}
-
-  async importTransactions(
-    dto: ImportTransactionsDto,
-    userId: string,
-  ): Promise<ImportTransactionsResponseDto> {
-    return this.transactionImportService.importTransactions(dto, userId)
-  }
 
   private validateTransactionBusinessRules(
     dto: CreateTransactionDto | CreateAndUpdateTransactionDto,

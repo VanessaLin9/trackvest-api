@@ -1,6 +1,5 @@
 import { Prisma, type Transaction } from '@prisma/client'
 import { TransactionsService } from './transactions.service'
-import { TransactionImportService } from './transaction-import.service'
 import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
 import { TransactionRebuildPolicyService } from './transaction-rebuild-policy.service'
 
@@ -106,16 +105,11 @@ describe('TransactionsService', () => {
       rebuildPolicy,
     )
 
-    const importService = {
-      importTransactions: jest.fn(),
-    } as unknown as TransactionImportService
-
     const service = new TransactionsService(
       prisma as never,
       postingService as never,
       ownershipService as never,
       transactionPositionOrchestrator as never,
-      importService,
     )
 
     txClient.transaction.findFirst.mockResolvedValue(null)
