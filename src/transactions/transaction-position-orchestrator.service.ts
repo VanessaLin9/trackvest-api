@@ -3,6 +3,11 @@ import { Currency, Prisma, Transaction } from '@prisma/client'
 import { PositionReplayService } from '../corporate-actions/position-replay.service'
 import { PostingService } from '../gl/posting.service'
 import { toNumber } from '../common/utils/number.util'
+import {
+  CreateMutationDecision,
+  PositionScope,
+  TransactionRebuildPolicyService,
+} from './transaction-rebuild-policy.service'
 
 type SellLotConsumptionPlan = {
   positionId: string
@@ -16,11 +21,6 @@ type SellLotConsumptionPlan = {
   nextPositionQuantity: number
   nextPositionAvgCost: number
   nextPositionClosedAt: Date | null
-}
-
-type PositionScope = {
-  accountId: string
-  assetId: string
 }
 
 type RebuildTransaction = Transaction & {
@@ -43,8 +43,7 @@ export type TransactionSideEffectResult = {
 }
 
 type CreateSideEffectPlan = {
-  requiresScopeRebuild: boolean
-  scope: PositionScope | null
+  decision: CreateMutationDecision
   sellPlan: SellLotConsumptionPlan | null
 }
 
@@ -53,6 +52,7 @@ export class TransactionPositionOrchestratorService {
   constructor(
     private readonly positionReplayService: PositionReplayService,
     private readonly postingService: PostingService,
+    private readonly rebuildPolicy: TransactionRebuildPolicyService,
   ) {}
 
   async prepareCreateSideEffects(
@@ -65,23 +65,14 @@ export class TransactionPositionOrchestratorService {
       tradeTime: Date
     },
   ): Promise<CreateSideEffectPlan> {
-    const scope = this.getTransactionScope({
+    const decision = await this.rebuildPolicy.resolveCreateMutation(prisma, {
       accountId: candidate.accountId,
       assetId: candidate.assetId ?? null,
       type: candidate.type,
+      tradeTime: candidate.tradeTime,
     })
-    const requiresScopeRebuild = await this.requiresScopeRebuildOnCreate(
-      prisma,
-      {
-        accountId: candidate.accountId,
-        assetId: candidate.assetId ?? null,
-        type: candidate.type,
-        tradeTime: candidate.tradeTime,
-      } as Transaction,
-      scope,
-    )
     const sellPlan =
-      !requiresScopeRebuild && candidate.type === 'sell' && candidate.assetId
+      decision.canUseIncrementalSellPlan && candidate.assetId
         ? await this.buildSellLotConsumptionPlan(prisma, {
             accountId: candidate.accountId,
             assetId: candidate.assetId,
@@ -91,8 +82,7 @@ export class TransactionPositionOrchestratorService {
         : null
 
     return {
-      requiresScopeRebuild,
-      scope,
+      decision,
       sellPlan,
     }
   }
@@ -102,11 +92,11 @@ export class TransactionPositionOrchestratorService {
     created: Transaction,
     plan: CreateSideEffectPlan,
   ): Promise<TransactionSideEffectResult> {
-    const { requiresScopeRebuild, scope, sellPlan } = plan
+    const { decision, sellPlan } = plan
 
     if (created.type === 'buy') {
-      if (requiresScopeRebuild && scope) {
-        await this.rebuildAndRepostSellScopes(prisma, [scope])
+      if (decision.needsFullScopeReplay && decision.scope) {
+        await this.rebuildAndRepostSellScopes(prisma, [decision.scope])
       } else {
         await this.syncPositionOnCreate(prisma, created)
         await this.createBuyLotOnCreate(prisma, created)
@@ -115,12 +105,12 @@ export class TransactionPositionOrchestratorService {
 
     if (created.type === 'sell' && sellPlan) {
       await this.applySellLotConsumptionPlan(prisma, created, sellPlan)
-    } else if (created.type === 'sell' && requiresScopeRebuild && scope) {
-      await this.rebuildAndRepostSellScopes(prisma, [scope])
+    } else if (created.type === 'sell' && decision.needsFullScopeReplay && decision.scope) {
+      await this.rebuildAndRepostSellScopes(prisma, [decision.scope])
     }
 
     return {
-      skipPrimaryGlPost: created.type === 'sell' && requiresScopeRebuild,
+      skipPrimaryGlPost: !decision.shouldPostCurrentTransaction,
     }
   }
 
@@ -129,16 +119,14 @@ export class TransactionPositionOrchestratorService {
     existing: Transaction,
     updated: Transaction,
   ): Promise<TransactionSideEffectResult> {
-    const scopes = this.getUpdateRebuildScopes(existing, updated)
+    const decision = this.rebuildPolicy.resolveUpdateMutation(existing, updated)
 
-    if (scopes.length === 0) {
-      return { skipPrimaryGlPost: false }
+    if (decision.needsFullScopeReplay) {
+      await this.rebuildAndRepostSellScopes(prisma, decision.affectedScopes)
     }
 
-    await this.rebuildAndRepostSellScopes(prisma, scopes)
-
     return {
-      skipPrimaryGlPost: this.isScopedSellTransaction(updated),
+      skipPrimaryGlPost: !decision.shouldPostCurrentTransaction,
     }
   }
 
@@ -146,18 +134,10 @@ export class TransactionPositionOrchestratorService {
     prisma: Prisma.TransactionClient,
     transaction: Transaction,
   ): Promise<void> {
-    const scope = this.getTransactionScope(transaction)
+    const decision = this.rebuildPolicy.resolveDeleteMutation(transaction)
 
-    if (transaction.type === 'sell' && scope) {
-      await this.rebuildAndRepostSellScopes(
-        prisma,
-        this.getDistinctScopes(scope),
-      )
-      return
-    }
-
-    if (this.isScopedBuyTransaction(transaction) && scope) {
-      await this.rebuildAndRepostSellScopes(prisma, [scope])
+    if (decision.needsFullScopeReplay) {
+      await this.rebuildAndRepostSellScopes(prisma, decision.affectedScopes)
     }
   }
 
@@ -165,47 +145,11 @@ export class TransactionPositionOrchestratorService {
     prisma: Prisma.TransactionClient,
     deleted: Pick<Transaction, 'accountId' | 'assetId' | 'type'>,
   ): Promise<void> {
-    const scope = this.getTransactionScope(deleted)
+    const decision = this.rebuildPolicy.resolveDeleteMutation(deleted)
 
-    if (deleted.type === 'sell' && scope) {
-      await this.rebuildAndRepostSellScopes(
-        prisma,
-        this.getDistinctScopes(scope),
-      )
-      return
+    if (decision.needsFullScopeReplay) {
+      await this.rebuildAndRepostSellScopes(prisma, decision.affectedScopes)
     }
-
-    if (this.isScopedBuyTransaction(deleted) && scope) {
-      await this.rebuildAndRepostSellScopes(prisma, [scope])
-    }
-  }
-
-  private async requiresScopeRebuildOnCreate(
-    prisma: Prisma.TransactionClient,
-    created: Transaction,
-    scope: PositionScope | null,
-  ) {
-    if (!scope) {
-      return false
-    }
-
-    if (created.type === 'sell') {
-      return this.hasActiveScopedTransactionsOnOrAfter(
-        prisma,
-        scope,
-        created.tradeTime,
-      )
-    }
-
-    if (created.type === 'buy') {
-      return this.hasActiveSellTransactionsOnOrAfter(
-        prisma,
-        scope,
-        created.tradeTime,
-      )
-    }
-
-    return false
   }
 
   private async syncPositionOnCreate(
@@ -397,104 +341,6 @@ export class TransactionPositionOrchestratorService {
         closedAt: plan.nextPositionClosedAt,
       },
     })
-  }
-
-  private getTransactionScope(transaction: Pick<Transaction, 'accountId' | 'assetId' | 'type'>) {
-    if (!transaction.assetId) {
-      return null
-    }
-
-    if (transaction.type !== 'buy' && transaction.type !== 'sell') {
-      return null
-    }
-
-    return {
-      accountId: transaction.accountId,
-      assetId: transaction.assetId,
-    }
-  }
-
-  private getDistinctScopes(...scopes: Array<PositionScope | null>) {
-    const uniqueScopes = new Map<string, PositionScope>()
-
-    for (const scope of scopes) {
-      if (!scope) {
-        continue
-      }
-
-      uniqueScopes.set(`${scope.accountId}:${scope.assetId}`, scope)
-    }
-
-    return [...uniqueScopes.values()]
-  }
-
-  private isScopedBuyTransaction(
-    transaction: Pick<Transaction, 'type' | 'assetId'>,
-  ) {
-    return transaction.type === 'buy' && Boolean(transaction.assetId)
-  }
-
-  private isScopedSellTransaction(
-    transaction: Pick<Transaction, 'type' | 'assetId'>,
-  ) {
-    return transaction.type === 'sell' && Boolean(transaction.assetId)
-  }
-
-  private getUpdateRebuildScopes(existing: Transaction, updated: Transaction) {
-    return this.getDistinctScopes(
-      this.getTransactionScope(existing),
-      this.getTransactionScope(updated),
-    )
-  }
-
-  private async hasActiveScopedTransactionsOnOrAfter(
-    prisma: Prisma.TransactionClient,
-    scope: PositionScope,
-    tradeTime: Date,
-    excludeTransactionId?: string,
-  ) {
-    const transaction = await prisma.transaction.findFirst({
-      where: {
-        accountId: scope.accountId,
-        assetId: scope.assetId,
-        type: { in: ['buy', 'sell'] },
-        isDeleted: false,
-        tradeTime: { gte: tradeTime },
-        ...(excludeTransactionId
-          ? {
-              id: { not: excludeTransactionId },
-            }
-          : {}),
-      },
-      select: { id: true },
-    })
-
-    return Boolean(transaction)
-  }
-
-  private async hasActiveSellTransactionsOnOrAfter(
-    prisma: Prisma.TransactionClient,
-    scope: PositionScope,
-    tradeTime: Date,
-    excludeTransactionId?: string,
-  ) {
-    const transaction = await prisma.transaction.findFirst({
-      where: {
-        accountId: scope.accountId,
-        assetId: scope.assetId,
-        type: 'sell',
-        isDeleted: false,
-        tradeTime: { gte: tradeTime },
-        ...(excludeTransactionId
-          ? {
-              id: { not: excludeTransactionId },
-            }
-          : {}),
-      },
-      select: { id: true },
-    })
-
-    return Boolean(transaction)
   }
 
   private async rebuildPositionScope(
