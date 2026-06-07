@@ -1,5 +1,6 @@
 import { Prisma, type Transaction } from '@prisma/client'
 import { TransactionsService } from './transactions.service'
+import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
 import { AccountType, Currency } from '@prisma/client'
 import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
 import { BadRequestException } from '@nestjs/common'
@@ -99,11 +100,16 @@ describe('TransactionsService', () => {
       rebuildScope: jest.fn().mockResolvedValue([]),
     }
 
+    const transactionPositionOrchestrator = new TransactionPositionOrchestratorService(
+      positionReplayService as never,
+      postingService as never,
+    )
+
     const service = new TransactionsService(
       prisma as never,
       postingService as never,
       ownershipService as never,
-      positionReplayService as never,
+      transactionPositionOrchestrator as never,
     )
 
     txClient.transaction.findFirst.mockResolvedValue(null)
@@ -119,6 +125,7 @@ describe('TransactionsService', () => {
       postingService,
       ownershipService,
       positionReplayService,
+      transactionPositionOrchestrator,
     }
   }
 
