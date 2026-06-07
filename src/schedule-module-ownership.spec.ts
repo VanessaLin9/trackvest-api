@@ -1,4 +1,5 @@
 import { ConfigModule } from '@nestjs/config'
+import { MODULE_METADATA } from '@nestjs/common/constants'
 import { Test } from '@nestjs/testing'
 import { ScheduleModule } from '@nestjs/schedule'
 import { AppModule } from './app.module'
@@ -8,6 +9,16 @@ import { CorporateActionsModule } from './corporate-actions/corporate-actions.mo
 import { MarketPriceScheduler } from './market-price/market-price.scheduler'
 import { MarketPriceModule } from './market-price/market-price.module'
 import { PrismaModule } from './prisma.module'
+
+function importsScheduleModuleForRoot(imports: unknown[]): boolean {
+  return imports.some(
+    (item) =>
+      typeof item === 'object' &&
+      item !== null &&
+      'module' in item &&
+      (item as { module: unknown }).module === ScheduleModule,
+  )
+}
 
 describe('Schedule module ownership (P5)', () => {
   /*
@@ -57,5 +68,14 @@ describe('Schedule module ownership (P5)', () => {
     expect(moduleRef.get(MarketPriceScheduler)).toBeInstanceOf(MarketPriceScheduler)
 
     await moduleRef.close()
+  })
+
+  it('mounts ScheduleModule.forRoot at AppModule instead of MarketPriceModule', () => {
+    const appImports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, AppModule) ?? []
+    const marketPriceImports =
+      Reflect.getMetadata(MODULE_METADATA.IMPORTS, MarketPriceModule) ?? []
+
+    expect(importsScheduleModuleForRoot(appImports)).toBe(true)
+    expect(importsScheduleModuleForRoot(marketPriceImports)).toBe(false)
   })
 })
