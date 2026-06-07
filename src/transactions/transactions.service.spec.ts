@@ -2316,6 +2316,15 @@ describe('TransactionsService', () => {
   })
 
   /*
+   * P3 rebuild-policy characterization inventory:
+   * - out-of-order buy: covered by "backdated buy before later sells" (unit + e2e)
+   * - out-of-order sell: covered by "backdated sell before later buys" (unit + e2e)
+   * - sell update: covered by "rebuilds FIFO lots and reposts sell GL when updating a sell" (unit + e2e)
+   * - buy delete before existing sell: covered by remove/hardDelete buy before later sells (unit + e2e)
+   * - hard delete sell: covered by hard deleting sell transaction specs (unit + e2e)
+   * Policy decision tests live in transaction-rebuild-policy.service.spec.ts (commit 2).
+   */
+  /*
    * P2 side-effect characterization inventory (create/update/remove/hardDelete):
    * - create buy: position create/update covered; incremental PositionLot create covered below.
    * - create sell: FIFO plan, rebuild, reject paths covered above.
