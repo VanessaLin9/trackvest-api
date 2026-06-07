@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { ScheduleModule } from '@nestjs/schedule'
 import { APP_FILTER, APP_GUARD } from '@nestjs/core'
 import { AccountsModule } from './accounts/accounts.module'
 import { AssetsModule } from './assets/assets.module'
@@ -21,6 +22,7 @@ import { UsersModule } from './users/users.module'
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     CommonModule,
     AuthModule,
