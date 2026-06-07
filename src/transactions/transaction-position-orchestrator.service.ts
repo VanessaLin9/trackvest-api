@@ -129,19 +129,16 @@ export class TransactionPositionOrchestratorService {
     existing: Transaction,
     updated: Transaction,
   ): Promise<TransactionSideEffectResult> {
-    const existingScope = this.getTransactionScope(existing)
-    const nextScope = this.getTransactionScope(updated)
-    const requiresScopeRebuild = this.requiresScopeRebuildOnUpdate(existing, updated)
+    const scopes = this.getUpdateRebuildScopes(existing, updated)
 
-    if (requiresScopeRebuild) {
-      const scopes = this.getDistinctScopes(existingScope, nextScope)
-      await this.rebuildAndRepostSellScopes(prisma, scopes)
-    } else {
-      await this.syncPositionOnUpdate(prisma, existing, updated)
+    if (scopes.length === 0) {
+      return { skipPrimaryGlPost: false }
     }
 
+    await this.rebuildAndRepostSellScopes(prisma, scopes)
+
     return {
-      skipPrimaryGlPost: updated.type === 'sell' && requiresScopeRebuild,
+      skipPrimaryGlPost: this.isScopedSellTransaction(updated),
     }
   }
 
@@ -443,15 +440,10 @@ export class TransactionPositionOrchestratorService {
     return transaction.type === 'sell' && Boolean(transaction.assetId)
   }
 
-  private requiresScopeRebuildOnUpdate(
-    existing: Transaction,
-    updated: Transaction,
-  ) {
-    return (
-      this.isScopedSellTransaction(existing) ||
-      this.isScopedSellTransaction(updated) ||
-      this.isScopedBuyTransaction(existing) ||
-      this.isScopedBuyTransaction(updated)
+  private getUpdateRebuildScopes(existing: Transaction, updated: Transaction) {
+    return this.getDistinctScopes(
+      this.getTransactionScope(existing),
+      this.getTransactionScope(updated),
     )
   }
 
@@ -548,125 +540,5 @@ export class TransactionPositionOrchestratorService {
         db: prisma,
       })
     }
-  }
-
-  private async rollbackBuyPositionEffect(
-    prisma: Prisma.TransactionClient,
-    transaction: Transaction,
-  ) {
-    if (transaction.type !== 'buy' || !transaction.assetId) {
-      return
-    }
-
-    const quantity = toNumber(transaction.quantity)
-    const totalCost = toNumber(transaction.amount)
-
-    if (quantity <= 0 || totalCost <= 0) {
-      throw new BadRequestException('buy transactions require positive quantity and amount')
-    }
-
-    const existingPosition = await prisma.position.findFirst({
-      where: {
-        accountId: transaction.accountId,
-        assetId: transaction.assetId,
-        closedAt: null,
-      },
-      orderBy: { openedAt: 'desc' },
-    })
-
-    if (!existingPosition) {
-      throw new NotFoundException('Active position not found for buy transaction rollback')
-    }
-
-    const currentQuantity = toNumber(existingPosition.quantity)
-    const currentAvgCost = toNumber(existingPosition.avgCost)
-    const nextQuantity = currentQuantity - quantity
-    const nextTotalCost = currentQuantity * currentAvgCost - totalCost
-
-    if (nextQuantity < -1e-9 || nextTotalCost < -1e-9) {
-      throw new BadRequestException('position rollback would result in negative holdings')
-    }
-
-    if (nextQuantity <= 1e-9) {
-      await prisma.position.update({
-        where: { id: existingPosition.id },
-        data: {
-          quantity: 0,
-          avgCost: 0,
-          closedAt: transaction.tradeTime,
-        },
-      })
-      return
-    }
-
-    await prisma.position.update({
-      where: { id: existingPosition.id },
-      data: {
-        quantity: nextQuantity,
-        avgCost: nextTotalCost / nextQuantity,
-        closedAt: null,
-      },
-    })
-  }
-
-  private async syncPositionOnUpdate(
-    prisma: Prisma.TransactionClient,
-    previousTransaction: Transaction,
-    nextTransaction: Transaction,
-  ) {
-    const isPreviousBuy =
-      previousTransaction.type === 'buy' && Boolean(previousTransaction.assetId)
-    const isNextBuy = nextTransaction.type === 'buy' && Boolean(nextTransaction.assetId)
-
-    if (!isPreviousBuy && !isNextBuy) {
-      return
-    }
-
-    const samePositionTarget =
-      isPreviousBuy &&
-      isNextBuy &&
-      previousTransaction.accountId === nextTransaction.accountId &&
-      previousTransaction.assetId === nextTransaction.assetId
-
-    if (samePositionTarget) {
-      const existingPosition = await prisma.position.findFirst({
-        where: {
-          accountId: nextTransaction.accountId,
-          assetId: nextTransaction.assetId!,
-          closedAt: null,
-        },
-        orderBy: { openedAt: 'desc' },
-      })
-
-      if (!existingPosition) {
-        throw new NotFoundException('Active position not found for buy transaction update')
-      }
-
-      const currentQuantity = toNumber(existingPosition.quantity)
-      const currentAvgCost = toNumber(existingPosition.avgCost)
-      const previousQuantity = toNumber(previousTransaction.quantity)
-      const previousCost = toNumber(previousTransaction.amount)
-      const nextQuantityDelta = toNumber(nextTransaction.quantity)
-      const nextCost = toNumber(nextTransaction.amount)
-      const recalculatedQuantity = currentQuantity - previousQuantity + nextQuantityDelta
-      const recalculatedCost = currentQuantity * currentAvgCost - previousCost + nextCost
-
-      if (recalculatedQuantity <= 0 || recalculatedCost < 0) {
-        throw new BadRequestException('updated buy transaction would invalidate the active position')
-      }
-
-      await prisma.position.update({
-        where: { id: existingPosition.id },
-        data: {
-          quantity: recalculatedQuantity,
-          avgCost: recalculatedCost / recalculatedQuantity,
-          closedAt: null,
-        },
-      })
-      return
-    }
-
-    await this.rollbackBuyPositionEffect(prisma, previousTransaction)
-    await this.syncPositionOnCreate(prisma, nextTransaction)
   }
 }
