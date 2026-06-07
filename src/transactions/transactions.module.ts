@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 import { CorporateActionsModule } from '../corporate-actions/corporate-actions.module'
 import { GlModule } from '../gl/gl.module'
 import { TransactionsController } from './transactions.controller'
+import { TransactionImportService } from './transaction-import.service'
 import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
 import { TransactionRebuildPolicyService } from './transaction-rebuild-policy.service'
 import { TransactionsService } from './transactions.service'
@@ -11,6 +12,7 @@ import { TransactionsService } from './transactions.service'
   controllers: [TransactionsController],
   providers: [
     TransactionsService,
+    TransactionImportService,
     TransactionRebuildPolicyService,
     TransactionPositionOrchestratorService,
   ],
