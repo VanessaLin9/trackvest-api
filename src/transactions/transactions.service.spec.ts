@@ -2322,4 +2322,115 @@ describe('TransactionsService', () => {
       ],
     })
   })
+
+  /*
+   * P1 regression inventory (buy mutation without later sells):
+   * - Existing tests at ~749/800/870 only assert Position.update, not PositionLot sync.
+   * - Existing tests with later sells (~1350/1472) already expect rebuildScope.
+   * - Tests below assert the target behavior: rebuildScope instead of incremental Position-only patches.
+   */
+  describe('buy mutation scope rebuild regression (P1)', () => {
+    it('rebuilds scope when updating a buy transaction with no later sells', async () => {
+      const { service, prisma, txClient, postingService, positionReplayService } =
+        createHarness()
+      const existingTransaction = buildCreatedTransaction()
+      const updatedTransaction = buildCreatedTransaction({
+        amount: 330,
+        quantity: 6,
+        price: 54,
+        fee: 6,
+      })
+
+      prisma.transaction.findUnique.mockResolvedValue(existingTransaction)
+      txClient.transaction.update.mockResolvedValue(updatedTransaction)
+      txClient.transaction.findMany.mockResolvedValue([updatedTransaction])
+      txClient.position.findFirst.mockResolvedValue({
+        id: 'position-1',
+        quantity: 10,
+        avgCost: 101.5,
+      })
+      postingService.postTransaction.mockResolvedValue({ id: 'entry-updated-buy' })
+
+      await service.update(
+        'tx-1',
+        {
+          amount: 330,
+          quantity: 6,
+          price: 54,
+          fee: 6,
+          tradeTime,
+        },
+        userId,
+      )
+
+      expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+        accountId,
+        assetId,
+      })
+      expect(txClient.position.update).not.toHaveBeenCalled()
+      expect(postingService.postTransaction).toHaveBeenCalledWith({
+        userId,
+        transaction: updatedTransaction,
+        db: txClient,
+      })
+    })
+
+    it('rebuilds scope when soft deleting a buy transaction with no later sells', async () => {
+      const { service, txClient, postingService, positionReplayService } =
+        createHarness()
+      const removedTransaction = buildCreatedTransaction({
+        isDeleted: true,
+        deletedAt: new Date('2026-03-25T10:00:00.000Z'),
+      })
+
+      txClient.transaction.update.mockResolvedValue(removedTransaction)
+      txClient.transaction.findMany.mockResolvedValue([])
+      txClient.position.findFirst.mockResolvedValue({
+        id: 'position-1',
+        quantity: 10,
+        avgCost: 101.5,
+      })
+
+      await service.remove('tx-1', userId)
+
+      expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+        accountId,
+        assetId,
+      })
+      expect(txClient.position.update).not.toHaveBeenCalled()
+      expect(postingService.archiveTransactionEntries).toHaveBeenCalledWith(
+        userId,
+        'tx-1',
+        txClient,
+      )
+    })
+
+    it('rebuilds scope when hard deleting a buy transaction with no later sells', async () => {
+      const { service, txClient, postingService, positionReplayService } =
+        createHarness()
+      const existingTransaction = buildCreatedTransaction()
+
+      txClient.transaction.findUnique.mockResolvedValue(existingTransaction)
+      txClient.transaction.delete.mockResolvedValue(existingTransaction)
+      txClient.transaction.findMany.mockResolvedValue([])
+      txClient.position.findFirst.mockResolvedValue({
+        id: 'position-1',
+        quantity: 10,
+        avgCost: 101.5,
+      })
+
+      await service.hardDelete('tx-1', userId)
+
+      expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+        accountId,
+        assetId,
+      })
+      expect(txClient.position.update).not.toHaveBeenCalled()
+      expect(postingService.archiveTransactionEntries).toHaveBeenCalledWith(
+        userId,
+        'tx-1',
+        txClient,
+      )
+    })
+  })
 })

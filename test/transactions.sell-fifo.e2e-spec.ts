@@ -1051,4 +1051,226 @@ describe('Transactions sell FIFO (e2e)', () => {
       ]),
     )
   })
+
+  /*
+   * P1 regression: buy update/delete/hardDelete without later sells must keep
+   * PositionLot aligned with Position. Existing sell-FIFO e2e cases only cover
+   * buy mutations when later sells already exist (rebuildScope path).
+   */
+  describe('buy mutation PositionLot consistency (P1 regression)', () => {
+    it('keeps PositionLot aligned with Position when a buy is updated before any sell exists', async () => {
+      const { user, account, asset } = await createFixture()
+
+      const buy = await createTransaction(user.id, {
+        accountId: account.id,
+        assetId: asset.id,
+        type: 'buy',
+        amount: 1000,
+        quantity: 10,
+        price: 100,
+        fee: 0,
+        tax: 0,
+        tradeTime: '2026-03-20T09:30:00.000Z',
+        note: 'initial buy',
+      })
+
+      await request(app.getHttpServer())
+        .patch(`/transactions/${buy.body.id}`)
+        .set(auth(user.id))
+        .send({
+          amount: 330,
+          quantity: 6,
+          price: 55,
+          fee: 0,
+          tax: 0,
+          tradeTime: '2026-03-20T09:30:00.000Z',
+          note: 'updated buy',
+        })
+        .expect(200)
+
+      const position = await findActivePosition(account.id, asset.id)
+      expect(position).not.toBeNull()
+      expect(Number(position?.quantity)).toBe(6)
+      expect(Number(position?.avgCost)).toBe(55)
+
+      const lots = await findLots(account.id, asset.id)
+      expect(lots).toHaveLength(1)
+      expect(lots[0].sourceTransactionId).toBe(buy.body.id)
+      expect(Number(lots[0].originalQuantity)).toBe(6)
+      expect(Number(lots[0].remainingQuantity)).toBe(6)
+      expect(Number(lots[0].unitCost)).toBe(55)
+    })
+
+    it('uses updated buy lot cost for FIFO when selling after a buy update with no prior sells', async () => {
+      const { user, account, asset } = await createFixture()
+
+      const buy = await createTransaction(user.id, {
+        accountId: account.id,
+        assetId: asset.id,
+        type: 'buy',
+        amount: 1000,
+        quantity: 10,
+        price: 100,
+        fee: 0,
+        tax: 0,
+        tradeTime: '2026-03-20T09:30:00.000Z',
+        note: 'buy before update',
+      })
+
+      await request(app.getHttpServer())
+        .patch(`/transactions/${buy.body.id}`)
+        .set(auth(user.id))
+        .send({
+          amount: 360,
+          quantity: 6,
+          price: 60,
+          fee: 0,
+          tax: 0,
+          tradeTime: '2026-03-20T09:30:00.000Z',
+          note: 'updated buy lot',
+        })
+        .expect(200)
+
+      const sell = await createTransaction(user.id, {
+        accountId: account.id,
+        assetId: asset.id,
+        type: 'sell',
+        amount: 400,
+        quantity: 4,
+        price: 100,
+        fee: 0,
+        tax: 0,
+        tradeTime: '2026-03-21T09:30:00.000Z',
+        note: 'sell after buy update',
+      })
+
+      const sellMatches = await prisma.sellLotMatch.findMany({
+        where: { sellTransactionId: sell.body.id },
+        include: {
+          buyLot: {
+            select: { sourceTransactionId: true },
+          },
+        },
+      })
+
+      expect(sellMatches).toHaveLength(1)
+      expect(Number(sellMatches[0].quantity)).toBe(4)
+      expect(Number(sellMatches[0].unitCost)).toBe(60)
+      expect(sellMatches[0].buyLot.sourceTransactionId).toBe(buy.body.id)
+
+      const sellEntry = await prisma.glEntry.findFirst({
+        where: {
+          refTxId: sell.body.id,
+          isDeleted: false,
+        },
+        include: { lines: true },
+      })
+
+      expect(sellEntry).not.toBeNull()
+      expect(
+        sellEntry?.lines.map((line) => ({
+          side: line.side,
+          amount: Number(line.amount),
+          note: line.note,
+        })),
+      ).toEqual(
+        expect.arrayContaining([
+          { side: 'debit', amount: 400, note: 'sell proceeds in' },
+          { side: 'credit', amount: 240, note: 'sell cost basis out' },
+          { side: 'credit', amount: 160, note: 'realized gain' },
+        ]),
+      )
+    })
+
+    it('keeps PositionLot aligned when soft deleting a buy before any sell exists', async () => {
+      const { user, account, asset } = await createFixture()
+
+      const buy1 = await createTransaction(user.id, {
+        accountId: account.id,
+        assetId: asset.id,
+        type: 'buy',
+        amount: 1000,
+        quantity: 10,
+        price: 100,
+        fee: 0,
+        tax: 0,
+        tradeTime: '2026-03-20T09:30:00.000Z',
+        note: 'buy lot 1',
+      })
+
+      await createTransaction(user.id, {
+        accountId: account.id,
+        assetId: asset.id,
+        type: 'buy',
+        amount: 1200,
+        quantity: 10,
+        price: 120,
+        fee: 0,
+        tax: 0,
+        tradeTime: '2026-03-21T09:30:00.000Z',
+        note: 'buy lot 2',
+      })
+
+      await request(app.getHttpServer())
+        .delete(`/transactions/${buy1.body.id}`)
+        .set(auth(user.id))
+        .expect(200)
+
+      const position = await findActivePosition(account.id, asset.id)
+      expect(position).not.toBeNull()
+      expect(Number(position?.quantity)).toBe(10)
+      expect(Number(position?.avgCost)).toBe(120)
+
+      const lots = await findLots(account.id, asset.id)
+      expect(lots).toHaveLength(1)
+      expect(Number(lots[0].remainingQuantity)).toBe(10)
+      expect(Number(lots[0].unitCost)).toBe(120)
+    })
+
+    it('keeps PositionLot aligned when hard deleting a buy before any sell exists', async () => {
+      const { user, account, asset } = await createFixture()
+
+      const buy1 = await createTransaction(user.id, {
+        accountId: account.id,
+        assetId: asset.id,
+        type: 'buy',
+        amount: 1000,
+        quantity: 10,
+        price: 100,
+        fee: 0,
+        tax: 0,
+        tradeTime: '2026-03-20T09:30:00.000Z',
+        note: 'buy lot 1',
+      })
+
+      const buy2 = await createTransaction(user.id, {
+        accountId: account.id,
+        assetId: asset.id,
+        type: 'buy',
+        amount: 1200,
+        quantity: 10,
+        price: 120,
+        fee: 0,
+        tax: 0,
+        tradeTime: '2026-03-21T09:30:00.000Z',
+        note: 'buy lot 2',
+      })
+
+      await request(app.getHttpServer())
+        .delete(`/transactions/${buy1.body.id}/hard`)
+        .set(auth(user.id))
+        .expect(200)
+
+      const position = await findActivePosition(account.id, asset.id)
+      expect(position).not.toBeNull()
+      expect(Number(position?.quantity)).toBe(10)
+      expect(Number(position?.avgCost)).toBe(120)
+
+      const lots = await findLots(account.id, asset.id)
+      expect(lots).toHaveLength(1)
+      expect(lots[0].sourceTransactionId).toBe(buy2.body.id)
+      expect(Number(lots[0].remainingQuantity)).toBe(10)
+      expect(Number(lots[0].unitCost)).toBe(120)
+    })
+  })
 })
