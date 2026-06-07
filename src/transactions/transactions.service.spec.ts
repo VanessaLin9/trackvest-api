@@ -134,22 +134,23 @@ describe('TransactionsService', () => {
     }
   }
 
-  function buildImportContent(rows: string[][]) {
+  function buildImportContent(rows: string[][], delimiter: '\t' | ',' = '\t') {
+    const headers = [
+      '股名',
+      '日期',
+      '成交股數',
+      '淨收付',
+      '成交單價',
+      '手續費',
+      '交易稅',
+      '稅款',
+      '委託書號',
+      '幣別',
+      '備註',
+    ]
     return [
-      [
-        '股名',
-        '日期',
-        '成交股數',
-        '淨收付',
-        '成交單價',
-        '手續費',
-        '交易稅',
-        '稅款',
-        '委託書號',
-        '幣別',
-        '備註',
-      ].join('\t'),
-      ...rows.map((row) => row.join('\t')),
+      headers.join(delimiter),
+      ...rows.map((row) => row.join(delimiter)),
     ].join('\n')
   }
 
@@ -1567,6 +1568,146 @@ describe('TransactionsService', () => {
       userId,
       transaction: updatedTransaction,
       db: txClient,
+    })
+  })
+
+  /*
+   * P4 import characterization inventory:
+   * - delimiter tab: covered by buildImportContent default and most import specs
+   * - delimiter comma: covered by "imports a valid broker buy row from comma-delimited CSV"
+   * - quoted CSV: covered by "imports a row with a quoted note field containing the delimiter"
+   * - missing columns: covered by "rejects the import ... missing header"
+   * - duplicate brokerOrderNo in file: covered
+   * - duplicate brokerOrderNo in DB / P2002: covered
+   * - currency mismatch / unsupported: covered
+   * - asset alias missing: covered by "returns a row error when the asset alias is not found"
+   * - asset alias global fallback: covered
+   * - partial success: covered by "continues importing later rows"
+   * Extraction to TransactionImportService: commit 2.
+   */
+  it('imports a valid broker buy row from comma-delimited CSV', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+    const importedTransaction = buildCreatedTransaction({
+      id: 'tx-import-comma-1',
+      amount: 1015,
+      quantity: 10,
+      price: 100,
+      fee: 10,
+      tax: 5,
+      brokerOrderNo: 'BRK-COMMA-001',
+      note: '逗號分隔',
+      tradeTime: importedTradeTime,
+    })
+
+    mockImportAccount(prisma)
+    prisma.assetAlias.findUnique.mockResolvedValueOnce({ assetId })
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    txClient.transaction.create.mockResolvedValue(importedTransaction)
+    txClient.position.findFirst.mockResolvedValue(null)
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-import-comma-1' })
+
+    const result = await service.importTransactions(
+      {
+        accountId,
+        csvContent: buildImportContent(
+          [['富邦台50', '2026/03/24', '10', '-1015', '100', '10', '3', '2', 'BRK-COMMA-001', 'TWD', '逗號分隔']],
+          ',',
+        ),
+      },
+      userId,
+    )
+
+    expect(txClient.transaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'buy',
+          brokerOrderNo: 'BRK-COMMA-001',
+          note: '逗號分隔',
+        }),
+      }),
+    )
+    expect(result.successCount).toBe(1)
+    expect(result.failureCount).toBe(0)
+  })
+
+  it('imports a row with a quoted note field containing the delimiter', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+    const note = '整股,含逗號'
+    const importedTransaction = buildCreatedTransaction({
+      id: 'tx-import-quoted-1',
+      amount: 1015,
+      quantity: 10,
+      price: 100,
+      fee: 10,
+      tax: 5,
+      brokerOrderNo: 'BRK-QUOTED-001',
+      note,
+      tradeTime: importedTradeTime,
+    })
+
+    mockImportAccount(prisma)
+    prisma.assetAlias.findUnique.mockResolvedValueOnce({ assetId })
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    txClient.transaction.create.mockResolvedValue(importedTransaction)
+    txClient.position.findFirst.mockResolvedValue(null)
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-import-quoted-1' })
+
+    const result = await service.importTransactions(
+      {
+        accountId,
+        csvContent: [
+          '股名,日期,成交股數,淨收付,成交單價,手續費,交易稅,稅款,委託書號,幣別,備註',
+          `富邦台50,2026/03/24,10,-1015,100,10,3,2,BRK-QUOTED-001,TWD,"${note}"`,
+        ].join('\n'),
+      },
+      userId,
+    )
+
+    expect(txClient.transaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          note,
+          brokerOrderNo: 'BRK-QUOTED-001',
+        }),
+      }),
+    )
+    expect(result.successCount).toBe(1)
+    expect(result.failureCount).toBe(0)
+  })
+
+  it('returns a row error when the asset alias is not found', async () => {
+    const { service, prisma, txClient, postingService } = createHarness()
+
+    mockImportAccount(prisma)
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.assetAlias.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+
+    const result = await service.importTransactions(
+      {
+        accountId,
+        csvContent: buildImportContent([
+          ['未知標的', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-ALIAS-001', 'TWD', '缺別名'],
+        ]),
+      },
+      userId,
+    )
+
+    expect(txClient.transaction.create).not.toHaveBeenCalled()
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      totalRows: 1,
+      successCount: 0,
+      failureCount: 1,
+      createdTransactionIds: [],
+      errors: [
+        {
+          row: 2,
+          field: '股名',
+          message: 'Asset alias not found for 未知標的',
+        },
+      ],
     })
   })
 
