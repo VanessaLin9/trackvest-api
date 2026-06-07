@@ -10,42 +10,7 @@ import { UserContext } from '../common/types/auth-user'
 import { ImportTransactionsDto } from './dto/import-transactions.dto'
 import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
 import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
-import { toNumber } from '../common/utils/number.util'
-import { PositionReplayService } from '../corporate-actions/position-replay.service'
-
-type SellLotConsumptionPlan = {
-  positionId: string
-  lotConsumptions: Array<{
-    buyLotId: string
-    consumedQuantity: number
-    unitCost: number
-    nextRemainingQuantity: number
-    nextClosedAt: Date | null
-  }>
-  nextPositionQuantity: number
-  nextPositionAvgCost: number
-  nextPositionClosedAt: Date | null
-}
-
-type PositionScope = {
-  accountId: string
-  assetId: string
-}
-
-type RebuildTransaction = Transaction & {
-  account: {
-    id: string
-    name: string
-    currency: Currency
-    userId: string
-  }
-  asset: {
-    id: string
-    symbol: string
-    name: string
-    baseCurrency: string
-  } | null
-}
+import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
 
 @Injectable()
 export class TransactionsService {
@@ -53,7 +18,7 @@ export class TransactionsService {
     private prisma: PrismaService,
     private postingService: PostingService,
     private ownershipService: OwnershipService,
-    private positionReplayService: PositionReplayService,
+    private transactionPositionOrchestrator: TransactionPositionOrchestratorService,
   ) {}
 
   private readonly importHeaderMap = {
@@ -480,465 +445,58 @@ export class TransactionsService {
     }
   }
 
-  private async syncPositionOnCreate(
-    prisma: Prisma.TransactionClient,
-    transaction: Transaction,
-  ) {
-    if (transaction.type !== 'buy' || !transaction.assetId) {
-      return
-    }
+  async create(dto: CreateTransactionDto, userId: string): Promise<Transaction> {
+    // Validate account belongs to user
+    await this.ownershipService.validateAccountOwnership(dto.accountId, userId)
+    this.validateTransactionBusinessRules(dto)
 
-    const quantity = toNumber(transaction.quantity)
-    const totalCost = toNumber(transaction.amount)
-
-    if (quantity <= 0 || totalCost <= 0) {
-      throw new BadRequestException('buy transactions require positive quantity and amount')
-    }
-
-    const existingPosition = await prisma.position.findFirst({
-      where: {
-        accountId: transaction.accountId,
-        assetId: transaction.assetId,
-        closedAt: null,
-      },
-      orderBy: { openedAt: 'desc' },
-    })
-
-    if (!existingPosition) {
-      await prisma.position.create({
-        data: {
-          accountId: transaction.accountId,
-          assetId: transaction.assetId,
-          quantity,
-          avgCost: totalCost / quantity,
-          openedAt: transaction.tradeTime,
-        },
-      })
-      return
-    }
-
-    const currentQuantity = toNumber(existingPosition.quantity)
-    const currentAvgCost = toNumber(existingPosition.avgCost)
-    const nextQuantity = currentQuantity + quantity
-
-    if (nextQuantity <= 0) {
-      throw new BadRequestException('resulting position quantity must stay positive')
-    }
-
-    const nextAvgCost =
-      (currentQuantity * currentAvgCost + totalCost) / nextQuantity
-
-    await prisma.position.update({
-      where: { id: existingPosition.id },
-      data: {
-        quantity: nextQuantity,
-        avgCost: nextAvgCost,
-      },
-    })
-  }
-
-  private async createBuyLotOnCreate(
-    prisma: Prisma.TransactionClient,
-    transaction: Transaction,
-  ) {
-    if (transaction.type !== 'buy' || !transaction.assetId) {
-      return
-    }
-
-    const quantity = toNumber(transaction.quantity)
-    const totalCost = toNumber(transaction.amount)
-
-    if (quantity <= 0 || totalCost <= 0) {
-      throw new BadRequestException('buy transactions require positive quantity and amount')
-    }
-
-    await prisma.positionLot.create({
-      data: {
-        accountId: transaction.accountId,
-        assetId: transaction.assetId,
-        sourceTransactionId: transaction.id,
-        originalQuantity: quantity,
-        remainingQuantity: quantity,
-        unitCost: totalCost / quantity,
-        openedAt: transaction.tradeTime,
-      },
-    })
-  }
-
-  private async buildSellLotConsumptionPlan(
-    prisma: Prisma.TransactionClient,
-    transactionLike: {
-      accountId: string
-      assetId: string
-      quantity: number
-      tradeTime: Date
-    },
-  ): Promise<SellLotConsumptionPlan> {
-    const activePosition = await prisma.position.findFirst({
-      where: {
-        accountId: transactionLike.accountId,
-        assetId: transactionLike.assetId,
-        closedAt: null,
-      },
-      orderBy: { openedAt: 'desc' },
-    })
-
-    if (!activePosition) {
-      throw new NotFoundException('Active position not found for sell transaction')
-    }
-
-    const openLots = await prisma.positionLot.findMany({
-      where: {
-        accountId: transactionLike.accountId,
-        assetId: transactionLike.assetId,
-        remainingQuantity: { gt: 0 },
-      },
-      orderBy: { openedAt: 'asc' },
-    })
-
-    let remainingToSell = transactionLike.quantity
-    let remainingQuantity = 0
-    let remainingCost = 0
-    const lotConsumptions: SellLotConsumptionPlan['lotConsumptions'] = []
-
-    for (const lot of openLots) {
-      const lotRemainingQuantity = toNumber(lot.remainingQuantity)
-      const unitCost = toNumber(lot.unitCost)
-      const consumedQuantity = Math.min(lotRemainingQuantity, remainingToSell)
-      const nextRemainingQuantity = lotRemainingQuantity - consumedQuantity
-
-      if (consumedQuantity > 0) {
-        lotConsumptions.push({
-          buyLotId: lot.id,
-          consumedQuantity,
-          unitCost,
-          nextRemainingQuantity,
-          nextClosedAt: nextRemainingQuantity <= 1e-9 ? transactionLike.tradeTime : null,
+    return this.prisma.$transaction(async (db) => {
+      const tradeTime = dto.tradeTime ? new Date(dto.tradeTime) : new Date()
+      const createSideEffectPlan =
+        await this.transactionPositionOrchestrator.prepareCreateSideEffects(db, {
+          accountId: dto.accountId,
+          assetId: dto.assetId ?? null,
+          type: dto.type,
+          quantity: dto.quantity,
+          tradeTime,
         })
-        remainingToSell -= consumedQuantity
-      }
 
-      if (nextRemainingQuantity > 1e-9) {
-        remainingQuantity += nextRemainingQuantity
-        remainingCost += nextRemainingQuantity * unitCost
-      }
-    }
-
-    if (remainingToSell > 1e-9) {
-      throw new BadRequestException('sell quantity exceeds the remaining open position lots')
-    }
-
-    return {
-      positionId: activePosition.id,
-      lotConsumptions,
-      nextPositionQuantity: remainingQuantity,
-      nextPositionAvgCost: remainingQuantity > 1e-9 ? remainingCost / remainingQuantity : 0,
-      nextPositionClosedAt: remainingQuantity > 1e-9 ? null : transactionLike.tradeTime,
-    }
-  }
-
-  private async applySellLotConsumptionPlan(
-    prisma: Prisma.TransactionClient,
-    transaction: Transaction,
-    plan: SellLotConsumptionPlan,
-  ) {
-    for (const lotConsumption of plan.lotConsumptions) {
-      await prisma.positionLot.update({
-        where: { id: lotConsumption.buyLotId },
+      const created = await db.transaction.create({
         data: {
-          remainingQuantity: lotConsumption.nextRemainingQuantity,
-          closedAt: lotConsumption.nextClosedAt,
+          accountId: dto.accountId,
+          assetId: dto.assetId,
+          type: dto.type,
+          amount: dto.amount,
+          quantity: dto.quantity,
+          price: dto.price,
+          fee: dto.fee ?? 0,
+          tax: dto.tax ?? 0,
+          brokerOrderNo: dto.brokerOrderNo,
+          tradeTime,
+          note: dto.note,
+        },
+        include: {
+          account: { select: { id: true, name: true, currency: true, userId: true } },
+          asset: { select: { id: true, symbol: true, name: true, baseCurrency: true } },
         },
       })
-    }
 
-    await prisma.sellLotMatch.createMany({
-      data: plan.lotConsumptions.map((lotConsumption) => ({
-        sellTransactionId: transaction.id,
-        buyLotId: lotConsumption.buyLotId,
-        quantity: lotConsumption.consumedQuantity,
-        unitCost: lotConsumption.unitCost,
-      })),
-    })
+      const sideEffects = await this.transactionPositionOrchestrator.applyCreateSideEffects(
+        db,
+        created,
+        createSideEffectPlan,
+      )
 
-    await prisma.position.update({
-      where: { id: plan.positionId },
-      data: {
-        quantity: plan.nextPositionQuantity,
-        avgCost: plan.nextPositionAvgCost,
-        closedAt: plan.nextPositionClosedAt,
-      },
-    })
-  }
-
-  private getTransactionScope(transaction: Pick<Transaction, 'accountId' | 'assetId' | 'type'>) {
-    if (!transaction.assetId) {
-      return null
-    }
-
-    if (transaction.type !== 'buy' && transaction.type !== 'sell') {
-      return null
-    }
-
-    return {
-      accountId: transaction.accountId,
-      assetId: transaction.assetId,
-    }
-  }
-
-  private getDistinctScopes(...scopes: Array<PositionScope | null>) {
-    const uniqueScopes = new Map<string, PositionScope>()
-
-    for (const scope of scopes) {
-      if (!scope) {
-        continue
+      if (!sideEffects.skipPrimaryGlPost) {
+        await this.postingService.postTransaction({
+          userId: created.account.userId,
+          transaction: created,
+          db,
+        })
       }
-
-      uniqueScopes.set(`${scope.accountId}:${scope.assetId}`, scope)
-    }
-
-    return [...uniqueScopes.values()]
-  }
-
-  private isScopedBuyTransaction(
-    transaction: Pick<Transaction, 'type' | 'assetId'>,
-  ) {
-    return transaction.type === 'buy' && Boolean(transaction.assetId)
-  }
-
-  private isScopedSellTransaction(
-    transaction: Pick<Transaction, 'type' | 'assetId'>,
-  ) {
-    return transaction.type === 'sell' && Boolean(transaction.assetId)
-  }
-
-  private requiresScopeRebuildOnUpdate(
-    existing: Transaction,
-    updated: Transaction,
-  ) {
-    return (
-      this.isScopedSellTransaction(existing) ||
-      this.isScopedSellTransaction(updated) ||
-      this.isScopedBuyTransaction(existing) ||
-      this.isScopedBuyTransaction(updated)
-    )
-  }
-
-  private async hasActiveScopedTransactionsOnOrAfter(
-    prisma: Prisma.TransactionClient,
-    scope: PositionScope,
-    tradeTime: Date,
-    excludeTransactionId?: string,
-  ) {
-    const transaction = await prisma.transaction.findFirst({
-      where: {
-        accountId: scope.accountId,
-        assetId: scope.assetId,
-        type: { in: ['buy', 'sell'] },
-        isDeleted: false,
-        tradeTime: { gte: tradeTime },
-        ...(excludeTransactionId
-          ? {
-              id: { not: excludeTransactionId },
-            }
-          : {}),
-      },
-      select: { id: true },
-    })
-
-    return Boolean(transaction)
-  }
-
-  private async hasActiveSellTransactionsOnOrAfter(
-    prisma: Prisma.TransactionClient,
-    scope: PositionScope,
-    tradeTime: Date,
-    excludeTransactionId?: string,
-  ) {
-    const transaction = await prisma.transaction.findFirst({
-      where: {
-        accountId: scope.accountId,
-        assetId: scope.assetId,
-        type: 'sell',
-        isDeleted: false,
-        tradeTime: { gte: tradeTime },
-        ...(excludeTransactionId
-          ? {
-              id: { not: excludeTransactionId },
-            }
-          : {}),
-      },
-      select: { id: true },
-    })
-
-    return Boolean(transaction)
-  }
-
-  private async rebuildPositionScope(
-    prisma: Prisma.TransactionClient,
-    scope: PositionScope,
-  ): Promise<RebuildTransaction[]> {
-    const scopedTransactions = await prisma.transaction.findMany({
-      where: {
-        accountId: scope.accountId,
-        assetId: scope.assetId,
-        type: { in: ['buy', 'sell'] },
-      },
-      orderBy: [{ tradeTime: 'asc' }, { id: 'asc' }],
-      include: {
-        account: { select: { id: true, name: true, currency: true, userId: true } },
-        asset: { select: { id: true, symbol: true, name: true, baseCurrency: true } },
-      },
-    }) as RebuildTransaction[]
-
-    const sellTransactionIds = await this.positionReplayService.rebuildScope(prisma, scope)
-    const sellTransactionIdSet = new Set(sellTransactionIds)
-
-    return scopedTransactions.filter((transaction) =>
-      sellTransactionIdSet.has(transaction.id),
-    )
-  }
-
-  private async rebuildAndRepostSellScopes(
-    prisma: Prisma.TransactionClient,
-    scopes: PositionScope[],
-  ) {
-    const sellTransactionsToRepost: RebuildTransaction[] = []
-
-    for (const scope of scopes) {
-      const rebuiltSellTransactions = await this.rebuildPositionScope(prisma, scope)
-      sellTransactionsToRepost.push(...rebuiltSellTransactions)
-    }
-
-    for (const sellTransaction of sellTransactionsToRepost) {
-      await this.postingService.postTransaction({
-        userId: sellTransaction.account.userId,
-        transaction: sellTransaction,
-        db: prisma,
-      })
-    }
-  }
-
-  private async rollbackBuyPositionEffect(
-    prisma: Prisma.TransactionClient,
-    transaction: Transaction,
-  ) {
-    if (transaction.type !== 'buy' || !transaction.assetId) {
-      return
-    }
-
-    const quantity = toNumber(transaction.quantity)
-    const totalCost = toNumber(transaction.amount)
-
-    if (quantity <= 0 || totalCost <= 0) {
-      throw new BadRequestException('buy transactions require positive quantity and amount')
-    }
-
-    const existingPosition = await prisma.position.findFirst({
-      where: {
-        accountId: transaction.accountId,
-        assetId: transaction.assetId,
-        closedAt: null,
-      },
-      orderBy: { openedAt: 'desc' },
-    })
-
-    if (!existingPosition) {
-      throw new NotFoundException('Active position not found for buy transaction rollback')
-    }
-
-    const currentQuantity = toNumber(existingPosition.quantity)
-    const currentAvgCost = toNumber(existingPosition.avgCost)
-    const nextQuantity = currentQuantity - quantity
-    const nextTotalCost = currentQuantity * currentAvgCost - totalCost
-
-    if (nextQuantity < -1e-9 || nextTotalCost < -1e-9) {
-      throw new BadRequestException('position rollback would result in negative holdings')
-    }
-
-    if (nextQuantity <= 1e-9) {
-      await prisma.position.update({
-        where: { id: existingPosition.id },
-        data: {
-          quantity: 0,
-          avgCost: 0,
-          closedAt: transaction.tradeTime,
-        },
-      })
-      return
-    }
-
-    await prisma.position.update({
-      where: { id: existingPosition.id },
-      data: {
-        quantity: nextQuantity,
-        avgCost: nextTotalCost / nextQuantity,
-        closedAt: null,
-      },
+      return created
     })
   }
-
-  private async syncPositionOnUpdate(
-    prisma: Prisma.TransactionClient,
-    previousTransaction: Transaction,
-    nextTransaction: Transaction,
-  ) {
-    const isPreviousBuy =
-      previousTransaction.type === 'buy' && Boolean(previousTransaction.assetId)
-    const isNextBuy = nextTransaction.type === 'buy' && Boolean(nextTransaction.assetId)
-
-    if (!isPreviousBuy && !isNextBuy) {
-      return
-    }
-
-    const samePositionTarget =
-      isPreviousBuy &&
-      isNextBuy &&
-      previousTransaction.accountId === nextTransaction.accountId &&
-      previousTransaction.assetId === nextTransaction.assetId
-
-    if (samePositionTarget) {
-      const existingPosition = await prisma.position.findFirst({
-        where: {
-          accountId: nextTransaction.accountId,
-          assetId: nextTransaction.assetId!,
-          closedAt: null,
-        },
-        orderBy: { openedAt: 'desc' },
-      })
-
-      if (!existingPosition) {
-        throw new NotFoundException('Active position not found for buy transaction update')
-      }
-
-      const currentQuantity = toNumber(existingPosition.quantity)
-      const currentAvgCost = toNumber(existingPosition.avgCost)
-      const previousQuantity = toNumber(previousTransaction.quantity)
-      const previousCost = toNumber(previousTransaction.amount)
-      const nextQuantityDelta = toNumber(nextTransaction.quantity)
-      const nextCost = toNumber(nextTransaction.amount)
-      const recalculatedQuantity = currentQuantity - previousQuantity + nextQuantityDelta
-      const recalculatedCost = currentQuantity * currentAvgCost - previousCost + nextCost
-
-      if (recalculatedQuantity <= 0 || recalculatedCost < 0) {
-        throw new BadRequestException('updated buy transaction would invalidate the active position')
-      }
-
-      await prisma.position.update({
-        where: { id: existingPosition.id },
-        data: {
-          quantity: recalculatedQuantity,
-          avgCost: recalculatedCost / recalculatedQuantity,
-          closedAt: null,
-        },
-      })
-      return
-    }
-
-    await this.rollbackBuyPositionEffect(prisma, previousTransaction)
-    await this.syncPositionOnCreate(prisma, nextTransaction)
-  }
-
   async findAll(q: FindTransactionsDto, user: UserContext) {
     const { userId, isAdmin } = await this.ownershipService.resolveUser(user)
 
@@ -988,80 +546,6 @@ export class TransactionsService {
       take: q.take ?? 50,
       items,
     }
-  }
-
-  async create(dto: CreateTransactionDto, userId: string): Promise<Transaction> {
-    // Validate account belongs to user
-    await this.ownershipService.validateAccountOwnership(dto.accountId, userId)
-    this.validateTransactionBusinessRules(dto)
-
-    return this.prisma.$transaction(async (db) => {
-      const tradeTime = dto.tradeTime ? new Date(dto.tradeTime) : new Date()
-      const scope = this.getTransactionScope({
-        accountId: dto.accountId,
-        assetId: dto.assetId ?? null,
-        type: dto.type,
-      })
-      const requiresScopeRebuild =
-        scope && dto.type === 'sell'
-          ? await this.hasActiveScopedTransactionsOnOrAfter(db, scope, tradeTime)
-          : scope && dto.type === 'buy'
-            ? await this.hasActiveSellTransactionsOnOrAfter(db, scope, tradeTime)
-            : false
-      const sellPlan =
-        !requiresScopeRebuild && dto.type === 'sell' && dto.assetId
-          ? await this.buildSellLotConsumptionPlan(db, {
-              accountId: dto.accountId,
-              assetId: dto.assetId,
-              quantity: Number(dto.quantity),
-              tradeTime,
-            })
-          : null
-
-      const created = await db.transaction.create({
-        data: {
-          accountId: dto.accountId,
-          assetId: dto.assetId,
-          type: dto.type,
-          amount: dto.amount,
-          quantity: dto.quantity,
-          price: dto.price,
-          fee: dto.fee ?? 0,
-          tax: dto.tax ?? 0,
-          brokerOrderNo: dto.brokerOrderNo,
-          tradeTime,
-          note: dto.note,
-        },
-        include: {
-          account: { select: { id: true, name: true, currency: true, userId: true } },
-          asset: { select: { id: true, symbol: true, name: true, baseCurrency: true } },
-        },
-      })
-
-      if (created.type === 'buy') {
-        if (requiresScopeRebuild && scope) {
-          await this.rebuildAndRepostSellScopes(db, [scope])
-        } else {
-          await this.syncPositionOnCreate(db, created)
-          await this.createBuyLotOnCreate(db, created)
-        }
-      }
-
-      if (created.type === 'sell' && sellPlan) {
-        await this.applySellLotConsumptionPlan(db, created, sellPlan)
-      } else if (created.type === 'sell' && requiresScopeRebuild && scope) {
-        await this.rebuildAndRepostSellScopes(db, [scope])
-      }
-
-      if (!(created.type === 'sell' && requiresScopeRebuild)) {
-        await this.postingService.postTransaction({
-          userId: created.account.userId,
-          transaction: created,
-          db,
-        })
-      }
-      return created
-    })
   }
 
   async findOne(id: string, userId: string) {
@@ -1145,21 +629,13 @@ export class TransactionsService {
         },
       })
 
-      const existingScope = this.getTransactionScope(existing)
-      const nextScope = this.getTransactionScope(transaction)
-      const requiresScopeRebuild = this.requiresScopeRebuildOnUpdate(
+      const sideEffects = await this.transactionPositionOrchestrator.applyUpdateSideEffects(
+        db,
         existing,
         transaction,
       )
 
-      if (requiresScopeRebuild) {
-        const scopes = this.getDistinctScopes(existingScope, nextScope)
-        await this.rebuildAndRepostSellScopes(db, scopes)
-      } else {
-        await this.syncPositionOnUpdate(db, existing, transaction)
-      }
-
-      if (!(transaction.type === 'sell' && requiresScopeRebuild)) {
+      if (!sideEffects.skipPrimaryGlPost) {
         await this.postingService.postTransaction({
           userId: transaction.account.userId,
           transaction,
@@ -1196,7 +672,7 @@ export class TransactionsService {
         })
 
         await this.postingService.archiveTransactionEntries(transaction.account.userId, id, db)
-        await this.rebuildAndRepostSellScopes(db, this.getDistinctScopes(this.getTransactionScope(transaction)))
+        await this.transactionPositionOrchestrator.applyRemoveSideEffects(db, transaction)
         return transaction
       }
 
@@ -1212,11 +688,7 @@ export class TransactionsService {
       })
 
       await this.postingService.archiveTransactionEntries(transaction.account.userId, id, db)
-      const transactionScope = this.getTransactionScope(transaction)
-
-      if (this.isScopedBuyTransaction(transaction) && transactionScope) {
-        await this.rebuildAndRepostSellScopes(db, [transactionScope])
-      }
+      await this.transactionPositionOrchestrator.applyRemoveSideEffects(db, transaction)
 
       return transaction
     })
@@ -1239,16 +711,15 @@ export class TransactionsService {
       if (existing.type === 'sell' && existing.assetId) {
         await this.postingService.archiveTransactionEntries(existing.account.userId, id, db)
         const deleted = await db.transaction.delete({ where: { id } })
-        await this.rebuildAndRepostSellScopes(db, this.getDistinctScopes(this.getTransactionScope(existing)))
+        await this.transactionPositionOrchestrator.applyHardDeleteSideEffects(db, existing)
         return deleted
       }
 
       await this.postingService.archiveTransactionEntries(existing.account.userId, id, db)
-      const transactionScope = this.getTransactionScope(existing)
 
-      if (this.isScopedBuyTransaction(existing) && transactionScope) {
+      if (existing.type === 'buy' && existing.assetId) {
         const deleted = await db.transaction.delete({ where: { id } })
-        await this.rebuildAndRepostSellScopes(db, [transactionScope])
+        await this.transactionPositionOrchestrator.applyHardDeleteSideEffects(db, existing)
         return deleted
       }
 

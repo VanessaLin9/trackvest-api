@@ -1,5 +1,6 @@
 import { Prisma, type Transaction } from '@prisma/client'
 import { TransactionsService } from './transactions.service'
+import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
 import { AccountType, Currency } from '@prisma/client'
 import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
 import { BadRequestException } from '@nestjs/common'
@@ -99,11 +100,16 @@ describe('TransactionsService', () => {
       rebuildScope: jest.fn().mockResolvedValue([]),
     }
 
+    const transactionPositionOrchestrator = new TransactionPositionOrchestratorService(
+      positionReplayService as never,
+      postingService as never,
+    )
+
     const service = new TransactionsService(
       prisma as never,
       postingService as never,
       ownershipService as never,
-      positionReplayService as never,
+      transactionPositionOrchestrator as never,
     )
 
     txClient.transaction.findFirst.mockResolvedValue(null)
@@ -119,6 +125,7 @@ describe('TransactionsService', () => {
       postingService,
       ownershipService,
       positionReplayService,
+      transactionPositionOrchestrator,
     }
   }
 
@@ -2305,6 +2312,93 @@ describe('TransactionsService', () => {
           message: 'Amount must be a positive number',
         },
       ],
+    })
+  })
+
+  /*
+   * P2 side-effect characterization inventory (create/update/remove/hardDelete):
+   * - create buy: position create/update covered; incremental PositionLot create covered below.
+   * - create sell: FIFO plan, rebuild, reject paths covered above.
+   * - update/remove/hardDelete: buy/sell rebuild, deposit noop, P1 regression covered above.
+   * - import: goes through create(); out of P2 extraction scope.
+   */
+  describe('incremental buy create side effects (P2 characterization)', () => {
+    it('creates a matching PositionLot when opening the first buy in a scope', async () => {
+      const { service, txClient } = createHarness()
+      const createdTransaction = buildCreatedTransaction()
+
+      txClient.transaction.create.mockResolvedValue(createdTransaction)
+      txClient.position.findFirst.mockResolvedValue(null)
+
+      await service.create(
+        {
+          accountId,
+          assetId,
+          type: 'buy',
+          amount: 1015,
+          quantity: 10,
+          price: 100,
+          fee: 15,
+          tradeTime,
+        },
+        userId,
+      )
+
+      expect(txClient.positionLot.create).toHaveBeenCalledWith({
+        data: {
+          accountId,
+          assetId,
+          sourceTransactionId: createdTransaction.id,
+          originalQuantity: 10,
+          remainingQuantity: 10,
+          unitCost: 101.5,
+          openedAt: new Date(tradeTime),
+        },
+      })
+    })
+
+    it('creates a new PositionLot when incrementally adding another buy to an open position', async () => {
+      const { service, txClient } = createHarness()
+      const createdTransaction = buildCreatedTransaction({
+        id: 'tx-2',
+        amount: 330,
+        quantity: 6,
+        price: 54,
+        fee: 6,
+      })
+
+      txClient.transaction.create.mockResolvedValue(createdTransaction)
+      txClient.position.findFirst.mockResolvedValue({
+        id: 'position-1',
+        quantity: 20,
+        avgCost: 50,
+      })
+
+      await service.create(
+        {
+          accountId,
+          assetId,
+          type: 'buy',
+          amount: 330,
+          quantity: 6,
+          price: 54,
+          fee: 6,
+          tradeTime,
+        },
+        userId,
+      )
+
+      expect(txClient.positionLot.create).toHaveBeenCalledWith({
+        data: {
+          accountId,
+          assetId,
+          sourceTransactionId: createdTransaction.id,
+          originalQuantity: 6,
+          remainingQuantity: 6,
+          unitCost: 55,
+          openedAt: new Date(tradeTime),
+        },
+      })
     })
   })
 
