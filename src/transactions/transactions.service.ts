@@ -700,6 +700,30 @@ export class TransactionsService {
     return [...uniqueScopes.values()]
   }
 
+  private isScopedBuyTransaction(
+    transaction: Pick<Transaction, 'type' | 'assetId'>,
+  ) {
+    return transaction.type === 'buy' && Boolean(transaction.assetId)
+  }
+
+  private isScopedSellTransaction(
+    transaction: Pick<Transaction, 'type' | 'assetId'>,
+  ) {
+    return transaction.type === 'sell' && Boolean(transaction.assetId)
+  }
+
+  private requiresScopeRebuildOnUpdate(
+    existing: Transaction,
+    updated: Transaction,
+  ) {
+    return (
+      this.isScopedSellTransaction(existing) ||
+      this.isScopedSellTransaction(updated) ||
+      this.isScopedBuyTransaction(existing) ||
+      this.isScopedBuyTransaction(updated)
+    )
+  }
+
   private async hasActiveScopedTransactionsOnOrAfter(
     prisma: Prisma.TransactionClient,
     scope: PositionScope,
@@ -1123,25 +1147,10 @@ export class TransactionsService {
 
       const existingScope = this.getTransactionScope(existing)
       const nextScope = this.getTransactionScope(transaction)
-      const requiresScopeRebuild =
-        (existing.type === 'sell' && Boolean(existingScope)) ||
-        (transaction.type === 'sell' && Boolean(nextScope)) ||
-        (existing.type === 'buy' &&
-          Boolean(existingScope) &&
-          await this.hasActiveSellTransactionsOnOrAfter(
-            db,
-            existingScope!,
-            existing.tradeTime,
-            existing.id,
-          )) ||
-        (transaction.type === 'buy' &&
-          Boolean(nextScope) &&
-          await this.hasActiveSellTransactionsOnOrAfter(
-            db,
-            nextScope!,
-            transaction.tradeTime,
-            transaction.id,
-          ))
+      const requiresScopeRebuild = this.requiresScopeRebuildOnUpdate(
+        existing,
+        transaction,
+      )
 
       if (requiresScopeRebuild) {
         const scopes = this.getDistinctScopes(existingScope, nextScope)
@@ -1204,21 +1213,11 @@ export class TransactionsService {
 
       await this.postingService.archiveTransactionEntries(transaction.account.userId, id, db)
       const transactionScope = this.getTransactionScope(transaction)
-      const requiresScopeRebuild =
-        transaction.type === 'buy' &&
-        Boolean(transactionScope) &&
-        await this.hasActiveSellTransactionsOnOrAfter(
-          db,
-          transactionScope!,
-          transaction.tradeTime,
-          transaction.id,
-        )
 
-      if (requiresScopeRebuild && transactionScope) {
+      if (this.isScopedBuyTransaction(transaction) && transactionScope) {
         await this.rebuildAndRepostSellScopes(db, [transactionScope])
-      } else {
-        await this.rollbackBuyPositionEffect(db, transaction)
       }
+
       return transaction
     })
   }
@@ -1246,23 +1245,13 @@ export class TransactionsService {
 
       await this.postingService.archiveTransactionEntries(existing.account.userId, id, db)
       const transactionScope = this.getTransactionScope(existing)
-      const requiresScopeRebuild =
-        existing.type === 'buy' &&
-        Boolean(transactionScope) &&
-        await this.hasActiveSellTransactionsOnOrAfter(
-          db,
-          transactionScope!,
-          existing.tradeTime,
-          existing.id,
-        )
 
-      if (requiresScopeRebuild && transactionScope) {
+      if (this.isScopedBuyTransaction(existing) && transactionScope) {
         const deleted = await db.transaction.delete({ where: { id } })
         await this.rebuildAndRepostSellScopes(db, [transactionScope])
         return deleted
       }
 
-      await this.rollbackBuyPositionEffect(db, existing)
       return db.transaction.delete({ where: { id } })
     })
   }
