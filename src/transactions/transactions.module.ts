@@ -3,12 +3,17 @@ import { CorporateActionsModule } from '../corporate-actions/corporate-actions.m
 import { GlModule } from '../gl/gl.module'
 import { TransactionsController } from './transactions.controller'
 import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
+import { TransactionRebuildPolicyService } from './transaction-rebuild-policy.service'
 import { TransactionsService } from './transactions.service'
 
 @Module({
   imports: [GlModule, CorporateActionsModule],
   controllers: [TransactionsController],
-  providers: [TransactionsService, TransactionPositionOrchestratorService],
+  providers: [
+    TransactionsService,
+    TransactionRebuildPolicyService,
+    TransactionPositionOrchestratorService,
+  ],
   exports: [TransactionsService],
 })
 export class TransactionsModule {}
