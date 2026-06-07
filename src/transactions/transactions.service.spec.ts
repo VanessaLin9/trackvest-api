@@ -747,7 +747,7 @@ describe('TransactionsService', () => {
   })
 
   it('recalculates position and reposts GL when a buy transaction is updated', async () => {
-    const { service, prisma, txClient, postingService, ownershipService } =
+    const { service, prisma, txClient, postingService, ownershipService, positionReplayService } =
       createHarness()
     const existingTransaction = buildCreatedTransaction()
     const updatedTransaction = buildCreatedTransaction({
@@ -759,11 +759,7 @@ describe('TransactionsService', () => {
 
     prisma.transaction.findUnique.mockResolvedValue(existingTransaction)
     txClient.transaction.update.mockResolvedValue(updatedTransaction)
-    txClient.position.findFirst.mockResolvedValue({
-      id: 'position-1',
-      quantity: 10,
-      avgCost: 101.5,
-    })
+    txClient.transaction.findMany.mockResolvedValue([updatedTransaction])
     postingService.postTransaction.mockResolvedValue({ id: 'entry-2' })
 
     await service.update(
@@ -782,23 +778,20 @@ describe('TransactionsService', () => {
       'tx-1',
       userId,
     )
+    expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+      accountId,
+      assetId,
+    })
+    expect(txClient.position.update).not.toHaveBeenCalled()
     expect(postingService.postTransaction).toHaveBeenCalledWith({
       userId,
       transaction: updatedTransaction,
       db: txClient,
     })
-    expect(txClient.position.update).toHaveBeenCalledWith({
-      where: { id: 'position-1' },
-      data: {
-        quantity: 6,
-        avgCost: 55,
-        closedAt: null,
-      },
-    })
   })
 
   it('archives GL and closes the position when removing the last buy transaction', async () => {
-    const { service, txClient, postingService, ownershipService } =
+    const { service, txClient, postingService, ownershipService, positionReplayService } =
       createHarness()
     const removedTransaction = buildCreatedTransaction({
       isDeleted: true,
@@ -806,11 +799,7 @@ describe('TransactionsService', () => {
     })
 
     txClient.transaction.update.mockResolvedValue(removedTransaction)
-    txClient.position.findFirst.mockResolvedValue({
-      id: 'position-1',
-      quantity: 10,
-      avgCost: 101.5,
-    })
+    txClient.transaction.findMany.mockResolvedValue([])
 
     await service.remove('tx-1', userId)
 
@@ -823,28 +812,21 @@ describe('TransactionsService', () => {
       'tx-1',
       txClient,
     )
-    expect(txClient.position.update).toHaveBeenCalledWith({
-      where: { id: 'position-1' },
-      data: {
-        quantity: 0,
-        avgCost: 0,
-        closedAt: removedTransaction.tradeTime,
-      },
+    expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+      accountId,
+      assetId,
     })
+    expect(txClient.position.update).not.toHaveBeenCalled()
   })
 
   it('archives GL and closes the position when hard deleting the last buy transaction', async () => {
-    const { service, txClient, postingService, ownershipService } =
+    const { service, txClient, postingService, ownershipService, positionReplayService } =
       createHarness()
     const existingTransaction = buildCreatedTransaction()
 
     txClient.transaction.findUnique.mockResolvedValue(existingTransaction)
     txClient.transaction.delete.mockResolvedValue(existingTransaction)
-    txClient.position.findFirst.mockResolvedValue({
-      id: 'position-1',
-      quantity: 10,
-      avgCost: 101.5,
-    })
+    txClient.transaction.findMany.mockResolvedValue([])
 
     await service.hardDelete('tx-1', userId)
 
@@ -857,18 +839,15 @@ describe('TransactionsService', () => {
       'tx-1',
       txClient,
     )
-    expect(txClient.position.update).toHaveBeenCalledWith({
-      where: { id: 'position-1' },
-      data: {
-        quantity: 0,
-        avgCost: 0,
-        closedAt: existingTransaction.tradeTime,
-      },
+    expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+      accountId,
+      assetId,
     })
+    expect(txClient.position.update).not.toHaveBeenCalled()
   })
 
   it('reduces quantity and keeps the position open when removing a non-final buy transaction', async () => {
-    const { service, txClient, postingService } = createHarness()
+    const { service, txClient, postingService, positionReplayService } = createHarness()
     const removedTransaction = buildCreatedTransaction({
       amount: 330,
       quantity: 6,
@@ -877,13 +856,18 @@ describe('TransactionsService', () => {
       isDeleted: true,
       deletedAt: new Date('2026-03-25T10:00:00.000Z'),
     })
+    const remainingBuy = buildCreatedTransaction({
+      id: 'buy-2',
+      amount: 1000,
+      quantity: 20,
+      price: 50,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-26T09:30:00.000Z'),
+    })
 
     txClient.transaction.update.mockResolvedValue(removedTransaction)
-    txClient.position.findFirst.mockResolvedValue({
-      id: 'position-1',
-      quantity: 26,
-      avgCost: 51.1538461538,
-    })
+    txClient.transaction.findMany.mockResolvedValue([remainingBuy])
 
     await service.remove('tx-1', userId)
 
@@ -892,29 +876,34 @@ describe('TransactionsService', () => {
       'tx-1',
       txClient,
     )
-    const updateCall = txClient.position.update.mock.calls[0][0]
-    expect(updateCall.where).toEqual({ id: 'position-1' })
-    expect(updateCall.data.quantity).toBe(20)
-    expect(updateCall.data.avgCost).toBeCloseTo(50, 8)
-    expect(updateCall.data.closedAt).toBeNull()
+    expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+      accountId,
+      assetId,
+    })
+    expect(txClient.position.update).not.toHaveBeenCalled()
   })
 
   it('reduces quantity and keeps the position open when hard deleting a non-final buy transaction', async () => {
-    const { service, txClient, postingService } = createHarness()
+    const { service, txClient, postingService, positionReplayService } = createHarness()
     const existingTransaction = buildCreatedTransaction({
       amount: 330,
       quantity: 6,
       price: 54,
       fee: 6,
     })
+    const remainingBuy = buildCreatedTransaction({
+      id: 'buy-2',
+      amount: 1000,
+      quantity: 20,
+      price: 50,
+      fee: 0,
+      tax: 0,
+      tradeTime: new Date('2026-03-26T09:30:00.000Z'),
+    })
 
     txClient.transaction.findUnique.mockResolvedValue(existingTransaction)
     txClient.transaction.delete.mockResolvedValue(existingTransaction)
-    txClient.position.findFirst.mockResolvedValue({
-      id: 'position-1',
-      quantity: 26,
-      avgCost: 51.1538461538,
-    })
+    txClient.transaction.findMany.mockResolvedValue([remainingBuy])
 
     await service.hardDelete('tx-1', userId)
 
@@ -923,15 +912,16 @@ describe('TransactionsService', () => {
       'tx-1',
       txClient,
     )
-    const updateCall = txClient.position.update.mock.calls[0][0]
-    expect(updateCall.where).toEqual({ id: 'position-1' })
-    expect(updateCall.data.quantity).toBe(20)
-    expect(updateCall.data.avgCost).toBeCloseTo(50, 8)
-    expect(updateCall.data.closedAt).toBeNull()
+    expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+      accountId,
+      assetId,
+    })
+    expect(txClient.position.update).not.toHaveBeenCalled()
   })
 
   it('moves holdings when a buy transaction is updated to a different account and asset', async () => {
-    const { service, prisma, txClient, postingService } = createHarness()
+    const { service, prisma, txClient, postingService, positionReplayService } =
+      createHarness()
     const existingTransaction = buildCreatedTransaction()
     const movedTransaction = buildCreatedTransaction({
       accountId: anotherAccountId,
@@ -947,13 +937,7 @@ describe('TransactionsService', () => {
 
     prisma.transaction.findUnique.mockResolvedValue(existingTransaction)
     txClient.transaction.update.mockResolvedValue(movedTransaction)
-    txClient.position.findFirst
-      .mockResolvedValueOnce({
-        id: 'old-position',
-        quantity: 10,
-        avgCost: 101.5,
-      })
-      .mockResolvedValueOnce(null)
+    txClient.transaction.findMany.mockResolvedValue([movedTransaction])
     postingService.postTransaction.mockResolvedValue({ id: 'entry-3' })
 
     await service.update(
@@ -970,22 +954,20 @@ describe('TransactionsService', () => {
       userId,
     )
 
-    expect(txClient.position.update).toHaveBeenCalledWith({
-      where: { id: 'old-position' },
-      data: {
-        quantity: 0,
-        avgCost: 0,
-        closedAt: existingTransaction.tradeTime,
-      },
+    expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+      accountId,
+      assetId,
     })
-    expect(txClient.position.create).toHaveBeenCalledWith({
-      data: {
-        accountId: anotherAccountId,
-        assetId: anotherAssetId,
-        quantity: 6,
-        avgCost: 55,
-        openedAt: movedTransaction.tradeTime,
-      },
+    expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+      accountId: anotherAccountId,
+      assetId: anotherAssetId,
+    })
+    expect(txClient.position.update).not.toHaveBeenCalled()
+    expect(txClient.position.create).not.toHaveBeenCalled()
+    expect(postingService.postTransaction).toHaveBeenCalledWith({
+      userId,
+      transaction: movedTransaction,
+      db: txClient,
     })
   })
 
@@ -1537,8 +1519,9 @@ describe('TransactionsService', () => {
     })
   })
 
-  it('rejects a buy update when the resulting position would become invalid', async () => {
-    const { service, prisma, txClient, postingService } = createHarness()
+  it('reconciles buy updates through scope rebuild instead of incremental position guards', async () => {
+    const { service, prisma, txClient, postingService, positionReplayService } =
+      createHarness()
     const existingTransaction = buildCreatedTransaction()
     const updatedTransaction = buildCreatedTransaction({
       amount: 100,
@@ -1549,28 +1532,30 @@ describe('TransactionsService', () => {
 
     prisma.transaction.findUnique.mockResolvedValue(existingTransaction)
     txClient.transaction.update.mockResolvedValue(updatedTransaction)
-    txClient.position.findFirst.mockResolvedValue({
-      id: 'position-1',
-      quantity: 5,
-      avgCost: 50,
-    })
+    txClient.transaction.findMany.mockResolvedValue([updatedTransaction])
     postingService.postTransaction.mockResolvedValue({ id: 'entry-5' })
 
-    await expect(
-      service.update(
-        'tx-1',
-        {
-          amount: 100,
-          quantity: 1,
-          price: 100,
-          fee: 0,
-          tradeTime,
-        },
-        userId,
-      ),
-    ).rejects.toThrow('updated buy transaction would invalidate the active position')
+    await service.update(
+      'tx-1',
+      {
+        amount: 100,
+        quantity: 1,
+        price: 100,
+        fee: 0,
+        tradeTime,
+      },
+      userId,
+    )
 
-    expect(postingService.postTransaction).not.toHaveBeenCalled()
+    expect(positionReplayService.rebuildScope).toHaveBeenCalledWith(txClient, {
+      accountId,
+      assetId,
+    })
+    expect(postingService.postTransaction).toHaveBeenCalledWith({
+      userId,
+      transaction: updatedTransaction,
+      db: txClient,
+    })
   })
 
   it('imports a valid broker buy row and creates GL and position side effects', async () => {
