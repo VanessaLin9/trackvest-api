@@ -1,4 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common'
+import { PortfolioHoldingsSnapshotService } from './portfolio-holdings-snapshot.service'
 import { PortfolioService } from './portfolio.service'
 
 /**
@@ -54,13 +55,18 @@ describe('PortfolioService', () => {
       getReferenceRate: jest.fn(),
     }
 
-    const service = new PortfolioService(
+    const holdingsSnapshotService = new PortfolioHoldingsSnapshotService(
       prisma as never,
       ownershipService as never,
       fxRateService as never,
     )
+    const service = new PortfolioService(
+      prisma as never,
+      ownershipService as never,
+      holdingsSnapshotService,
+    )
 
-    return { service, prisma, ownershipService, fxRateService }
+    return { service, prisma, ownershipService, fxRateService, holdingsSnapshotService }
   }
 
   it('returns an empty summary when the user has no open holdings', async () => {
