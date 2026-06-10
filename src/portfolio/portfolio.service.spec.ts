@@ -1,6 +1,35 @@
-import { BadRequestException } from '@nestjs/common'
+import { BadRequestException, NotFoundException } from '@nestjs/common'
+import { PortfolioHoldingsSnapshotService } from './portfolio-holdings-snapshot.service'
+import { PortfolioRebalanceService } from './portfolio-rebalance.service'
 import { PortfolioService } from './portfolio.service'
+import { PortfolioTrendService } from './portfolio-trend.service'
 
+/**
+ * P7 CP0 characterization inventory for `portfolio.service.ts`.
+ *
+ * | Area | Risk | Covered by |
+ * |------|------|------------|
+ * | summary (empty) | low | returns an empty summary when the user has no open holdings |
+ * | summary (mixed FX) | high | returns mixed currency summary when holdings span multiple account currencies |
+ * | summary (missing price) | high | uses invested amount as market value when no latest price exists |
+ * | holdings aggregation | high | aggregates holdings by asset and derives allocation metrics from latest prices |
+ * | holdings (same asset, mixed account FX) | high | converts each position before aggregating the same asset across mixed account currencies |
+ * | holdings (cross-currency overview) | high | converts cross-currency holdings to a USD overview base currency |
+ * | display currency (summary/holdings) | high | uses requested display currency for normalized summary and holdings values |
+ * | display currency (trend) | high | uses requested display currency for portfolio trend points |
+ * | display currency (rebalance) | medium | passes requested display currency through rebalance response |
+ * | rebalance (default targets) | high | builds rebalance metrics from equity and bond holdings only |
+ * | rebalance (custom targets) | medium | uses custom rebalance targets provided by the client |
+ * | rebalance (invalid targets) | medium | rejects invalid rebalance targets when the provided ratios do not sum to one |
+ * | rebalance (no equity/bond) | medium | returns empty rebalance metrics when there are no equity or bond holdings |
+ * | portfolio trend (sparse replay) | high | builds sparse portfolio trend points from transactions and price history |
+ * | portfolio trend (same-day EOD price) | high | uses same-day price snapshots as end-of-day values in portfolio trend points |
+ * | portfolio trend (point-in-time FX) | high | uses point-in-time FX when building mixed-currency portfolio trend points |
+ * | portfolio trend (empty) | medium | returns empty trend points when the user has no investment transactions |
+ * | holding trend | high | builds asset trend points and throws when the asset is not held by the user |
+ * | holding trend (same-day EOD price) | high | uses same-day price snapshots as end-of-day values in holding trend points |
+ * | FX missing on valuation | high | throws when FX rate is unavailable during holdings valuation |
+ */
 describe('PortfolioService', () => {
   function createHarness() {
     const prisma = {
@@ -28,13 +57,32 @@ describe('PortfolioService', () => {
       getReferenceRate: jest.fn(),
     }
 
-    const service = new PortfolioService(
+    const holdingsSnapshotService = new PortfolioHoldingsSnapshotService(
       prisma as never,
       ownershipService as never,
       fxRateService as never,
     )
+    const rebalanceService = new PortfolioRebalanceService()
+    const trendService = new PortfolioTrendService(
+      prisma as never,
+      ownershipService as never,
+      holdingsSnapshotService,
+    )
+    const service = new PortfolioService(
+      holdingsSnapshotService,
+      rebalanceService,
+      trendService,
+    )
 
-    return { service, prisma, ownershipService, fxRateService }
+    return {
+      service,
+      prisma,
+      ownershipService,
+      fxRateService,
+      holdingsSnapshotService,
+      rebalanceService,
+      trendService,
+    }
   }
 
   it('returns an empty summary when the user has no open holdings', async () => {
@@ -57,6 +105,103 @@ describe('PortfolioService', () => {
     expect(result.totalPnl).toBe(0)
     expect(result.totalReturnRate).toBe(0)
     expect(result.holdingsCount).toBe(0)
+  })
+
+  it('returns mixed currency summary when holdings span multiple account currencies', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.position.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        quantity: 1,
+        avgCost: 100,
+        openedAt: new Date('2026-03-01T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-1',
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          type: 'equity',
+          assetClass: 'equity',
+          baseCurrency: 'USD',
+        },
+      },
+      {
+        assetId: 'asset-2',
+        quantity: 1,
+        avgCost: 3000,
+        openedAt: new Date('2026-03-02T00:00:00.000Z'),
+        account: { currency: 'TWD' },
+        asset: {
+          id: 'asset-2',
+          symbol: '0050',
+          name: 'Taiwan 50',
+          type: 'etf',
+          assetClass: 'equity',
+          baseCurrency: 'TWD',
+        },
+      },
+    ])
+    prisma.price.findMany.mockResolvedValue([])
+    prisma.transaction.findMany.mockResolvedValue([])
+    fxRateService.getReferenceRate.mockResolvedValue({
+      base: 'TWD',
+      quote: 'USD',
+      rate: 0.03125,
+      date: '2026-04-05',
+      provider: 'frankfurter',
+    })
+
+    const result = await service.getSummary('user-1')
+
+    expect(result.displayCurrencyMode).toBe('portfolio-default')
+    expect(result.requestedDisplayCurrency).toBeNull()
+    expect(result.effectiveDisplayCurrency).toBe('USD')
+    expect(result.baseCurrency).toBe('USD')
+    expect(result.investedCapital).toBe(193.75)
+    expect(result.marketValue).toBe(193.75)
+    expect(result.totalPnl).toBe(0)
+    expect(result.totalReturnRate).toBe(0)
+    expect(result.holdingsCount).toBe(2)
+  })
+
+  it('uses invested amount as market value when no latest price exists', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.position.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        quantity: 4,
+        avgCost: 50,
+        openedAt: new Date('2026-03-01T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-1',
+          symbol: 'TSLA',
+          name: 'Tesla Inc.',
+          type: 'equity',
+          assetClass: 'equity',
+          baseCurrency: 'USD',
+        },
+      },
+    ])
+    prisma.price.findMany.mockResolvedValue([])
+    prisma.transaction.findMany.mockResolvedValue([])
+    fxRateService.getReferenceRate.mockResolvedValue({
+      base: 'USD',
+      quote: 'USD',
+      rate: 1,
+      date: '2026-04-05',
+      provider: 'identity',
+    })
+
+    const result = await service.getSummary('user-1')
+
+    expect(result.investedCapital).toBe(200)
+    expect(result.marketValue).toBe(200)
+    expect(result.totalPnl).toBe(0)
+    expect(result.totalReturnRate).toBe(0)
+    expect(result.holdingsCount).toBe(1)
   })
 
   it('aggregates holdings by asset and derives allocation metrics from latest prices', async () => {
@@ -228,64 +373,6 @@ describe('PortfolioService', () => {
         weight: 1,
       },
     ])
-  })
-
-  it('returns mixed currency summary when holdings span multiple account currencies', async () => {
-    const { service, prisma, ownershipService, fxRateService } = createHarness()
-    ownershipService.validateUserExists.mockResolvedValue(undefined)
-    prisma.position.findMany.mockResolvedValue([
-      {
-        assetId: 'asset-1',
-        quantity: 1,
-        avgCost: 100,
-        openedAt: new Date('2026-03-01T00:00:00.000Z'),
-        account: { currency: 'USD' },
-        asset: {
-          id: 'asset-1',
-          symbol: 'AAPL',
-          name: 'Apple Inc.',
-          type: 'equity',
-          assetClass: 'equity',
-          baseCurrency: 'USD',
-        },
-      },
-      {
-        assetId: 'asset-2',
-        quantity: 1,
-        avgCost: 3000,
-        openedAt: new Date('2026-03-02T00:00:00.000Z'),
-        account: { currency: 'TWD' },
-        asset: {
-          id: 'asset-2',
-          symbol: '0050',
-          name: 'Taiwan 50',
-          type: 'etf',
-          assetClass: 'equity',
-          baseCurrency: 'TWD',
-        },
-      },
-    ])
-    prisma.price.findMany.mockResolvedValue([])
-    prisma.transaction.findMany.mockResolvedValue([])
-    fxRateService.getReferenceRate.mockResolvedValue({
-      base: 'TWD',
-      quote: 'USD',
-      rate: 0.03125,
-      date: '2026-04-05',
-      provider: 'frankfurter',
-    })
-
-    const result = await service.getSummary('user-1')
-
-    expect(result.displayCurrencyMode).toBe('portfolio-default')
-    expect(result.requestedDisplayCurrency).toBeNull()
-    expect(result.effectiveDisplayCurrency).toBe('USD')
-    expect(result.baseCurrency).toBe('USD')
-    expect(result.investedCapital).toBe(193.75)
-    expect(result.marketValue).toBe(193.75)
-    expect(result.totalPnl).toBe(0)
-    expect(result.totalReturnRate).toBe(0)
-    expect(result.holdingsCount).toBe(2)
   })
 
   it('builds rebalance metrics from equity and bond holdings only', async () => {
@@ -1330,5 +1417,132 @@ describe('PortfolioService', () => {
         },
       ],
     })
+  })
+
+  it('returns empty trend points when the user has no investment transactions', async () => {
+    const { service, prisma, ownershipService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.transaction.findMany.mockResolvedValue([])
+
+    const result = await service.getTrend('user-1')
+
+    expect(result).toEqual({
+      displayCurrencyMode: 'portfolio-default',
+      requestedDisplayCurrency: null,
+      effectiveDisplayCurrency: null,
+      points: [],
+    })
+  })
+
+  it('passes requested display currency through rebalance response', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.position.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        quantity: 1,
+        avgCost: 800,
+        openedAt: new Date('2026-03-01T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-1',
+          symbol: 'VTI',
+          name: 'Vanguard Total Stock ETF',
+          type: 'etf',
+          assetClass: 'equity',
+          baseCurrency: 'USD',
+        },
+      },
+      {
+        assetId: 'asset-2',
+        quantity: 1,
+        avgCost: 200,
+        openedAt: new Date('2026-03-02T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-2',
+          symbol: 'BND',
+          name: 'Vanguard Total Bond ETF',
+          type: 'etf',
+          assetClass: 'bond',
+          baseCurrency: 'USD',
+        },
+      },
+    ])
+    prisma.price.findMany.mockResolvedValue([])
+    prisma.transaction.findMany.mockResolvedValue([])
+    fxRateService.getReferenceRate.mockImplementation(async ({ base, quote }: { base: string; quote: string }) => {
+      if (base === 'USD' && quote === 'TWD') {
+        return {
+          base,
+          quote,
+          rate: 32,
+          date: '2026-04-05',
+          provider: 'frankfurter',
+        }
+      }
+
+      return {
+        base,
+        quote,
+        rate: 1,
+        date: '2026-04-05',
+        provider: 'identity',
+      }
+    })
+
+    const result = await service.getRebalance('user-1', { preferredBaseCurrency: 'TWD' })
+
+    expect(result.displayCurrencyMode).toBe('preferred-base')
+    expect(result.requestedDisplayCurrency).toBe('TWD')
+    expect(result.effectiveDisplayCurrency).toBe('TWD')
+    expect(result.baseCurrency).toBe('TWD')
+    expect(result.trackedMarketValue).toBe(32000)
+  })
+
+  it('throws when FX rate is unavailable during holdings valuation', async () => {
+    const { service, prisma, ownershipService, fxRateService } = createHarness()
+    ownershipService.validateUserExists.mockResolvedValue(undefined)
+    prisma.position.findMany.mockResolvedValue([
+      {
+        assetId: 'asset-1',
+        quantity: 1,
+        avgCost: 100,
+        openedAt: new Date('2026-03-01T00:00:00.000Z'),
+        account: { currency: 'USD' },
+        asset: {
+          id: 'asset-1',
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          type: 'equity',
+          assetClass: 'equity',
+          baseCurrency: 'USD',
+        },
+      },
+      {
+        assetId: 'asset-2',
+        quantity: 1,
+        avgCost: 3000,
+        openedAt: new Date('2026-03-02T00:00:00.000Z'),
+        account: { currency: 'TWD' },
+        asset: {
+          id: 'asset-2',
+          symbol: '0050',
+          name: 'Taiwan 50',
+          type: 'etf',
+          assetClass: 'equity',
+          baseCurrency: 'TWD',
+        },
+      },
+    ])
+    prisma.price.findMany.mockResolvedValue([])
+    prisma.transaction.findMany.mockResolvedValue([])
+    fxRateService.getReferenceRate.mockRejectedValue(
+      new NotFoundException('FX rate not found for TWD/USD'),
+    )
+
+    await expect(service.getSummary('user-1')).rejects.toThrow(
+      new NotFoundException('FX rate not found for TWD/USD'),
+    )
   })
 })
