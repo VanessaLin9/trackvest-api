@@ -476,7 +476,7 @@ The system uses **naming conventions** to find GL accounts:
 | Realized Loss | Name contains "已實現損益-損失" |
 | Cash | Linked to Account via `linkedAccountId` |
 
-**Service**: `GlAccountLookupService` handles all lookups.
+**Service**: `GlService` (`src/gl/services/gl.service.ts`) handles GL account lookups for posting.
 
 ### Example: Buy Transaction Auto-Posting
 
@@ -516,17 +516,13 @@ System Flow:
   - `postTransaction()` - Automatic transaction posting
   - `createEntry()` - Internal method to create GL entry
 
-### GlAccountLookupService
-- **Location**: `src/gl/services/gl-account-lookup.service.ts`
-- **Purpose**: Find GL accounts by various criteria
-- **Methods**:
-  - `getLinkedCashGlAccountId()` - Find by linked Account
-  - `getNamedGlAccountId()` - Find by name pattern
-  - `getInvestmentBucketGlAccountId()` - Find investment account
-  - `getFeeExpenseGlAccountId()` - Find fee account
-  - `getDividendIncomeGlAccountId()` - Find dividend account
-  - `getEquityGlAccountId()` - Find equity account
-  - And more...
+### GlService
+- **Location**: `src/gl/services/gl.service.ts`
+- **Purpose**: GL account discovery for `PostingService` and ledger HTTP endpoints
+- **Lookup methods** (non-exhaustive):
+  - `getLinkedCashGlAccountId()` - Cash GL linked to an `Account`
+  - `getInvestmentBucketGlAccountId()` - Investment bucket by user + currency
+  - `getFeeExpenseGlAccountId()`, `getDividendIncomeGlAccountId()`, `getEquityGlAccountId()`, realized gain/loss helpers
 
 ### OwnershipService
 - **Location**: `src/common/services/ownership.service.ts`

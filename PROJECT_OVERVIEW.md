@@ -29,6 +29,10 @@ trackvest-api/
 │   ├── accounts/          # Account management (broker/bank/cash)
 │   ├── assets/            # Asset catalog (stocks, ETFs, crypto)
 │   ├── transactions/       # Transaction recording & management
+│   ├── corporate-actions/  # Stock splits: sync, chronological replay
+│   ├── portfolio/          # Holdings valuation, trend, rebalance
+│   ├── dashboard/          # Summary metrics (GL-based investment view)
+│   ├── market-price/       # FinMind price + split event providers
 │   ├── gl/                # General Ledger (double-entry accounting)
 │   ├── users/             # User management
 │   ├── health/            # Health check endpoint
@@ -82,9 +86,10 @@ trackvest-api/
 - **Must balance**: Total debits = Total credits
 
 ### 8. **Position** (Holdings)
-- Quantity, average cost
+- Quantity, average cost, opened/closed timestamps
 - Links Account + Asset
-- (Calculation logic not yet implemented)
+- Backed by `PositionLot` (FIFO) and `SellLotMatch` on sells
+- Rebuilt chronologically via `PositionReplayService` (includes corporate actions on the timeline)
 
 ### 9. **Tag** (Transaction Tags)
 - User-specific tags
@@ -247,19 +252,23 @@ async findOne(
 - `validateTagOwnership()`
 - `isAdmin()` - Check if user is admin
 
-### 3. **GlAccountLookupService** (`src/gl/services/gl-account-lookup.service.ts`)
-**Purpose**: Find GL accounts by various criteria
+### 3. **GlService** (`src/gl/services/gl.service.ts`)
+**Purpose**: GL account discovery and ledger helpers used by posting
 
-**Methods**:
-- `getLinkedCashGlAccountId()` - Find GL account linked to Account
-- `getNamedGlAccountId()` - Find by name pattern
-- `getInvestmentBucketGlAccountId()` - Find investment account
-- `getFeeExpenseGlAccountId()` - Find fee account
-- `getDividendIncomeGlAccountId()` - Find dividend account
-- `getEquityGlAccountId()` - Find equity account
-- And more...
+**Methods** (used by `PostingService`):
+- `getLinkedCashGlAccountId()` - GL account linked to a broker/bank `Account`
+- `getInvestmentBucketGlAccountId()` - Investment bucket by user + currency
+- `getFeeExpenseGlAccountId()`, dividend / realized gain / loss / equity helpers
+- Ledger queries exposed via `GlController`
 
-### 4. **Utility Functions** (`src/common/utils/`)
+> Note: Some older docs refer to `GlAccountLookupService`; that standalone service/file does not exist. Lookups live on `GlService`.
+
+### 4. **PositionReplayService** (`src/corporate-actions/position-replay.service.ts`)
+**Purpose**: Rebuild `Position`, `PositionLot`, and `SellLotMatch` for an account–asset scope from transactions + `CorporateAction` events (chronological replay).
+
+Used by transaction scope rebuilds and `CorpActionService.syncSplits`.
+
+### 5. **Utility Functions** (`src/common/utils/`)
 - **GL Validation**: `ensureBalanced()`, `ensureSameCurrency()`
 - **Number Utils**: `toNumber()`, `roundTo()`, `isApproximatelyEqual()`
 - **Date Utils**: `toDate()`, `toISOString()`
@@ -434,24 +443,20 @@ Multiple broker/bank accounts → Track separately → Consolidated reporting
 - **FEATURES.md** - Complete feature list
 - **USAGE_GUIDE.md** - How to use the API
 - **OWNERSHIP_VALIDATION.md** - Security & ownership details
-- **REFACTORING.md** - Code refactoring documentation
+- **REFACTORING.md** - Refactor backlog, architecture decisions, utility extraction notes
 - **PROJECT_OVERVIEW.md** - This file
 
 ---
 
 ## 🔮 Future Enhancements
 
-### Planned Features
-- Position calculation service
-- Price management endpoints
-- FX Rate management endpoints
-- Tag management endpoints
-- GL Account CRUD endpoints
-- GL Entry query endpoints
-- Reporting/analytics endpoints
+See **REFACTORING.md** for the active refactor backlog (TransactionsService slim-down, CSV import extraction, ScheduleModule placement, etc.).
+
+### Planned / in progress
+- Converge incremental position updates with chronological replay engine
+- Further split large services (`portfolio.service.ts`, `transactions.service.ts`)
 
 ### Potential Features
-- Portfolio valuation (using prices)
 - Performance metrics (ROI, P&L)
 - Tax reporting
 - Multi-currency conversion
