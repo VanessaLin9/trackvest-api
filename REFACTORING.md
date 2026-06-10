@@ -1,167 +1,133 @@
-# Code Refactoring: Utility Functions
+# Refactoring & architecture notes
 
-## Overview
-This document describes the refactoring of common utility functions into shared modules for better code organization, reusability, and maintainability.
+> **Document status:** Living notes for refactor backlog and past extractions.  
+> Distinguish **implemented (as of repo HEAD)** vs **planned**. When in doubt, verify in `src/` before coding.
 
-## Refactored Components
+## Implemented utilities (stable)
 
-### 1. GL Validation Utilities (`src/common/utils/gl-validation.util.ts`)
+### GL validation (`src/common/utils/gl-validation.util.ts`)
 
-**Extracted Functions:**
-- `ensureBalanced(lines)` - Validates that total debits equal total credits
-- `ensureSameCurrency(lines)` - Validates all lines use the same currency
-- `validateGlLines(lines)` - Convenience function that calls both validations
-- `calculateTotalDebit(lines)` - Calculates total debit amount
-- `calculateTotalCredit(lines)` - Calculates total credit amount
+- `validateGlLines`, `ensureBalanced`, `ensureSameCurrency`, debit/credit totals
 
-**Benefits:**
-- Pure functions (no side effects)
-- Reusable across different services
-- Better testability
-- Centralized validation logic
+### Number utils (`src/common/utils/number.util.ts`)
 
-**Usage:**
+- `toNumber`, `toNumberStrict`, `roundTo`, `isApproximatelyEqual`
+
+### Date utils (`src/common/utils/date.util.ts`)
+
+- `toDate`, `toISOString`, `isValidDateString`
+
+---
+
+## GL account lookup (current code)
+
+**Implemented in `GlService`** (`src/gl/services/gl.service.ts`), not a separate `GlAccountLookupService`.
+
+`PostingService` delegates lookups to `GlService`, for example:
+
+- `getLinkedCashGlAccountId(accountId, db?)`
+- `getInvestmentBucketGlAccountId(userId, currency, db?)`
+- `getFeeExpenseGlAccountId`, dividend / realized gain / loss / equity helpers
+
+There is **no** `src/gl/services/gl-account-lookup.service.ts` in the repo. Older docs and a stale comment in `posting.service.ts` still mention `GlAccountLookupService`; treat those as drift.
+
+---
+
+## Position / FIFO source of truth (decision, 2026-06)
+
+**Decision:** Position and FIFO lot math should **converge on the chronological replay engine**, not maintain two parallel semantics long term.
+
+| Path | Location | Role today |
+|------|----------|------------|
+| **Replay (target SoT)** | `src/corporate-actions/position-replay.engine.ts` + `PositionReplayService` | Merge buy/sell txs + `CorporateAction` splits on one timeline; rebuild lots, matches, position; used by scope rebuild and `syncSplits` |
+| **Incremental (legacy)** | `TransactionsService` create/update paths | Still updates position/lots inline on some buy/sell flows; overlaps replay semantics |
+
+**Implication for upcoming refactor tasks:** Prefer `PositionReplayService.rebuildScope()` for affected account–asset scopes instead of patching incremental `PositionLot` updates (e.g. buy update without later sells).
+
+`CorporateActionApplication` records that a replay ran for an account; it is **not** a skip gate and does not mean “open lots were directly split-adjusted.”
+
+---
+
+## Portfolio vs Dashboard metrics (different sources)
+
+Numbers can legitimately differ. Do not assume one endpoint is “wrong” without checking which model it uses.
+
+| Surface | Service | Primary inputs | What it approximates |
+|---------|---------|----------------|----------------------|
+| **Portfolio** | `PortfolioService` | `Position` / open lots, `Price`, `FxRate` | Holdings **market value** and cost basis in display currency |
+| **Dashboard investment summary** | `DashboardService` | `GL` lines on investment bucket accounts, `deposit` / `withdraw` txs | **Ledger-based** invested balance and return vs net contributions |
+
+Product/docs should name these explicitly before changing API behavior.
+
+---
+
+## Refactor backlog (from API data-flow review)
+
+Suggested order; each item should become its own small task/PR.
+
+### P1 — Buy update / PositionLot consistency
+
+- **Issue:** `syncPositionOnUpdate` / `rollbackBuyPositionEffect` can update `Position` without matching `PositionLot` when no later sell triggers full scope rebuild.
+- **Preferred fix:** Rebuild affected scope via `PositionReplayService.rebuildScope()` (aligns with replay SoT decision).
+- **Alternative:** Patch incremental lot sync + regression test (only if explicitly choosing dual-path maintenance).
+
+### P2 — Extract position/FIFO orchestration from `TransactionsService`
+
+- Goal: `TransactionsService` = transaction write orchestration; position mutation details in focused services.
+- Preserve `$transaction` + `Prisma.TransactionClient` boundaries; no repository-pattern rewrite in round one.
+
+### P2 — Extract CSV import parser
+
+- Move broker CSV parsing/mapping out of `TransactionsService` (`importTransactions`, header map, row validators).
+
+### P2 — Portfolio / Dashboard naming & docs
+
+- Document metric definitions; decide later whether API shapes change.
+
+### P3 — `ScheduleModule.forRoot()` placement
+
+- Today only `MarketPriceModule` calls `forRoot()`; `CorporateActionsModule` crons depend on it implicitly. Move `forRoot()` to `AppModule`.
+
+### P3 — Portfolio service size
+
+- `portfolio.service.ts` is large; consider splitting valuation / trend / rebalance later.
+
+### P3 — This doc + sibling markdown drift
+
+- Keep `REFACTORING.md`, `PROJECT_OVERVIEW.md`, `GL_ENDPOINTS_OVERVIEW.md` aligned with `GlService` and replay engine.
+
+---
+
+## Refactor task acceptance criteria (all code tasks)
+
+Apply to every refactor sub-task, not only functional correctness:
+
+1. **Readability:** Reduce deep nesting and oversized methods; prefer early returns and small named helpers.
+2. **Boundaries:** One clear responsibility per service (no mixing CSV parsing, validation, position math, and GL posting in one layer).
+3. **Transactions:** Keep existing Prisma transaction boundaries unless a task explicitly redesigns them.
+4. **Regression tests:** Any change to Position / FIFO / sell GL repost must add or extend unit tests; run `pnpm exec jest --runInBand` before/after each step.
+5. **Scope discipline:** Each task lists scope, non-scope, data-consistency risk, test plan, and readability checklist in its Notion card / PR.
+
+---
+
+## Historical note: utility extraction (completed)
+
+The sections below describe an **earlier** refactor that moved validation/number/date helpers out of `PostingService`. GL lookups were consolidated into `GlService` afterward; they were **not** shipped as a standalone `GlAccountLookupService` file.
+
+### What moved out of `PostingService`
+
+- Validation → `gl-validation.util.ts`
+- Number conversion → `number.util.ts`
+- GL account discovery → **`GlService`** (not a separate lookup service file)
+
+### Example (current style)
+
 ```typescript
 import { validateGlLines, GlLineInput } from '../common/utils/gl-validation.util'
-
-const lines: GlLineInput[] = [...]
-validateGlLines(lines) // Throws BadRequestException if invalid
-```
-
-### 2. Number Utilities (`src/common/utils/number.util.ts`)
-
-**Extracted Functions:**
-- `toNumber(value)` - Safely converts value to number (returns 0 for null/undefined/NaN)
-- `toNumberStrict(value)` - Strict conversion (throws on invalid values)
-- `roundTo(value, decimals)` - Rounds to specified decimal places
-- `isApproximatelyEqual(a, b, epsilon)` - Checks if two numbers are approximately equal
-
-**Benefits:**
-- Consistent number handling across the codebase
-- Prevents NaN propagation
-- Better error handling
-
-**Usage:**
-```typescript
 import { toNumber } from '../common/utils/number.util'
+import { GlService } from './services/gl.service'
 
-const amount = toNumber(tx.amount) // Safe conversion, returns 0 if invalid
+validateGlLines(lines)
+const amount = toNumber(tx.amount)
+const cashGlId = await this.glService.getLinkedCashGlAccountId(account.id, prisma)
 ```
-
-### 3. Date Utilities (`src/common/utils/date.util.ts`)
-
-**Extracted Functions:**
-- `toDate(value)` - Converts date string or Date to Date object
-- `toISOString(date)` - Formats date to ISO string
-- `isValidDateString(value)` - Validates date string
-
-**Benefits:**
-- Consistent date handling
-- Type safety
-- Centralized date logic
-
-**Usage:**
-```typescript
-import { toDate } from '../common/utils/date.util'
-
-const date = toDate(tx.tradeTime) // Handles string or Date
-```
-
-### 4. GL Account Lookup Service (`src/gl/services/gl-account-lookup.service.ts`)
-
-**Extracted Methods:**
-- `getLinkedCashGlAccountId(accountId)` - Find GL account linked to account
-- `getNamedGlAccountId(userId, nameContains)` - Find by name pattern
-- `getInvestmentBucketGlAccountId(userId, currency)` - Find investment account
-- `getFeeExpenseGlAccountId(userId)` - Find fee expense account
-- `getDividendIncomeGlAccountId(userId)` - Find dividend income account
-- `getRealizedGainIncomeGlAccountId(userId)` - Find realized gain account
-- `getRealizedLossExpenseGlAccountId(userId)` - Find realized loss account
-- `getEquityGlAccountId(userId)` - Find equity account
-- `findByTypeAndName(...)` - Generic lookup method
-
-**Benefits:**
-- Centralized GL account discovery logic
-- Easier to test and maintain
-- Consistent error messages
-- Can be reused by other services
-
-**Usage:**
-```typescript
-constructor(private glAccountLookup: GlAccountLookupService) {}
-
-const cashGlId = await this.glAccountLookup.getLinkedCashGlAccountId(accountId)
-```
-
-## Files Modified
-
-### Updated Files:
-1. **`src/gl/posting.service.ts`**
-   - Removed private validation methods (`ensureBalanced`, `ensureSameCurrency`)
-   - Removed private lookup methods (delegated to `GlAccountLookupService`)
-   - Updated to use utility functions (`toNumber`, `validateGlLines`)
-   - Updated type from `LineInput` to `GlLineInput` (exported type)
-
-2. **`src/app.module.ts`**
-   - Added `GlAccountLookupService` to providers
-
-### New Files Created:
-1. `src/common/utils/gl-validation.util.ts` - GL validation utilities
-2. `src/common/utils/number.util.ts` - Number conversion utilities
-3. `src/common/utils/date.util.ts` - Date handling utilities
-4. `src/common/utils/index.ts` - Barrel export for utilities
-5. `src/gl/services/gl-account-lookup.service.ts` - GL account lookup service
-
-## Migration Guide
-
-### Before:
-```typescript
-// In posting.service.ts
-private ensureBalanced(lines: LineInput[]) {
-  const debit = lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
-  const credit = lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
-  if (Math.abs(debit - credit) > 1e-6) {
-    throw new BadRequestException(`Entry not balanced: debit=${debit}, credit=${credit}`)
-  }
-}
-
-const amount = Number(tx.amount)
-const cashGlId = await this.getLinkedCashGlAccountId(account.id)
-```
-
-### After:
-```typescript
-// Import utilities
-import { validateGlLines, GlLineInput } from '../common/utils/gl-validation.util'
-import { toNumber } from '../common/utils/number.util'
-import { GlAccountLookupService } from './services/gl-account-lookup.service'
-
-// Use utilities
-validateGlLines(lines) // Instead of ensureBalanced + ensureSameCurrency
-const amount = toNumber(tx.amount) // Instead of Number()
-const cashGlId = await this.glAccountLookup.getLinkedCashGlAccountId(account.id)
-```
-
-## Benefits Summary
-
-1. **Code Reusability**: Common functions can be used across multiple services
-2. **Maintainability**: Changes to validation logic only need to be made in one place
-3. **Testability**: Pure utility functions are easier to unit test
-4. **Type Safety**: Shared types (`GlLineInput`) ensure consistency
-5. **Separation of Concerns**: Business logic separated from utility functions
-6. **Better Organization**: Related utilities grouped in logical modules
-
-## Future Improvements
-
-1. Consider extracting more common patterns:
-   - Conflict checking (duplicate symbol validation)
-   - Pagination utilities
-   - Sorting utilities
-   - Filter building utilities
-
-2. Add unit tests for utility functions
-
-3. Consider using Decimal.js for financial calculations instead of number
-
-4. Add JSDoc comments for better IDE support
-
