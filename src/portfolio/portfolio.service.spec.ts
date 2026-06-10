@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common'
 import { PortfolioHoldingsSnapshotService } from './portfolio-holdings-snapshot.service'
+import { PortfolioRebalanceService } from './portfolio-rebalance.service'
 import { PortfolioService } from './portfolio.service'
 
 /**
@@ -60,13 +61,15 @@ describe('PortfolioService', () => {
       ownershipService as never,
       fxRateService as never,
     )
+    const rebalanceService = new PortfolioRebalanceService()
     const service = new PortfolioService(
       prisma as never,
       ownershipService as never,
       holdingsSnapshotService,
+      rebalanceService,
     )
 
-    return { service, prisma, ownershipService, fxRateService, holdingsSnapshotService }
+    return { service, prisma, ownershipService, fxRateService, holdingsSnapshotService, rebalanceService }
   }
 
   it('returns an empty summary when the user has no open holdings', async () => {
