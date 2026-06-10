@@ -450,11 +450,13 @@ Multiple broker/bank accounts → Track separately → Consolidated reporting
 
 ## 🔮 Future Enhancements
 
-See **REFACTORING.md** for the active refactor backlog (TransactionsService slim-down, CSV import extraction, ScheduleModule placement, etc.).
+See **REFACTORING.md** for refactor task status (P1–P7).
+
+### Completed on `main` (see REFACTORING.md)
+- P1–P6: buy-mutation replay fix, position orchestrator, rebuild policy, CSV import service, `ScheduleModule` at `AppModule`, refactor docs alignment
 
 ### Planned / in progress
-- Converge incremental position updates with chronological replay engine
-- Further split large services (`portfolio.service.ts`, `transactions.service.ts`)
+- **P7** — split `portfolio.service.ts` (valuation / trend / rebalance)
 
 ### Potential Features
 - Performance metrics (ROI, P&L)

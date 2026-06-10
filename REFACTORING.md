@@ -1,6 +1,6 @@
 # Refactoring & architecture notes
 
-> **Document status:** Living notes for refactor backlog and past extractions.  
+> **Document status:** Living notes for refactor backlog and past extractions.
 > Distinguish **implemented (as of repo HEAD)** vs **planned**. When in doubt, verify in `src/` before coding.
 
 ## Implemented utilities (stable)
@@ -29,7 +29,7 @@
 - `getInvestmentBucketGlAccountId(userId, currency, db?)`
 - `getFeeExpenseGlAccountId`, dividend / realized gain / loss / equity helpers
 
-There is **no** `src/gl/services/gl-account-lookup.service.ts` in the repo. Older docs and a stale comment in `posting.service.ts` still mention `GlAccountLookupService`; treat those as drift.
+There is **no** `src/gl/services/gl-account-lookup.service.ts` in the repo. Older markdown may still mention `GlAccountLookupService`; treat that as drift.
 
 ---
 
@@ -37,12 +37,14 @@ There is **no** `src/gl/services/gl-account-lookup.service.ts` in the repo. Olde
 
 **Decision:** Position and FIFO lot math should **converge on the chronological replay engine**, not maintain two parallel semantics long term.
 
-| Path | Location | Role today |
-|------|----------|------------|
-| **Replay (target SoT)** | `src/corporate-actions/position-replay.engine.ts` + `PositionReplayService` | Merge buy/sell txs + `CorporateAction` splits on one timeline; rebuild lots, matches, position; used by scope rebuild and `syncSplits` |
-| **Incremental (legacy)** | `TransactionsService` create/update paths | Still updates position/lots inline on some buy/sell flows; overlaps replay semantics |
+| Layer | Location | Role today |
+|-------|----------|------------|
+| **Replay (SoT)** | `position-replay.engine.ts` + `PositionReplayService` | Chronological merge of buy/sell + splits; rebuild lots, matches, position |
+| **Orchestration** | `TransactionPositionOrchestratorService` | Transaction side effects: incremental create paths, scope rebuild, sell GL repost |
+| **Rebuild policy** | `TransactionRebuildPolicyService` | Centralizes when a mutation needs full scope replay vs incremental sell plan |
+| **CRUD entry** | `TransactionsService` | Transaction write orchestration; delegates position work to orchestrator |
 
-**Implication for upcoming refactor tasks:** Prefer `PositionReplayService.rebuildScope()` for affected account–asset scopes instead of patching incremental `PositionLot` updates (e.g. buy update without later sells).
+Buy update/delete/hardDelete high-risk paths now rebuild via `rebuildScope()` (P1). Some create paths still use incremental lot updates when policy allows.
 
 `CorporateActionApplication` records that a replay ran for an account; it is **not** a skip gate and does not mean “open lots were directly split-adjusted.”
 
@@ -61,40 +63,33 @@ Product/docs should name these explicitly before changing API behavior.
 
 ---
 
-## Refactor backlog (from API data-flow review)
+## Refactor task status (P1–P7)
 
-Suggested order; each item should become its own small task/PR.
+Last aligned with `main` after corp-actions replay merge and refactor PRs #20–#24.
 
-### P1 — Buy update / PositionLot consistency
+| Task | Status | Outcome (verify in `src/`) |
+|------|--------|----------------------------|
+| **P1** Buy mutation replay fix | ✅ Completed | Buy update/delete/hardDelete rebuild scope via `PositionReplayService.rebuildScope()` |
+| **P2** Transaction position orchestrator | ✅ Completed | `TransactionPositionOrchestratorService` owns position/FIFO side effects |
+| **P3** Rebuild decision policy | ✅ Completed | `TransactionRebuildPolicyService` centralizes scope-replay vs incremental decisions |
+| **P4** CSV import extraction | ✅ Completed | `TransactionImportService`; controller routes import |
+| **P5** ScheduleModule ownership | ✅ Completed | `ScheduleModule.forRoot()` in `AppModule` (`app.module.ts`) |
+| **P6** Refactor docs alignment | ✅ Completed | `REFACTORING.md`, `PROJECT_OVERVIEW.md`, `GL_ENDPOINTS_OVERVIEW.md` |
+| **P7** Portfolio service split | ⏳ Pending | Split `portfolio.service.ts` (~1300 lines) by valuation/trend/rebalance |
 
-- **Issue:** `syncPositionOnUpdate` / `rollbackBuyPositionEffect` can update `Position` without matching `PositionLot` when no later sell triggers full scope rebuild.
-- **Preferred fix:** Rebuild affected scope via `PositionReplayService.rebuildScope()` (aligns with replay SoT decision).
-- **Alternative:** Patch incremental lot sync + regression test (only if explicitly choosing dual-path maintenance).
+### Completed (detail)
 
-### P2 — Extract position/FIFO orchestration from `TransactionsService`
+- **P1** — PR #20. Regression tests in `transactions.service.spec.ts` lock buy-mutation replay behavior.
+- **P2** — PR #21. `TransactionsService` delegates to `TransactionPositionOrchestratorService`.
+- **P3** — PR #22. `TransactionRebuildPolicyService` + `transaction-rebuild-policy.service.spec.ts`.
+- **P4** — PR #23. `TransactionImportService` + `transaction-import.service.spec.ts`.
+- **P5** — PR #24. `schedule-module-ownership.spec.ts` guards compile-time module wiring.
+- **P6** — P1–P7 status table; backlog drift removed from sibling markdown.
 
-- Goal: `TransactionsService` = transaction write orchestration; position mutation details in focused services.
-- Preserve `$transaction` + `Prisma.TransactionClient` boundaries; no repository-pattern rewrite in round one.
+### Remaining
 
-### P2 — Extract CSV import parser
-
-- Move broker CSV parsing/mapping out of `TransactionsService` (`importTransactions`, header map, row validators).
-
-### P2 — Portfolio / Dashboard naming & docs
-
-- Document metric definitions; decide later whether API shapes change.
-
-### P3 — `ScheduleModule.forRoot()` placement
-
-- Today only `MarketPriceModule` calls `forRoot()`; `CorporateActionsModule` crons depend on it implicitly. Move `forRoot()` to `AppModule`.
-
-### P3 — Portfolio service size
-
-- `portfolio.service.ts` is large; consider splitting valuation / trend / rebalance later.
-
-### P3 — This doc + sibling markdown drift
-
-- Keep `REFACTORING.md`, `PROJECT_OVERVIEW.md`, `GL_ENDPOINTS_OVERVIEW.md` aligned with `GlService` and replay engine.
+- **P7** — Split `PortfolioService` without changing API response semantics.
+- **Follow-up (not numbered)** — Portfolio vs Dashboard metric naming in product/API docs if behavior should change later.
 
 ---
 
