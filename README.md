@@ -281,7 +281,9 @@ Canonical docs right now:
 - [README.md](/Users/vanessa/develop/trackvest-api/README.md)
 - [docs/mcp.md](/Users/vanessa/develop/trackvest-api/docs/mcp.md)
 
-There are also older root-level markdown files such as [FEATURES.md](/Users/vanessa/develop/trackvest-api/FEATURES.md) and [PROJECT_OVERVIEW.md](/Users/vanessa/develop/trackvest-api/PROJECT_OVERVIEW.md). Treat those as historical notes unless they are updated; they are not the current source of truth.
+- [REFACTORING.md](/Users/vanessa/develop/trackvest-api/REFACTORING.md) — refactor backlog, replay-engine decisions, Portfolio vs Dashboard metrics
+
+There are also older root-level markdown files such as [FEATURES.md](/Users/vanessa/develop/trackvest-api/FEATURES.md) and [PROJECT_OVERVIEW.md](/Users/vanessa/develop/trackvest-api/PROJECT_OVERVIEW.md). Prefer **README.md** + **REFACTORING.md** for current direction; update other files when touched, do not assume they are complete.
 
 ## Known gaps
 

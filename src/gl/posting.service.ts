@@ -67,8 +67,8 @@ export class PostingService {
     })
   }
 
-  /** ---------- 科目查找器（委託給 GlAccountLookupService） ---------- */
-  // All GL account lookup methods are now delegated to GlAccountLookupService
+  /** ---------- 科目查找器（委託給 GlService） ---------- */
+  // GL account lookups are delegated to GlService
 
   /** ---------- 1) Transfer ---------- */
   async postTransfer(command: {
