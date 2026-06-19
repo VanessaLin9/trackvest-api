@@ -132,40 +132,58 @@ Do not merge schema changes without a committed migration file.
 
 **Stop the deploy.** Do not retry blindly or run destructive recovery commands.
 
+A failed migration leaves a record in `_prisma_migrations`. Until that record is
+resolved, subsequent `pnpm db:migrate:deploy` runs will usually remain **blocked**.
+You cannot skip this by shipping a new forward-fix migration alone.
+
 1. Capture `pnpm db:migrate:status` output and the failing migration name.
 2. Read the migration SQL under `prisma/migrations/<name>/migration.sql`.
 3. Assess whether partial schema or data changes were applied to the database.
 4. Take or verify a backup when production or production-like data is involved.
 5. Choose a recovery path with reviewer sign-off — do not automate this decision.
 
-### Recovery paths
-
-**Forward-fix** — ship a new migration that repairs schema or backfills data when
-the database is in a known, safe intermediate state.
-
-**Restore from backup** — revert the database to a pre-deploy snapshot, then redeploy
-only after the root cause is fixed. Prefer this when partial changes are unclear or
-data integrity is at risk.
-
-**Mark migration resolved** — when a failed migration remains in `_prisma_migrations`,
-subsequent `pnpm db:migrate:deploy` runs may stay blocked until the record is cleared.
-Prisma provides `prisma migrate resolve` for this; **do not run it automatically**.
-
-First inspect partial changes, backups, and migration SQL; then a reviewer picks one:
-
-| Database state | Command |
-|----------------|---------|
-| Restored to pre-migration state, or migration changes were **not** retained | `npx prisma migrate resolve --rolled-back <migration_name>` |
-| Migration SQL was **fully applied manually** and the DB matches the intended end state | `npx prisma migrate resolve --applied <migration_name>` |
-
 `<migration_name>` is the migration folder name, for example `20260605183705_corp_actions`.
 
-If neither state applies cleanly, use backup restore or forward-fix instead of guessing
-with `resolve`.
+### Path A — return to pre-migration state
+
+Use when the migration should be treated as not applied.
+
+1. Revert partial changes manually **or** restore from backup.
+2. Confirm the database matches the state **before** this migration ran.
+3. Clear the failed record:
+
+```bash
+pnpm exec prisma migrate resolve --rolled-back <migration_name>
+```
+
+4. Fix the migration problem in the codebase — correct SQL or ship a revised migration on a new deploy.
+5. Redeploy: `pnpm db:migrate:deploy`
+6. Confirm: `pnpm db:migrate:status` exits **0** with no pending, failed, or diverged migrations.
+
+### Path B — complete the migration forward
+
+Use when the migration SQL was fully applied manually and the database already matches
+the migration's intended end state.
+
+1. Finish any remaining SQL by hand and verify schema and data against the intended end state.
+2. Mark the migration as applied:
+
+```bash
+pnpm exec prisma migrate resolve --applied <migration_name>
+```
+
+3. Apply any later pending migrations: `pnpm db:migrate:deploy`
+4. Confirm: `pnpm db:migrate:status` exits **0** with no pending, failed, or diverged migrations.
+
+### If the database state is unclear
+
+**Stop.** Do not run `migrate resolve` or deploy again.
+
+Restore from backup to a known-good snapshot, then restart from **Path A** after a
+reviewer confirms the restored state. Adding a new migration file does **not** clear
+a failed migration record and is not a substitute for resolve.
 
 Prisma does not provide reliable automatic *down* migrations for production rollback.
-Plan on backup restore, forward-fix migrations, or a deliberate `migrate resolve` after
-human verification.
 
 Provider-specific backup, restore, and point-in-time recovery procedures will be added
 after a production database provider is selected.
