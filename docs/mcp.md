@@ -180,7 +180,9 @@ Start infrastructure:
 pnpm db:up
 ```
 
-Seed if needed:
+Seed if needed **local dev only** — see [README.md](../README.md#local-setup).
+Do not run `prisma migrate reset` against production or production-like databases;
+use [docs/deployment.md](./deployment.md) for migration deploy steps.
 
 ```bash
 npx prisma migrate reset --force

@@ -23,6 +23,8 @@ describe('DB / schema command inventory (CP0)', () => {
     expect(scripts['db:up']).toBeDefined()
     expect(scripts['db:down']).toBeDefined()
     expect(scripts['prisma:migrate']).toContain('migrate dev')
+    expect(scripts['db:migrate:deploy']).toContain('migrate deploy')
+    expect(scripts['db:migrate:status']).toContain('migrate status')
     expect(scripts['prisma:seed']).toContain('prisma/seed.ts')
     expect(scripts['db:seed']).toContain('prisma db seed')
     expect(scripts['prices:sync-tw']).toBeDefined()
@@ -30,11 +32,15 @@ describe('DB / schema command inventory (CP0)', () => {
     expect(scripts['corp-actions:sync-splits']).toBeDefined()
   })
 
-  it('documents migrate reset as the local dev setup path (pre-CP1 baseline)', () => {
+  it('documents dev reset in README and production migrate deploy in deployment runbook', () => {
     const readme = readFileSync(README_PATH, 'utf8')
+    const deploymentDoc = readFileSync(join(process.cwd(), 'docs', 'deployment.md'), 'utf8')
 
     expect(readme).toMatch(/prisma migrate reset/)
-    expect(readme).not.toMatch(/migrate deploy/)
+    expect(readme).toMatch(/docs\/deployment\.md/)
+    expect(deploymentDoc).toMatch(/pnpm db:migrate:deploy/)
+    expect(deploymentDoc).toMatch(/prisma migrate reset/)
+    expect(deploymentDoc).toMatch(/Forbidden in production/)
   })
 
   it('does not yet expose production seed or bootstrap scripts (pre-CP2 baseline)', () => {

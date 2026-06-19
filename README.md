@@ -65,7 +65,11 @@ This starts:
 - Postgres on `localhost:5433`
 - Redis on `localhost:6379`
 
-3. Prepare database
+3. Prepare database **local dev only**
+
+This step destroys all data in the local Docker database and runs the dev seed.
+Do **not** use it against production or production-like databases.
+See [docs/deployment.md](docs/deployment.md) for production-safe migration policy.
 
 ```bash
 npx prisma migrate reset --force
@@ -279,6 +283,7 @@ npx jest --config ./test/jest-e2e.json --runInBand
 Canonical docs right now:
 
 - [README.md](/Users/vanessa/develop/trackvest-api/README.md)
+- [docs/deployment.md](/Users/vanessa/develop/trackvest-api/docs/deployment.md) — migration policy, forbidden commands, production-like rehearsal
 - [docs/mcp.md](/Users/vanessa/develop/trackvest-api/docs/mcp.md)
 
 - [REFACTORING.md](/Users/vanessa/develop/trackvest-api/REFACTORING.md) — refactor backlog, replay-engine decisions, Portfolio vs Dashboard metrics
