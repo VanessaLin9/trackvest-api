@@ -38,7 +38,7 @@ describe('Dev seed (CP2 layout)', () => {
     const source = readSource(DEV_SEED_RUNNER_PATH)
 
     expect(source).toContain("from './demo-identity'")
-    expect(source).toContain('resolveDemoUserPassword()')
+    expect(source).toContain('resolveDevDemoUserPassword()')
     expect(source).not.toMatch(/const DEMO_USER_ID = '/)
   })
 
@@ -53,7 +53,8 @@ describe('Dev seed (CP2 layout)', () => {
     expect(upsertSource).not.toMatch(/prisma\.asset\./)
     expect(upsertSource).not.toMatch(/prisma\.price\./)
     expect(upsertSource).not.toMatch(/prisma\.fxRate\./)
-    expect(upsertSource).toMatch(/await prisma\.user\.upsert\(/)
+    expect(upsertSource).toMatch(/assertDemoOwnershipGraphSafeForUpsert\(prisma\)/)
+    expect(upsertSource).toMatch(/resolveProductionDemoUserPassword\(\)/)
     expect(upsertSource).toMatch(/await prisma\.transaction\.upsert\(/)
   })
 
@@ -61,6 +62,7 @@ describe('Dev seed (CP2 layout)', () => {
     const source = readSource(PROD_DEMO_RUNNER_PATH)
 
     expect(source).toMatch(/assertProductionDemoSeedAllowed\(\)/)
+    expect(source).toMatch(/resolveProductionDemoUserPassword\(\)/)
     expect(source).toMatch(/assertDemoCatalogAssetsExist\(prisma\)/)
     expect(source).toMatch(/seedDemoUserGraphUpsert\(prisma\)/)
     expect(source).not.toMatch(/wipeAllData/)

@@ -4,7 +4,7 @@ import {
   BCRYPT_ROUNDS,
   DEMO_USER_EMAIL,
   DEMO_USER_ID,
-  resolveDemoUserPassword,
+  resolveProductionDemoUserPassword,
 } from './demo-identity'
 import {
   getDemoAccountsData,
@@ -16,10 +16,13 @@ import {
   getDemoSellLotMatchesData,
   getDemoTransactionsData,
 } from './demo-fixture-data'
+import { assertDemoOwnershipGraphSafeForUpsert } from './assert-demo-ownership-safe'
 
 /** Demo-user-owned graph only — upsert with fixed ids for idempotent prod-demo seed. */
 export async function seedDemoUserGraphUpsert(prisma: PrismaClient) {
-  const demoPasswordHash = await bcrypt.hash(resolveDemoUserPassword(), BCRYPT_ROUNDS)
+  await assertDemoOwnershipGraphSafeForUpsert(prisma)
+
+  const demoPasswordHash = await bcrypt.hash(resolveProductionDemoUserPassword(), BCRYPT_ROUNDS)
 
   await prisma.user.upsert({
     where: { id: DEMO_USER_ID },

@@ -1,6 +1,8 @@
 import { PrismaClient } from '@prisma/client'
+import { seedProductionCatalogBootstrap } from './catalog-bootstrap'
 
-/** Idempotent production bootstrap for system defaults — none required yet. */
-export async function runProductionBootstrap(_prisma: PrismaClient) {
-  console.log('Production bootstrap: no system defaults required at this time.')
+/** Idempotent production bootstrap for shared system catalog defaults. */
+export async function runProductionBootstrap(prisma: PrismaClient) {
+  await seedProductionCatalogBootstrap(prisma)
+  console.log('Production bootstrap completed: catalog assets and aliases upserted.')
 }

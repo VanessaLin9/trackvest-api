@@ -15,8 +15,7 @@ export async function assertDemoCatalogAssetsExist(prisma: PrismaClient) {
   if (missing.length > 0) {
     throw new SeedGuardError(
       `Production demo seed requires catalog assets to exist: ${missing.join(', ')}. ` +
-        'Global fixtures are not seeded by db:seed:prod-demo. ' +
-        'Load catalog via bootstrap or another approved path before prod-demo seed.',
+        'Run pnpm db:bootstrap:prod first to upsert shared Asset and AssetAlias catalog.',
     )
   }
 

@@ -56,25 +56,27 @@ It is **not** safe for production or production-like databases.
 
 ## Production bootstrap and demo seed
 
-After migrations are applied, production and production-like environments may run:
+After migrations are applied, production and production-like environments should run:
 
 ```bash
 pnpm db:bootstrap:prod
 ```
 
-Idempotent system bootstrap — currently a no-op placeholder for future defaults.
+Idempotent shared catalog bootstrap — upserts **Asset** and **AssetAlias** fixtures required by the demo portfolio. Does not seed Price, FxRate, or demo-user data.
 
 To load the demo user graph without wiping global catalog data:
 
 ```bash
-ALLOW_PRODUCTION_DEMO_SEED=true pnpm db:seed:prod-demo
+DEMO_USER_PASSWORD=<secret> ALLOW_PRODUCTION_DEMO_SEED=true pnpm db:seed:prod-demo
 ```
 
 Requirements:
 
 - `ALLOW_PRODUCTION_DEMO_SEED=true` (explicit opt-in)
-- Catalog assets referenced by demo fixtures must already exist (prod-demo does **not** seed Asset, AssetAlias, Price, or FxRate)
-- Uses upsert with fixed ids — safe to re-run for idempotency
+- `DEMO_USER_PASSWORD` set to a non-empty secret (no default in production)
+- Run `pnpm db:bootstrap:prod` first on a fresh database so catalog assets exist
+- Prod-demo seeds **demo-user-owned graph only** via upsert; refuses if fixed ids belong to a non-demo user
+- Does **not** seed Price or FxRate
 
 ## Production and production-like — schema only
 

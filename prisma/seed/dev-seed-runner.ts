@@ -5,7 +5,7 @@ import {
   BCRYPT_ROUNDS,
   DEMO_USER_EMAIL,
   DEMO_USER_ID,
-  resolveDemoUserPassword,
+  resolveDevDemoUserPassword,
 } from './demo-identity'
 import {
   getCatalogAssetAliasesData,
@@ -51,7 +51,7 @@ export async function seedGlobalCatalog(prisma: PrismaClient) {
 }
 
 async function seedDemoUserGraphCreate(prisma: PrismaClient) {
-  const demoPassword = resolveDemoUserPassword()
+  const demoPassword = resolveDevDemoUserPassword()
   const demoPasswordHash = await bcrypt.hash(demoPassword, BCRYPT_ROUNDS)
 
   await prisma.user.create({
