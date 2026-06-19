@@ -60,11 +60,32 @@ pnpm db:migrate:deploy
 This runs `prisma migrate deploy`: it applies pending migration SQL and **does not**
 run the dev seed.
 
+### Migration status and exit codes
+
 Check migration status before and after deploy:
 
 ```bash
 pnpm db:migrate:status
 ```
+
+This runs `prisma migrate status`. It may exit with code **1** for several reasons.
+**Do not treat exit 1 by itself as an incident** — read the command output first.
+
+**Before deploy**
+
+| Outcome | Meaning | Action |
+|---------|---------|--------|
+| Exit **0** | Database is up to date; no pending migrations | Safe to start the app if no new release migrations are expected |
+| Exit **1**, output shows **pending migrations only** | Expected when a release includes new migration files | Confirm the pending list matches the release, then run `pnpm db:migrate:deploy` |
+| Exit **1**, **connection error** | Cannot reach the database | **Blocking** — fix connectivity; do not deploy |
+| Exit **1**, **migration history divergence** | `_prisma_migrations` does not match `prisma/migrations/` | **Blocking** — stop; resolve divergence before deploy |
+| Exit **1**, **failed migration** | A migration is recorded as failed | **Blocking** — stop; recover before deploy (see below) |
+
+**After deploy**
+
+`pnpm db:migrate:status` should exit **0** with no pending, failed, or diverged
+migrations. Exit **1** after deploy is **blocking** — investigate before starting
+the application.
 
 ### Production-like rehearsal on a temporary local database
 
@@ -74,7 +95,7 @@ Use this to verify migrations without creating real cloud resources:
 2. Create a **dedicated** database or schema and set `DATABASE_URL` to it.
 3. Export `NODE_ENV=production`.
 4. Deploy migrations: `pnpm db:migrate:deploy`
-5. Confirm status: `pnpm db:migrate:status`
+5. Confirm status: `pnpm db:migrate:status` — must exit **0** with no pending, failed, or diverged migrations
 
 Do not run `prisma migrate reset`, `prisma db push`, or `pnpm db:seed` in this mode.
 Bootstrap and production demo seed commands will be documented here after they are
@@ -112,14 +133,39 @@ Do not merge schema changes without a committed migration file.
 **Stop the deploy.** Do not retry blindly or run destructive recovery commands.
 
 1. Capture `pnpm db:migrate:status` output and the failing migration name.
-2. Assess whether the database is partially migrated or unchanged.
-3. Choose a recovery path:
-   - **Forward-fix**: ship a new migration that repairs schema or backfills data.
-   - **Restore from backup**: revert the database to a pre-deploy snapshot, then
-     redeploy only after the root cause is fixed.
+2. Read the migration SQL under `prisma/migrations/<name>/migration.sql`.
+3. Assess whether partial schema or data changes were applied to the database.
+4. Take or verify a backup when production or production-like data is involved.
+5. Choose a recovery path with reviewer sign-off — do not automate this decision.
+
+### Recovery paths
+
+**Forward-fix** — ship a new migration that repairs schema or backfills data when
+the database is in a known, safe intermediate state.
+
+**Restore from backup** — revert the database to a pre-deploy snapshot, then redeploy
+only after the root cause is fixed. Prefer this when partial changes are unclear or
+data integrity is at risk.
+
+**Mark migration resolved** — when a failed migration remains in `_prisma_migrations`,
+subsequent `pnpm db:migrate:deploy` runs may stay blocked until the record is cleared.
+Prisma provides `prisma migrate resolve` for this; **do not run it automatically**.
+
+First inspect partial changes, backups, and migration SQL; then a reviewer picks one:
+
+| Database state | Command |
+|----------------|---------|
+| Restored to pre-migration state, or migration changes were **not** retained | `npx prisma migrate resolve --rolled-back <migration_name>` |
+| Migration SQL was **fully applied manually** and the DB matches the intended end state | `npx prisma migrate resolve --applied <migration_name>` |
+
+`<migration_name>` is the migration folder name, for example `20260605183705_corp_actions`.
+
+If neither state applies cleanly, use backup restore or forward-fix instead of guessing
+with `resolve`.
 
 Prisma does not provide reliable automatic *down* migrations for production rollback.
-Plan on backup restore or forward-fix migrations.
+Plan on backup restore, forward-fix migrations, or a deliberate `migrate resolve` after
+human verification.
 
 Provider-specific backup, restore, and point-in-time recovery procedures will be added
 after a production database provider is selected.
@@ -128,9 +174,9 @@ after a production database provider is selected.
 
 Before starting the application against a production or production-like database:
 
-1. `pnpm db:migrate:status` — confirm expected pending/applied state
+1. `pnpm db:migrate:status` — read output; exit **1** is OK **only** if it shows expected pending migrations and no connection error, divergence, or failed migration
 2. `pnpm db:migrate:deploy` — apply pending migrations
-3. `pnpm db:migrate:status` — confirm all migrations applied
+3. `pnpm db:migrate:status` — must exit **0** with no pending, failed, or diverged migrations
 4. Run production bootstrap and production demo seed when those commands exist
 5. Start the API; use admin manual sync endpoints to verify external integrations
 6. Leave scheduled jobs disabled unless `ENABLE_SCHEDULED_JOBS=true` is explicitly set

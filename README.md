@@ -32,19 +32,19 @@ Current MCP status:
 
 ## Repo shape
 
-Main code lives under [src](/Users/vanessa/develop/trackvest-api/src):
+Main code lives under [src](src):
 
-- [src/accounts](/Users/vanessa/develop/trackvest-api/src/accounts)
-- [src/assets](/Users/vanessa/develop/trackvest-api/src/assets)
-- [src/transactions](/Users/vanessa/develop/trackvest-api/src/transactions)
-- [src/dashboard](/Users/vanessa/develop/trackvest-api/src/dashboard)
-- [src/gl](/Users/vanessa/develop/trackvest-api/src/gl)
-- [src/mcp](/Users/vanessa/develop/trackvest-api/src/mcp)
+- [src/accounts](src/accounts)
+- [src/assets](src/assets)
+- [src/transactions](src/transactions)
+- [src/dashboard](src/dashboard)
+- [src/gl](src/gl)
+- [src/mcp](src/mcp)
 
 Entry points:
 
-- HTTP API: [src/main.ts](/Users/vanessa/develop/trackvest-api/src/main.ts)
-- MCP server: [src/mcp-main.ts](/Users/vanessa/develop/trackvest-api/src/mcp-main.ts)
+- HTTP API: [src/main.ts](src/main.ts)
+- MCP server: [src/mcp-main.ts](src/mcp-main.ts)
 
 ## Local setup
 
@@ -237,7 +237,7 @@ Current shape:
 - separate MCP module
 - shared domain/services underneath
 
-See [docs/mcp.md](/Users/vanessa/develop/trackvest-api/docs/mcp.md) for:
+See [docs/mcp.md](docs/mcp.md) for:
 
 - architecture
 - tool catalog
@@ -282,13 +282,13 @@ npx jest --config ./test/jest-e2e.json --runInBand
 
 Canonical docs right now:
 
-- [README.md](/Users/vanessa/develop/trackvest-api/README.md)
-- [docs/deployment.md](/Users/vanessa/develop/trackvest-api/docs/deployment.md) — migration policy, forbidden commands, production-like rehearsal
-- [docs/mcp.md](/Users/vanessa/develop/trackvest-api/docs/mcp.md)
+- [README.md](README.md)
+- [docs/deployment.md](docs/deployment.md) — migration policy, forbidden commands, production-like rehearsal
+- [docs/mcp.md](docs/mcp.md)
 
-- [REFACTORING.md](/Users/vanessa/develop/trackvest-api/REFACTORING.md) — refactor backlog, replay-engine decisions, Portfolio vs Dashboard metrics
+- [REFACTORING.md](REFACTORING.md) — refactor backlog, replay-engine decisions, Portfolio vs Dashboard metrics
 
-There are also older root-level markdown files such as [FEATURES.md](/Users/vanessa/develop/trackvest-api/FEATURES.md) and [PROJECT_OVERVIEW.md](/Users/vanessa/develop/trackvest-api/PROJECT_OVERVIEW.md). Prefer **README.md** + **REFACTORING.md** for current direction; update other files when touched, do not assume they are complete.
+There are also older root-level markdown files such as [FEATURES.md](FEATURES.md) and [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md). Prefer **README.md** + **REFACTORING.md** for current direction; update other files when touched, do not assume they are complete.
 
 ## Known gaps
 
