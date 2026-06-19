@@ -75,11 +75,19 @@ See [docs/deployment.md](docs/deployment.md) for production-safe migration polic
 npx prisma migrate reset --force
 ```
 
-If you only need to reseed:
+If you only need to reseed (dev-only — wipes all data):
 
 ```bash
 pnpm db:seed
 ```
+
+Or run the dev seed entry point directly:
+
+```bash
+pnpm db:seed:dev
+```
+
+See [docs/deployment.md](docs/deployment.md) for production bootstrap and demo seed commands.
 
 4. Start the HTTP API
 

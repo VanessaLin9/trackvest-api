@@ -1,68 +1,74 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const SEED_PATH = join(process.cwd(), 'prisma', 'seed.ts')
+const DEV_SEED_RUNNER_PATH = join(process.cwd(), 'prisma', 'seed', 'dev-seed-runner.ts')
+const DEMO_USER_GRAPH_UPSERT_PATH = join(
+  process.cwd(),
+  'prisma',
+  'seed',
+  'demo-user-graph-upsert.ts',
+)
+const PROD_DEMO_RUNNER_PATH = join(process.cwd(), 'prisma', 'seed', 'prod-demo-seed-runner.ts')
 
-function readSeedSource() {
-  return readFileSync(SEED_PATH, 'utf8')
+function readSource(path: string) {
+  return readFileSync(path, 'utf8')
 }
 
-describe('Dev seed (CP0 characterization)', () => {
-  /*
-   * Baseline inventory before CP2 seed separation.
-   * These tests document current behavior; CP2 will add guards and split entry points.
-   */
+describe('Dev seed (CP2 layout)', () => {
+  it('wipes all application tables via deleteMany in dev-seed-runner', () => {
+    const source = readSource(DEV_SEED_RUNNER_PATH)
 
-  it('starts by wiping all application tables via deleteMany', () => {
-    const source = readSeedSource()
-
-    expect(source).toMatch(/async function wipeAllData\(\)/)
+    expect(source).toMatch(/export async function wipeAllData\(prisma: PrismaClient\)/)
     expect(source).toMatch(/await prisma\.user\.deleteMany\(\)/)
     expect(source).toMatch(/await prisma\.glLine\.deleteMany\(\)/)
     expect(source).toMatch(/await prisma\.corporateActionApplication\.deleteMany\(\)/)
   })
 
-  it('has no NODE_ENV production guard before writes (pre-CP2 baseline)', () => {
-    const source = readSeedSource()
+  it('calls assertDevSeedAllowed before any database write', () => {
+    const source = readSource(DEV_SEED_RUNNER_PATH)
 
-    expect(source).not.toMatch(/NODE_ENV/)
-    expect(source).not.toMatch(/ALLOW_PRODUCTION_DEMO_SEED/)
+    expect(source).toMatch(/assertDevSeedAllowed\(\)/)
+    const guardIndex = source.indexOf('assertDevSeedAllowed()')
+    const wipeIndex = source.indexOf('wipeAllData(prisma)')
+    expect(guardIndex).toBeGreaterThan(-1)
+    expect(wipeIndex).toBeGreaterThan(guardIndex)
   })
 
-  it('uses a fixed demo user identity suitable for future prod-demo seed', () => {
-    const source = readSeedSource()
+  it('uses shared demo identity from demo-identity.ts', () => {
+    const source = readSource(DEV_SEED_RUNNER_PATH)
 
-    expect(source).toContain("DEMO_USER_ID = '5f9b7d4a-69d4-4a78-98f4-bc82eeac1001'")
-    expect(source).toContain("DEMO_USER_EMAIL = 'demo@trackvest.local'")
-    expect(source).toMatch(/DEMO_USER_PASSWORD = process\.env\.DEMO_USER_PASSWORD/)
+    expect(source).toContain("from './demo-identity'")
+    expect(source).toContain('resolveDemoUserPassword()')
+    expect(source).not.toMatch(/const DEMO_USER_ID = '/)
   })
 
-  it('creates demo-owned records and global catalog fixtures', () => {
-    const source = readSeedSource()
+  it('seeds global catalog separately from demo user graph', () => {
+    const devSource = readSource(DEV_SEED_RUNNER_PATH)
+    const upsertSource = readSource(DEMO_USER_GRAPH_UPSERT_PATH)
 
-    // User-owned graph (all keyed to demoUser.id or fixed demo account ids)
-    expect(source).toMatch(/await prisma\.user\.create\(/)
-    expect(source).toMatch(/await prisma\.account\.createMany\(/)
-    expect(source).toMatch(/await prisma\.glAccount\.createMany\(/)
-    expect(source).toMatch(/await prisma\.transaction\.createMany\(/)
-    expect(source).toMatch(/await prisma\.position\.createMany\(/)
-    expect(source).toMatch(/await prisma\.positionLot\.createMany\(/)
-    expect(source).toMatch(/await prisma\.sellLotMatch\.createMany\(/)
-    expect(source).toMatch(/await prisma\.glEntry\.createMany\(/)
-    expect(source).toMatch(/await prisma\.glLine\.createMany\(/)
+    expect(devSource).toMatch(/export async function seedGlobalCatalog\(prisma: PrismaClient\)/)
+    expect(devSource).toMatch(/await prisma\.asset\.createMany\(/)
+    expect(devSource).toMatch(/await prisma\.price\.createMany\(/)
 
-    // Global catalog (no userId — shared across users)
-    expect(source).toMatch(/await prisma\.asset\.createMany\(/)
-    expect(source).toMatch(/await prisma\.assetAlias\.createMany\(/)
-
-    // Market data fixtures (asset-scoped, not user-scoped)
-    expect(source).toMatch(/await prisma\.price\.createMany\(/)
-    expect(source).toMatch(/await prisma\.fxRate\.createMany\(/)
+    expect(upsertSource).not.toMatch(/prisma\.asset\./)
+    expect(upsertSource).not.toMatch(/prisma\.price\./)
+    expect(upsertSource).not.toMatch(/prisma\.fxRate\./)
+    expect(upsertSource).toMatch(/await prisma\.user\.upsert\(/)
+    expect(upsertSource).toMatch(/await prisma\.transaction\.upsert\(/)
   })
 
-  it('is wired as the sole Prisma seed entry in prisma.config.ts', () => {
+  it('prod-demo runner requires ALLOW_PRODUCTION_DEMO_SEED and catalog assets', () => {
+    const source = readSource(PROD_DEMO_RUNNER_PATH)
+
+    expect(source).toMatch(/assertProductionDemoSeedAllowed\(\)/)
+    expect(source).toMatch(/assertDemoCatalogAssetsExist\(prisma\)/)
+    expect(source).toMatch(/seedDemoUserGraphUpsert\(prisma\)/)
+    expect(source).not.toMatch(/wipeAllData/)
+  })
+
+  it('wires dev seed through prisma.config.ts seed-dev entry', () => {
     const configSource = readFileSync(join(process.cwd(), 'prisma.config.ts'), 'utf8')
 
-    expect(configSource).toContain("seed: 'ts-node prisma/seed.ts'")
+    expect(configSource).toContain("seed: 'ts-node prisma/seed-dev.ts'")
   })
 })

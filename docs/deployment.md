@@ -30,10 +30,16 @@ Use this flow on the Docker dev database only.
 npx prisma migrate reset --force
 ```
 
-3. Reseed without resetting schema when fixtures drift:
+3. Reseed without resetting schema when fixtures drift (dev-only — wipes all data):
 
 ```bash
 pnpm db:seed
+```
+
+Or equivalently:
+
+```bash
+pnpm db:seed:dev
 ```
 
 4. Create new migration files during feature work:
@@ -45,9 +51,30 @@ pnpm prisma:migrate
 `prisma migrate dev` applies pending migrations to your **local dev DB** and may
 prompt for a migration name. Commit the generated files under `prisma/migrations/`.
 
-The dev seed (`pnpm db:seed` / `prisma/seed.ts`) wipes and recreates demo fixtures.
-It is **not** safe for production or production-like databases. Production-safe seed
-entry points are added in a separate task.
+The dev seed (`pnpm db:seed` / `pnpm db:seed:dev`) wipes and recreates demo fixtures.
+It is **not** safe for production or production-like databases.
+
+## Production bootstrap and demo seed
+
+After migrations are applied, production and production-like environments may run:
+
+```bash
+pnpm db:bootstrap:prod
+```
+
+Idempotent system bootstrap — currently a no-op placeholder for future defaults.
+
+To load the demo user graph without wiping global catalog data:
+
+```bash
+ALLOW_PRODUCTION_DEMO_SEED=true pnpm db:seed:prod-demo
+```
+
+Requirements:
+
+- `ALLOW_PRODUCTION_DEMO_SEED=true` (explicit opt-in)
+- Catalog assets referenced by demo fixtures must already exist (prod-demo does **not** seed Asset, AssetAlias, Price, or FxRate)
+- Uses upsert with fixed ids — safe to re-run for idempotency
 
 ## Production and production-like — schema only
 
@@ -98,8 +125,8 @@ Use this to verify migrations without creating real cloud resources:
 5. Confirm status: `pnpm db:migrate:status` — must exit **0** with no pending, failed, or diverged migrations
 
 Do not run `prisma migrate reset`, `prisma db push`, or `pnpm db:seed` in this mode.
-Bootstrap and production demo seed commands will be documented here after they are
-implemented.
+Run `pnpm db:bootstrap:prod` and, when demo data is needed,
+`ALLOW_PRODUCTION_DEMO_SEED=true pnpm db:seed:prod-demo` instead of dev seed.
 
 ## Forbidden in production and production-like
 
@@ -110,7 +137,8 @@ Never run these against production or a production-like database:
 | `prisma migrate reset` | Drops the database and reruns dev seed |
 | `prisma db push` | Bypasses migration history; can drift from committed migrations |
 | `prisma migrate dev` | Dev workflow; may reset or prompt in ways unsafe for shared data |
-| `pnpm db:seed` / `prisma/seed.ts` | Dev-only; wipes all tables before seeding |
+| `pnpm db:seed` / `pnpm db:seed:dev` | Dev-only; wipes all tables before seeding |
+| `pnpm db:seed:prod-demo` without `ALLOW_PRODUCTION_DEMO_SEED=true` | Refused by seed guard |
 | Custom scripts that truncate tables or bulk-delete without ownership filters | Data loss |
 
 Hostname or database name alone must **not** be treated as an environment guard.
@@ -195,11 +223,11 @@ Before starting the application against a production or production-like database
 1. `pnpm db:migrate:status` — read output; exit **1** is OK **only** if it shows expected pending migrations and no connection error, divergence, or failed migration
 2. `pnpm db:migrate:deploy` — apply pending migrations
 3. `pnpm db:migrate:status` — must exit **0** with no pending, failed, or diverged migrations
-4. Run production bootstrap and production demo seed when those commands exist
+4. Run `pnpm db:bootstrap:prod` and, when needed, `ALLOW_PRODUCTION_DEMO_SEED=true pnpm db:seed:prod-demo`
 5. Start the API; use admin manual sync endpoints to verify external integrations
 6. Leave scheduled jobs disabled unless `ENABLE_SCHEDULED_JOBS=true` is explicitly set
 
-Scheduled job policy and seed separation are documented as those checkpoints land.
+Scheduled job policy is documented as that checkpoint lands.
 
 ## Related documentation
 
