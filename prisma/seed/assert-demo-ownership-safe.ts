@@ -1,4 +1,3 @@
-import { PrismaClient } from '@prisma/client'
 import { SeedGuardError } from '../../src/deployment/seed-guards'
 import {
   DEMO_ACCOUNT_IDS,
@@ -14,14 +13,15 @@ import {
   SELL_MATCH_IDS,
   TRANSACTION_IDS,
 } from './demo-fixture-data'
+import type { SeedDbClient } from './seed-db-client'
 
 function refuse(message: string): never {
   throw new SeedGuardError(message)
 }
 
 /** Refuse upsert when fixed demo ids are owned by a non-demo user or identity. */
-export async function assertDemoOwnershipGraphSafeForUpsert(prisma: PrismaClient) {
-  const userById = await prisma.user.findUnique({ where: { id: DEMO_USER_ID } })
+export async function assertDemoOwnershipGraphSafeForUpsert(db: SeedDbClient) {
+  const userById = await db.user.findUnique({ where: { id: DEMO_USER_ID } })
   if (userById) {
     if (userById.email !== DEMO_USER_EMAIL) {
       refuse(
@@ -37,7 +37,7 @@ export async function assertDemoOwnershipGraphSafeForUpsert(prisma: PrismaClient
     }
   }
 
-  const userByEmail = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL } })
+  const userByEmail = await db.user.findUnique({ where: { email: DEMO_USER_EMAIL } })
   if (userByEmail && userByEmail.id !== DEMO_USER_ID) {
     refuse(
       `Production demo seed refused: email ${DEMO_USER_EMAIL} belongs to user ${userByEmail.id}, ` +
@@ -46,7 +46,7 @@ export async function assertDemoOwnershipGraphSafeForUpsert(prisma: PrismaClient
   }
 
   for (const accountId of DEMO_ACCOUNT_IDS) {
-    const account = await prisma.account.findUnique({ where: { id: accountId } })
+    const account = await db.account.findUnique({ where: { id: accountId } })
     if (account && account.userId !== DEMO_USER_ID) {
       refuse(
         `Production demo seed refused: account ${accountId} belongs to user ${account.userId}, ` +
@@ -56,7 +56,7 @@ export async function assertDemoOwnershipGraphSafeForUpsert(prisma: PrismaClient
   }
 
   for (const glAccountId of Object.values(GL_ACCOUNT_IDS)) {
-    const glAccount = await prisma.glAccount.findUnique({ where: { id: glAccountId } })
+    const glAccount = await db.glAccount.findUnique({ where: { id: glAccountId } })
     if (glAccount && glAccount.userId !== DEMO_USER_ID) {
       refuse(
         `Production demo seed refused: GL account ${glAccountId} belongs to user ${glAccount.userId}, ` +
@@ -66,7 +66,7 @@ export async function assertDemoOwnershipGraphSafeForUpsert(prisma: PrismaClient
   }
 
   for (const transactionId of Object.values(TRANSACTION_IDS)) {
-    const transaction = await prisma.transaction.findUnique({
+    const transaction = await db.transaction.findUnique({
       where: { id: transactionId },
       include: { account: true },
     })
@@ -78,7 +78,7 @@ export async function assertDemoOwnershipGraphSafeForUpsert(prisma: PrismaClient
   }
 
   for (const positionId of Object.values(POSITION_IDS)) {
-    const position = await prisma.position.findUnique({
+    const position = await db.position.findUnique({
       where: { id: positionId },
       include: { account: true },
     })
@@ -90,7 +90,7 @@ export async function assertDemoOwnershipGraphSafeForUpsert(prisma: PrismaClient
   }
 
   for (const lotId of Object.values(LOT_IDS)) {
-    const lot = await prisma.positionLot.findUnique({
+    const lot = await db.positionLot.findUnique({
       where: { id: lotId },
       include: { account: true },
     })
@@ -102,7 +102,7 @@ export async function assertDemoOwnershipGraphSafeForUpsert(prisma: PrismaClient
   }
 
   for (const matchId of Object.values(SELL_MATCH_IDS)) {
-    const match = await prisma.sellLotMatch.findUnique({
+    const match = await db.sellLotMatch.findUnique({
       where: { id: matchId },
       include: {
         sellTransaction: { include: { account: true } },
@@ -116,7 +116,7 @@ export async function assertDemoOwnershipGraphSafeForUpsert(prisma: PrismaClient
   }
 
   for (const entryId of Object.values(GL_ENTRY_IDS)) {
-    const entry = await prisma.glEntry.findUnique({ where: { id: entryId } })
+    const entry = await db.glEntry.findUnique({ where: { id: entryId } })
     if (entry && entry.userId !== DEMO_USER_ID) {
       refuse(
         `Production demo seed refused: GL entry ${entryId} belongs to user ${entry.userId}, ` +
@@ -126,7 +126,7 @@ export async function assertDemoOwnershipGraphSafeForUpsert(prisma: PrismaClient
   }
 
   for (const lineId of Object.values(GL_LINE_IDS)) {
-    const line = await prisma.glLine.findUnique({
+    const line = await db.glLine.findUnique({
       where: { id: lineId },
       include: { entry: true },
     })

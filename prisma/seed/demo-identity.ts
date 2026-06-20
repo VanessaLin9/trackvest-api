@@ -1,8 +1,9 @@
-import { SeedGuardError } from '../../src/deployment/seed-guards'
-
 export const DEMO_USER_ID = '5f9b7d4a-69d4-4a78-98f4-bc82eeac1001'
 export const DEMO_USER_EMAIL = 'demo@trackvest.local'
 export const BCRYPT_ROUNDS = 10
+
+/** Passwords that are allowed for local dev seed only — never for production demo seed. */
+export const DEV_ONLY_DEMO_PASSWORDS = ['demo-password'] as const
 
 export const BANK_ACCOUNT_ID = '497f9b9a-7788-4fb5-93a2-4c8d3f0d5e01'
 export const BROKER_ACCOUNT_ID = 'f0a6c5d2-4f9d-4d4d-b7fb-3c5ef0ddc201'
@@ -41,21 +42,4 @@ export const GL_ACCOUNT_IDS = {
   travelExpense: '5d3d54b5-d72f-4780-a516-75bc4bc02010',
 } as const
 
-/** Local dev only — safe default for Docker reset/seed workflows. */
-export function resolveDevDemoUserPassword() {
-  return process.env.DEMO_USER_PASSWORD ?? 'demo-password'
-}
-
-/** Production demo seed — no default password. */
-export function resolveProductionDemoUserPassword() {
-  const password = process.env.DEMO_USER_PASSWORD?.trim()
-
-  if (!password) {
-    throw new SeedGuardError(
-      'Production demo seed refused: DEMO_USER_PASSWORD must be set to a non-empty secret. ' +
-        'Run: DEMO_USER_PASSWORD=<secret> ALLOW_PRODUCTION_DEMO_SEED=true pnpm db:seed:prod-demo',
-    )
-  }
-
-  return password
-}
+export { resolveDevDemoUserPassword, resolveProductionDemoUserPassword } from './demo-password'

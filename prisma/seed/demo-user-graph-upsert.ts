@@ -1,7 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import bcrypt from 'bcrypt'
 import {
-  BCRYPT_ROUNDS,
   DEMO_USER_EMAIL,
   DEMO_USER_ID,
   resolveProductionDemoUserPassword,
@@ -17,29 +15,26 @@ import {
   getDemoTransactionsData,
 } from './demo-fixture-data'
 import { assertDemoOwnershipGraphSafeForUpsert } from './assert-demo-ownership-safe'
+import { resolveDemoUserPasswordHash } from './demo-user-password'
+import type { SeedDbClient } from './seed-db-client'
 
-/** Demo-user-owned graph only — upsert with fixed ids for idempotent prod-demo seed. */
-export async function seedDemoUserGraphUpsert(prisma: PrismaClient) {
-  await assertDemoOwnershipGraphSafeForUpsert(prisma)
-
-  const demoPasswordHash = await bcrypt.hash(resolveProductionDemoUserPassword(), BCRYPT_ROUNDS)
-
-  await prisma.user.upsert({
+async function upsertDemoUserGraphWrites(db: SeedDbClient, passwordHash: string) {
+  await db.user.upsert({
     where: { id: DEMO_USER_ID },
     create: {
       id: DEMO_USER_ID,
       email: DEMO_USER_EMAIL,
-      passwordHash: demoPasswordHash,
+      passwordHash,
     },
     update: {
       email: DEMO_USER_EMAIL,
-      passwordHash: demoPasswordHash,
+      passwordHash,
     },
   })
 
   for (const account of getDemoAccountsData(DEMO_USER_ID)) {
     const { id, ...fields } = account
-    await prisma.account.upsert({
+    await db.account.upsert({
       where: { id },
       create: account,
       update: fields,
@@ -48,7 +43,7 @@ export async function seedDemoUserGraphUpsert(prisma: PrismaClient) {
 
   for (const glAccount of getDemoGlAccountsData(DEMO_USER_ID)) {
     const { id, ...fields } = glAccount
-    await prisma.glAccount.upsert({
+    await db.glAccount.upsert({
       where: { id },
       create: glAccount,
       update: fields,
@@ -57,7 +52,7 @@ export async function seedDemoUserGraphUpsert(prisma: PrismaClient) {
 
   for (const transaction of getDemoTransactionsData()) {
     const { id, ...fields } = transaction
-    await prisma.transaction.upsert({
+    await db.transaction.upsert({
       where: { id },
       create: transaction,
       update: fields,
@@ -66,7 +61,7 @@ export async function seedDemoUserGraphUpsert(prisma: PrismaClient) {
 
   for (const position of getDemoPositionsData()) {
     const { id, ...fields } = position
-    await prisma.position.upsert({
+    await db.position.upsert({
       where: { id },
       create: position,
       update: fields,
@@ -75,7 +70,7 @@ export async function seedDemoUserGraphUpsert(prisma: PrismaClient) {
 
   for (const lot of getDemoPositionLotsData()) {
     const { id, ...fields } = lot
-    await prisma.positionLot.upsert({
+    await db.positionLot.upsert({
       where: { id },
       create: lot,
       update: fields,
@@ -84,7 +79,7 @@ export async function seedDemoUserGraphUpsert(prisma: PrismaClient) {
 
   for (const match of getDemoSellLotMatchesData()) {
     const { id, ...fields } = match
-    await prisma.sellLotMatch.upsert({
+    await db.sellLotMatch.upsert({
       where: { id },
       create: match,
       update: fields,
@@ -93,7 +88,7 @@ export async function seedDemoUserGraphUpsert(prisma: PrismaClient) {
 
   for (const entry of getDemoGlEntriesData(DEMO_USER_ID)) {
     const { id, ...fields } = entry
-    await prisma.glEntry.upsert({
+    await db.glEntry.upsert({
       where: { id },
       create: entry,
       update: fields,
@@ -102,10 +97,21 @@ export async function seedDemoUserGraphUpsert(prisma: PrismaClient) {
 
   for (const line of getDemoGlLinesData()) {
     const { id, ...fields } = line
-    await prisma.glLine.upsert({
+    await db.glLine.upsert({
       where: { id },
       create: line,
       update: fields,
     })
   }
+}
+
+/** Demo-user-owned graph only — preflight + upserts in one interactive transaction. */
+export async function seedDemoUserGraphUpsert(prisma: PrismaClient) {
+  const password = resolveProductionDemoUserPassword()
+
+  await prisma.$transaction(async (tx) => {
+    await assertDemoOwnershipGraphSafeForUpsert(tx)
+    const passwordHash = await resolveDemoUserPasswordHash(tx, password)
+    await upsertDemoUserGraphWrites(tx, passwordHash)
+  })
 }

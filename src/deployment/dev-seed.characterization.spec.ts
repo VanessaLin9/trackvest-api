@@ -9,6 +9,7 @@ const DEMO_USER_GRAPH_UPSERT_PATH = join(
   'demo-user-graph-upsert.ts',
 )
 const PROD_DEMO_RUNNER_PATH = join(process.cwd(), 'prisma', 'seed', 'prod-demo-seed-runner.ts')
+const CATALOG_BOOTSTRAP_PATH = join(process.cwd(), 'prisma', 'seed', 'catalog-bootstrap.ts')
 
 function readSource(path: string) {
   return readFileSync(path, 'utf8')
@@ -53,9 +54,18 @@ describe('Dev seed (CP2 layout)', () => {
     expect(upsertSource).not.toMatch(/prisma\.asset\./)
     expect(upsertSource).not.toMatch(/prisma\.price\./)
     expect(upsertSource).not.toMatch(/prisma\.fxRate\./)
-    expect(upsertSource).toMatch(/assertDemoOwnershipGraphSafeForUpsert\(prisma\)/)
-    expect(upsertSource).toMatch(/resolveProductionDemoUserPassword\(\)/)
-    expect(upsertSource).toMatch(/await prisma\.transaction\.upsert\(/)
+    expect(upsertSource).toMatch(/\$transaction/)
+    expect(upsertSource).toMatch(/assertDemoOwnershipGraphSafeForUpsert/)
+    expect(upsertSource).toMatch(/resolveDemoUserPasswordHash/)
+    expect(upsertSource).toMatch(/await db\.transaction\.upsert\(/)
+  })
+
+  it('bootstrap catalog uses preflight and transaction before upsert', () => {
+    const source = readSource(CATALOG_BOOTSTRAP_PATH)
+
+    expect(source).toMatch(/assertCatalogBootstrapSafeForUpsert/)
+    expect(source).toMatch(/\$transaction/)
+    expect(source).toMatch(/asset\.upsert/)
   })
 
   it('prod-demo runner requires ALLOW_PRODUCTION_DEMO_SEED and catalog assets', () => {
