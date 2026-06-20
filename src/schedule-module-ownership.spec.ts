@@ -2,6 +2,7 @@ import { ConfigModule } from '@nestjs/config'
 import { MODULE_METADATA } from '@nestjs/common/constants'
 import { Test } from '@nestjs/testing'
 import { ScheduleModule } from '@nestjs/schedule'
+import { withEnv } from './deployment/testing/with-env'
 import { AppModule } from './app.module'
 import { CommonModule } from './common/common.module'
 import { CorpActionScheduler } from './corporate-actions/corp-action.scheduler'
@@ -28,16 +29,25 @@ describe('Schedule module ownership (P5)', () => {
    * - These tests lock scheduler DI registration and the root ScheduleModule pattern.
    */
 
-  it('registers MarketPriceScheduler and CorpActionScheduler when AppModule compiles', async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile()
+  it.each([
+    ['unset', undefined],
+    ['false', 'false'],
+    ['true', 'true'],
+  ] as const)(
+    'registers MarketPriceScheduler and CorpActionScheduler when AppModule compiles with ENABLE_SCHEDULED_JOBS=%s',
+    async (_label, flagValue) => {
+      await withEnv({ ENABLE_SCHEDULED_JOBS: flagValue }, async () => {
+        const moduleRef = await Test.createTestingModule({
+          imports: [AppModule],
+        }).compile()
 
-    expect(moduleRef.get(MarketPriceScheduler)).toBeInstanceOf(MarketPriceScheduler)
-    expect(moduleRef.get(CorpActionScheduler)).toBeInstanceOf(CorpActionScheduler)
+        expect(moduleRef.get(MarketPriceScheduler)).toBeInstanceOf(MarketPriceScheduler)
+        expect(moduleRef.get(CorpActionScheduler)).toBeInstanceOf(CorpActionScheduler)
 
-    await moduleRef.close()
-  })
+        await moduleRef.close()
+      })
+    },
+  )
 
   it('registers CorpActionScheduler when ScheduleModule.forRoot is mounted at root without MarketPriceModule', async () => {
     const moduleRef = await Test.createTestingModule({

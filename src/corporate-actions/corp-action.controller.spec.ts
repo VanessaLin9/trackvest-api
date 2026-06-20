@@ -1,3 +1,4 @@
+import { withEnv } from '../deployment/testing/with-env'
 import { CorpActionController } from './corp-action.controller'
 import { CorpActionService } from './corp-action.service'
 
@@ -44,6 +45,23 @@ describe('CorpActionController (CP0 characterization)', () => {
       eventsUpserted: 2,
       scopesReplayed: 1,
       replayPending: 0,
+    })
+  })
+
+  describe('when ENABLE_SCHEDULED_JOBS=false', () => {
+    it('syncSplits still delegates to corpActionService', async () => {
+      await withEnv({ ENABLE_SCHEDULED_JOBS: 'false' }, async () => {
+        const { controller, corpActionService } = createHarness()
+        corpActionService.syncSplits.mockResolvedValue({
+          eventsUpserted: 1,
+          scopesReplayed: 0,
+          replayPending: 0,
+        })
+
+        await controller.syncSplits({ market: 'tw' })
+
+        expect(corpActionService.syncSplits).toHaveBeenCalledWith({ market: 'tw' })
+      })
     })
   })
 })

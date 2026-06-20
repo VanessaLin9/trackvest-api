@@ -1,12 +1,10 @@
+import { isEnvFlagTrue } from './env-flags'
+
 export class SeedGuardError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'SeedGuardError'
   }
-}
-
-export function isEnvFlagTrue(name: string): boolean {
-  return process.env[name] === 'true'
 }
 
 /** Dev seed must not run under production runtime. Call before any Prisma write. */

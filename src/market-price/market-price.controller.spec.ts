@@ -1,3 +1,4 @@
+import { withEnv } from '../deployment/testing/with-env'
 import { MarketPriceController } from './market-price.controller'
 import { TaiwanPriceSyncModeDto } from './dto/sync-taiwan-prices.dto'
 import { UsPriceSyncModeDto } from './dto/sync-us-prices.dto'
@@ -85,6 +86,42 @@ describe('MarketPriceController (CP0 characterization)', () => {
       assetsProcessed: 3,
       assetsSkipped: 1,
       market: 'us',
+    })
+  })
+
+  describe('when ENABLE_SCHEDULED_JOBS=false', () => {
+    it('syncTaiwanPrices still delegates to marketPriceService', async () => {
+      await withEnv({ ENABLE_SCHEDULED_JOBS: 'false' }, async () => {
+        const { controller, marketPriceService } = createHarness()
+        marketPriceService.syncTaiwanPrices.mockResolvedValue({
+          rowsUpserted: 1,
+          assetsProcessed: 1,
+          assetsSkipped: 0,
+        })
+
+        await controller.syncTaiwanPrices({ mode: TaiwanPriceSyncModeDto.daily })
+
+        expect(marketPriceService.syncTaiwanPrices).toHaveBeenCalledWith({
+          mode: TaiwanPriceSyncModeDto.daily,
+        })
+      })
+    })
+
+    it('syncUsPrices still delegates to marketPriceService', async () => {
+      await withEnv({ ENABLE_SCHEDULED_JOBS: 'false' }, async () => {
+        const { controller, marketPriceService } = createHarness()
+        marketPriceService.syncUsPrices.mockResolvedValue({
+          rowsUpserted: 1,
+          assetsProcessed: 1,
+          assetsSkipped: 0,
+        })
+
+        await controller.syncUsPrices({ mode: UsPriceSyncModeDto.daily })
+
+        expect(marketPriceService.syncUsPrices).toHaveBeenCalledWith({
+          mode: UsPriceSyncModeDto.daily,
+        })
+      })
     })
   })
 })
