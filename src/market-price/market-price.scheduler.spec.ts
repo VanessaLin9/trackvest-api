@@ -3,12 +3,7 @@ import { expectCronSchedule } from '../deployment/testing/cron-metadata'
 import { MarketPriceScheduler } from './market-price.scheduler'
 import { MarketPriceService } from './market-price.service'
 
-describe('MarketPriceScheduler (CP0 characterization)', () => {
-  /*
-   * Baseline: cron handlers always delegate to MarketPriceService when invoked.
-   * CP3 will add ENABLE_SCHEDULED_JOBS guard and flip the flag=false expectations.
-   */
-
+describe('MarketPriceScheduler', () => {
   const prototype = MarketPriceScheduler.prototype
 
   function createHarness() {
@@ -60,42 +55,52 @@ describe('MarketPriceScheduler (CP0 characterization)', () => {
     })
   })
 
-  it('syncTwDailyCron delegates to syncTaiwanPrices with default mode', async () => {
-    const { scheduler, marketPriceService } = createHarness()
+  describe('when ENABLE_SCHEDULED_JOBS=true', () => {
+    it('syncTwDailyCron delegates to syncTaiwanPrices with default mode', async () => {
+      await withEnv({ ENABLE_SCHEDULED_JOBS: 'true' }, async () => {
+        const { scheduler, marketPriceService } = createHarness()
 
-    await scheduler.syncTwDailyCron()
+        await scheduler.syncTwDailyCron()
 
-    expect(marketPriceService.syncTaiwanPrices).toHaveBeenCalledTimes(1)
-    expect(marketPriceService.syncTaiwanPrices).toHaveBeenCalledWith()
+        expect(marketPriceService.syncTaiwanPrices).toHaveBeenCalledTimes(1)
+        expect(marketPriceService.syncTaiwanPrices).toHaveBeenCalledWith()
+      })
+    })
+
+    it('syncUsDailyCron delegates to syncUsPrices with default mode', async () => {
+      await withEnv({ ENABLE_SCHEDULED_JOBS: 'true' }, async () => {
+        const { scheduler, marketPriceService } = createHarness()
+
+        await scheduler.syncUsDailyCron()
+
+        expect(marketPriceService.syncUsPrices).toHaveBeenCalledTimes(1)
+        expect(marketPriceService.syncUsPrices).toHaveBeenCalledWith()
+      })
+    })
+
+    it('syncTwBackfillCron delegates to syncTaiwanPrices in backfill mode', async () => {
+      await withEnv({ ENABLE_SCHEDULED_JOBS: 'true' }, async () => {
+        const { scheduler, marketPriceService } = createHarness()
+
+        await scheduler.syncTwBackfillCron()
+
+        expect(marketPriceService.syncTaiwanPrices).toHaveBeenCalledWith({ mode: 'backfill' })
+      })
+    })
+
+    it('syncUsBackfillCron delegates to syncUsPrices in backfill mode', async () => {
+      await withEnv({ ENABLE_SCHEDULED_JOBS: 'true' }, async () => {
+        const { scheduler, marketPriceService } = createHarness()
+
+        await scheduler.syncUsBackfillCron()
+
+        expect(marketPriceService.syncUsPrices).toHaveBeenCalledWith({ mode: 'backfill' })
+      })
+    })
   })
 
-  it('syncUsDailyCron delegates to syncUsPrices with default mode', async () => {
-    const { scheduler, marketPriceService } = createHarness()
-
-    await scheduler.syncUsDailyCron()
-
-    expect(marketPriceService.syncUsPrices).toHaveBeenCalledTimes(1)
-    expect(marketPriceService.syncUsPrices).toHaveBeenCalledWith()
-  })
-
-  it('syncTwBackfillCron delegates to syncTaiwanPrices in backfill mode', async () => {
-    const { scheduler, marketPriceService } = createHarness()
-
-    await scheduler.syncTwBackfillCron()
-
-    expect(marketPriceService.syncTaiwanPrices).toHaveBeenCalledWith({ mode: 'backfill' })
-  })
-
-  it('syncUsBackfillCron delegates to syncUsPrices in backfill mode', async () => {
-    const { scheduler, marketPriceService } = createHarness()
-
-    await scheduler.syncUsBackfillCron()
-
-    expect(marketPriceService.syncUsPrices).toHaveBeenCalledWith({ mode: 'backfill' })
-  })
-
-  describe('ENABLE_SCHEDULED_JOBS baseline (pre-CP3)', () => {
-    it('still delegates all handlers when ENABLE_SCHEDULED_JOBS=false', async () => {
+  describe('ENABLE_SCHEDULED_JOBS guard', () => {
+    it('skips all handlers when ENABLE_SCHEDULED_JOBS=false', async () => {
       await withEnv({ ENABLE_SCHEDULED_JOBS: 'false' }, async () => {
         const { scheduler, marketPriceService } = createHarness()
 
@@ -104,8 +109,22 @@ describe('MarketPriceScheduler (CP0 characterization)', () => {
         await scheduler.syncTwBackfillCron()
         await scheduler.syncUsBackfillCron()
 
-        expect(marketPriceService.syncTaiwanPrices).toHaveBeenCalledTimes(2)
-        expect(marketPriceService.syncUsPrices).toHaveBeenCalledTimes(2)
+        expect(marketPriceService.syncTaiwanPrices).not.toHaveBeenCalled()
+        expect(marketPriceService.syncUsPrices).not.toHaveBeenCalled()
+      })
+    })
+
+    it('skips all handlers when ENABLE_SCHEDULED_JOBS is unset', async () => {
+      await withEnv({ ENABLE_SCHEDULED_JOBS: undefined }, async () => {
+        const { scheduler, marketPriceService } = createHarness()
+
+        await scheduler.syncTwDailyCron()
+        await scheduler.syncUsDailyCron()
+        await scheduler.syncTwBackfillCron()
+        await scheduler.syncUsBackfillCron()
+
+        expect(marketPriceService.syncTaiwanPrices).not.toHaveBeenCalled()
+        expect(marketPriceService.syncUsPrices).not.toHaveBeenCalled()
       })
     })
   })

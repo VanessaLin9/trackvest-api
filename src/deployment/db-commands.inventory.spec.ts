@@ -41,6 +41,7 @@ describe('DB / schema command inventory (CP2)', () => {
     expect(deploymentDoc).toMatch(/pnpm db:bootstrap:prod/)
     expect(deploymentDoc).toMatch(/ALLOW_PRODUCTION_DEMO_SEED=true pnpm db:seed:prod-demo/)
     expect(deploymentDoc).toMatch(/Forbidden in production/)
+    expect(deploymentDoc).toMatch(/ENABLE_SCHEDULED_JOBS=true/)
   })
 
   it('documents ALLOW_PRODUCTION_DEMO_SEED in .env.example', () => {
@@ -50,10 +51,10 @@ describe('DB / schema command inventory (CP2)', () => {
     expect(envExample).toMatch(/DEMO_USER_PASSWORD/)
   })
 
-  it('does not yet document ENABLE_SCHEDULED_JOBS (pre-CP3 baseline)', () => {
+  it('documents ENABLE_SCHEDULED_JOBS in .env.example', () => {
     const envExample = readFileSync(join(process.cwd(), '.env.example'), 'utf8')
 
-    expect(envExample).not.toMatch(/ENABLE_SCHEDULED_JOBS/)
+    expect(envExample).toMatch(/ENABLE_SCHEDULED_JOBS/)
   })
 
   it('registers ScheduleModule.forRoot at AppModule (pre-CP3 baseline)', () => {

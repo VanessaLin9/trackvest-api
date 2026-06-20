@@ -3,12 +3,7 @@ import { expectCronSchedule } from '../deployment/testing/cron-metadata'
 import { CorpActionScheduler } from './corp-action.scheduler'
 import { CorpActionService } from './corp-action.service'
 
-describe('CorpActionScheduler (CP0 characterization)', () => {
-  /*
-   * Baseline: cron handlers always delegate to CorpActionService when invoked.
-   * CP3 will add ENABLE_SCHEDULED_JOBS guard and flip the flag=false expectations.
-   */
-
+describe('CorpActionScheduler', () => {
   const prototype = CorpActionScheduler.prototype
 
   function createHarness() {
@@ -41,33 +36,50 @@ describe('CorpActionScheduler (CP0 characterization)', () => {
     })
   })
 
-  it('syncTwSplitsCron delegates to syncSplits for tw market', async () => {
-    const { scheduler, corpActionService } = createHarness()
+  describe('when ENABLE_SCHEDULED_JOBS=true', () => {
+    it('syncTwSplitsCron delegates to syncSplits for tw market', async () => {
+      await withEnv({ ENABLE_SCHEDULED_JOBS: 'true' }, async () => {
+        const { scheduler, corpActionService } = createHarness()
 
-    await scheduler.syncTwSplitsCron()
+        await scheduler.syncTwSplitsCron()
 
-    expect(corpActionService.syncSplits).toHaveBeenCalledTimes(1)
-    expect(corpActionService.syncSplits).toHaveBeenCalledWith({ market: 'tw' })
+        expect(corpActionService.syncSplits).toHaveBeenCalledTimes(1)
+        expect(corpActionService.syncSplits).toHaveBeenCalledWith({ market: 'tw' })
+      })
+    })
+
+    it('syncUsSplitsCron delegates to syncSplits for us market', async () => {
+      await withEnv({ ENABLE_SCHEDULED_JOBS: 'true' }, async () => {
+        const { scheduler, corpActionService } = createHarness()
+
+        await scheduler.syncUsSplitsCron()
+
+        expect(corpActionService.syncSplits).toHaveBeenCalledTimes(1)
+        expect(corpActionService.syncSplits).toHaveBeenCalledWith({ market: 'us' })
+      })
+    })
   })
 
-  it('syncUsSplitsCron delegates to syncSplits for us market', async () => {
-    const { scheduler, corpActionService } = createHarness()
-
-    await scheduler.syncUsSplitsCron()
-
-    expect(corpActionService.syncSplits).toHaveBeenCalledTimes(1)
-    expect(corpActionService.syncSplits).toHaveBeenCalledWith({ market: 'us' })
-  })
-
-  describe('ENABLE_SCHEDULED_JOBS baseline (pre-CP3)', () => {
-    it('still delegates all handlers when ENABLE_SCHEDULED_JOBS=false', async () => {
+  describe('ENABLE_SCHEDULED_JOBS guard', () => {
+    it('skips all handlers when ENABLE_SCHEDULED_JOBS=false', async () => {
       await withEnv({ ENABLE_SCHEDULED_JOBS: 'false' }, async () => {
         const { scheduler, corpActionService } = createHarness()
 
         await scheduler.syncTwSplitsCron()
         await scheduler.syncUsSplitsCron()
 
-        expect(corpActionService.syncSplits).toHaveBeenCalledTimes(2)
+        expect(corpActionService.syncSplits).not.toHaveBeenCalled()
+      })
+    })
+
+    it('skips all handlers when ENABLE_SCHEDULED_JOBS is unset', async () => {
+      await withEnv({ ENABLE_SCHEDULED_JOBS: undefined }, async () => {
+        const { scheduler, corpActionService } = createHarness()
+
+        await scheduler.syncTwSplitsCron()
+        await scheduler.syncUsSplitsCron()
+
+        expect(corpActionService.syncSplits).not.toHaveBeenCalled()
       })
     })
   })

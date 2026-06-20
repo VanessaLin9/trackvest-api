@@ -229,7 +229,23 @@ Before starting the application against a production or production-like database
 5. Start the API; use admin manual sync endpoints to verify external integrations
 6. Leave scheduled jobs disabled unless `ENABLE_SCHEDULED_JOBS=true` is explicitly set
 
-Scheduled job policy is documented as that checkpoint lands.
+## Scheduled jobs
+
+`ScheduleModule` is always registered so cron handlers exist, but they **no-op** unless
+`ENABLE_SCHEDULED_JOBS=true`. Unset or any value other than exactly `true` keeps jobs
+disabled — safe for production deploy and production-like rehearsal.
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `ENABLE_SCHEDULED_JOBS` | disabled | When `true`, runs TW/US price sync and split sync crons |
+
+Manual sync remains available via admin HTTP endpoints and CLI scripts
+(`pnpm prices:sync-tw`, `pnpm prices:sync-us`, `pnpm corp-actions:sync-splits`) regardless
+of this flag.
+
+For local development, leave the flag unset unless you want the API process to run
+scheduled FinMind sync on cron. Production and production-like environments should keep
+it disabled until external integrations are verified via manual sync.
 
 ## Related documentation
 
