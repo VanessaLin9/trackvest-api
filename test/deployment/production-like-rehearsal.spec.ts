@@ -23,7 +23,7 @@ import {
   dropRehearsalSchema,
   migrateStatusExitCode,
   type RehearsalDatabaseConfig,
-} from '../helpers/rehearsal-db'
+} from '../../src/deployment/rehearsal-db'
 
 const REHEARSAL_PASSWORD = 'rehearsal-test-secret'
 const REAL_USER_ID = '00000000-0000-4000-8000-000000000099'

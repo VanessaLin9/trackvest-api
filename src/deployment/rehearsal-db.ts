@@ -3,6 +3,10 @@ import { randomUUID } from 'crypto'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { PrismaClient } from '@prisma/client'
+import {
+  assertLocalhostDatabaseUrl,
+  assertRehearsalDbRecreateAllowed,
+} from './rehearsal-guards'
 
 export type RehearsalDatabaseConfig = {
   adminUrl: string
@@ -41,7 +45,9 @@ export function withDatabaseName(databaseUrl: string, databaseName: string) {
 }
 
 export function resolveBaseDatabaseUrl() {
-  return process.env.DATABASE_URL ?? readDatabaseUrlFromEnvFile()
+  const databaseUrl = process.env.DATABASE_URL ?? readDatabaseUrlFromEnvFile()
+  assertLocalhostDatabaseUrl(databaseUrl)
+  return databaseUrl
 }
 
 export function createEphemeralRehearsalConfig(): RehearsalDatabaseConfig {
@@ -65,6 +71,8 @@ export function postgresAdminUrl() {
 }
 
 export function deployMigrations(databaseUrl: string) {
+  assertLocalhostDatabaseUrl(databaseUrl)
+
   execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'deploy'], {
     cwd: process.cwd(),
     env: {
@@ -76,6 +84,8 @@ export function deployMigrations(databaseUrl: string) {
 }
 
 export function migrateStatusExitCode(databaseUrl: string) {
+  assertLocalhostDatabaseUrl(databaseUrl)
+
   try {
     execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'status'], {
       cwd: process.cwd(),
@@ -93,6 +103,8 @@ export function migrateStatusExitCode(databaseUrl: string) {
 }
 
 export function createPrismaClient(databaseUrl: string) {
+  assertLocalhostDatabaseUrl(databaseUrl)
+
   return new PrismaClient({
     datasources: {
       db: { url: databaseUrl },
@@ -101,6 +113,8 @@ export function createPrismaClient(databaseUrl: string) {
 }
 
 export async function dropRehearsalSchema(adminUrl: string, schema: string) {
+  assertLocalhostDatabaseUrl(adminUrl)
+
   const prisma = createPrismaClient(adminUrl)
 
   try {
@@ -111,7 +125,10 @@ export async function dropRehearsalSchema(adminUrl: string, schema: string) {
 }
 
 export async function recreateNamedRehearsalDatabase(databaseName = REHEARSAL_DATABASE_NAME) {
+  assertRehearsalDbRecreateAllowed()
+
   const adminUrl = postgresAdminUrl()
+  const rehearsalUrl = createNamedRehearsalDatabaseUrl(databaseName)
   const admin = createPrismaClient(adminUrl)
 
   try {
@@ -126,5 +143,5 @@ export async function recreateNamedRehearsalDatabase(databaseName = REHEARSAL_DA
     await admin.$disconnect()
   }
 
-  return createNamedRehearsalDatabaseUrl(databaseName)
+  return rehearsalUrl
 }

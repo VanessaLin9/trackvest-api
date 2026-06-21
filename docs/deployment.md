@@ -123,8 +123,11 @@ Use this to verify migrations without creating real cloud resources.
 **Automated rehearsal**
 
 ```bash
-pnpm db:rehearsal
+ALLOW_REHEARSAL_DB_RECREATE=true pnpm db:rehearsal
 ```
+
+Requires `ALLOW_REHEARSAL_DB_RECREATE=true` and a `DATABASE_URL` whose host is
+`localhost` or `127.0.0.1` only — remote hosts are refused.
 
 This recreates local database `trackvest_rehearsal` on the Docker Postgres instance,
 sets `NODE_ENV=production`, runs `migrate deploy`, bootstrap, prod-demo seed twice
@@ -137,7 +140,7 @@ pnpm test:deployment
 ```
 
 Uses an ephemeral `rehearsal_<uuid>` schema on the same Postgres instance; dropped after
-the suite completes.
+the suite completes. Also limited to localhost or `127.0.0.1` hosts.
 
 **Manual checklist**
 

@@ -44,7 +44,7 @@ describe('DB / schema command inventory (CP2)', () => {
     expect(deploymentDoc).toMatch(/ALLOW_PRODUCTION_DEMO_SEED=true pnpm db:seed:prod-demo/)
     expect(deploymentDoc).toMatch(/Forbidden in production/)
     expect(deploymentDoc).toMatch(/ENABLE_SCHEDULED_JOBS=true/)
-    expect(deploymentDoc).toMatch(/pnpm db:rehearsal/)
+    expect(deploymentDoc).toMatch(/ALLOW_REHEARSAL_DB_RECREATE=true pnpm db:rehearsal/)
     expect(deploymentDoc).toMatch(/pnpm test:deployment/)
   })
 
@@ -59,6 +59,7 @@ describe('DB / schema command inventory (CP2)', () => {
     const envExample = readFileSync(join(process.cwd(), '.env.example'), 'utf8')
 
     expect(envExample).toMatch(/ENABLE_SCHEDULED_JOBS/)
+    expect(envExample).toMatch(/ALLOW_REHEARSAL_DB_RECREATE/)
   })
 
   it('registers ScheduleModule.forRoot at AppModule (pre-CP3 baseline)', () => {

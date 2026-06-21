@@ -1,7 +1,6 @@
 import { execFileSync } from 'child_process'
 import { assertDevSeedAllowed } from '../src/deployment/seed-guards'
-import { runProductionBootstrap } from '../prisma/seed/bootstrap-runner'
-import { runProductionDemoSeed } from '../prisma/seed/prod-demo-seed-runner'
+import { assertRehearsalDbRecreateAllowed } from '../src/deployment/rehearsal-guards'
 import {
   createNamedRehearsalDatabaseUrl,
   createPrismaClient,
@@ -9,7 +8,9 @@ import {
   migrateStatusExitCode,
   recreateNamedRehearsalDatabase,
   REHEARSAL_DATABASE_NAME,
-} from '../test/helpers/rehearsal-db'
+} from '../src/deployment/rehearsal-db'
+import { runProductionBootstrap } from '../prisma/seed/bootstrap-runner'
+import { runProductionDemoSeed } from '../prisma/seed/prod-demo-seed-runner'
 
 const REHEARSAL_PASSWORD = process.env.DEMO_USER_PASSWORD?.trim() || 'rehearsal-local-secret'
 
@@ -68,6 +69,7 @@ async function snapshotDemoGraphCounts(databaseUrl: string) {
 }
 
 async function main() {
+  assertRehearsalDbRecreateAllowed()
   console.log(`Recreating rehearsal database "${REHEARSAL_DATABASE_NAME}"...`)
   const rehearsalUrl = await recreateNamedRehearsalDatabase()
 
