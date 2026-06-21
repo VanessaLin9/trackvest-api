@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Cron } from '@nestjs/schedule'
+import { isScheduledJobsEnabled } from '../deployment/scheduled-jobs.config'
 import { CorpActionService } from './corp-action.service'
 
 @Injectable()
@@ -11,6 +12,9 @@ export class CorpActionScheduler {
   /** Daily TW split sync after market data refresh. */
   @Cron('0 18 * * 1-5', { timeZone: 'Asia/Taipei' })
   async syncTwSplitsCron() {
+    if (!isScheduledJobsEnabled()) {
+      return
+    }
     this.logger.log('Starting scheduled TW split sync')
     try {
       const result = await this.corpActionService.syncSplits({ market: 'tw' })
@@ -28,6 +32,9 @@ export class CorpActionScheduler {
   /** Daily US split sync placeholder (v1 provider returns no events). */
   @Cron('30 18 * * 1-5', { timeZone: 'America/New_York' })
   async syncUsSplitsCron() {
+    if (!isScheduledJobsEnabled()) {
+      return
+    }
     this.logger.log('Starting scheduled US split sync')
     try {
       const result = await this.corpActionService.syncSplits({ market: 'us' })

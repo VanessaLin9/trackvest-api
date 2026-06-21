@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Cron } from '@nestjs/schedule'
+import { isScheduledJobsEnabled } from '../deployment/scheduled-jobs.config'
 import { MarketPriceService } from './market-price.service'
 
 @Injectable()
@@ -11,6 +12,9 @@ export class MarketPriceScheduler {
   /** Mon–Fri after Taiwan cash market close (~17:30 data refresh). */
   @Cron('45 17 * * 1-5', { timeZone: 'Asia/Taipei' })
   async syncTwDailyCron() {
+    if (!isScheduledJobsEnabled()) {
+      return
+    }
     this.logger.log('Starting scheduled TW daily price sync')
     try {
       const result = await this.marketPriceService.syncTaiwanPrices()
@@ -28,6 +32,9 @@ export class MarketPriceScheduler {
   /** Mon–Fri after US cash market close (NYSE 16:00 ET). */
   @Cron('15 17 * * 1-5', { timeZone: 'America/New_York' })
   async syncUsDailyCron() {
+    if (!isScheduledJobsEnabled()) {
+      return
+    }
     this.logger.log('Starting scheduled US daily price sync')
     try {
       const result = await this.marketPriceService.syncUsPrices()
@@ -45,6 +52,9 @@ export class MarketPriceScheduler {
   /** Nightly backfill for ever-held TWD assets (rate-limited per run). */
   @Cron('0 2 * * *', { timeZone: 'Asia/Taipei' })
   async syncTwBackfillCron() {
+    if (!isScheduledJobsEnabled()) {
+      return
+    }
     this.logger.log('Starting scheduled TW backfill price sync')
     try {
       const result = await this.marketPriceService.syncTaiwanPrices({ mode: 'backfill' })
@@ -62,6 +72,9 @@ export class MarketPriceScheduler {
   /** Nightly backfill for ever-held USD assets (rate-limited per run). */
   @Cron('30 2 * * *', { timeZone: 'America/New_York' })
   async syncUsBackfillCron() {
+    if (!isScheduledJobsEnabled()) {
+      return
+    }
     this.logger.log('Starting scheduled US backfill price sync')
     try {
       const result = await this.marketPriceService.syncUsPrices({ mode: 'backfill' })
