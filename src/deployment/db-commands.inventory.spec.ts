@@ -25,6 +25,8 @@ describe('DB / schema command inventory (CP2)', () => {
     expect(scripts['db:seed:dev']).toBe('ts-node prisma/seed-dev.ts')
     expect(scripts['db:bootstrap:prod']).toBe('ts-node prisma/bootstrap-prod.ts')
     expect(scripts['db:seed:prod-demo']).toBe('ts-node prisma/seed-prod-demo.ts')
+    expect(scripts['db:rehearsal']).toBe('ts-node scripts/rehearsal-prod-like.ts')
+    expect(scripts['test:deployment']).toContain('jest-deployment.json')
     expect(scripts['prices:sync-tw']).toBeDefined()
     expect(scripts['prices:sync-us']).toBeDefined()
     expect(scripts['corp-actions:sync-splits']).toBeDefined()
@@ -42,6 +44,8 @@ describe('DB / schema command inventory (CP2)', () => {
     expect(deploymentDoc).toMatch(/ALLOW_PRODUCTION_DEMO_SEED=true pnpm db:seed:prod-demo/)
     expect(deploymentDoc).toMatch(/Forbidden in production/)
     expect(deploymentDoc).toMatch(/ENABLE_SCHEDULED_JOBS=true/)
+    expect(deploymentDoc).toMatch(/pnpm db:rehearsal/)
+    expect(deploymentDoc).toMatch(/pnpm test:deployment/)
   })
 
   it('documents ALLOW_PRODUCTION_DEMO_SEED in .env.example', () => {

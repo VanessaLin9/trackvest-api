@@ -23,6 +23,8 @@
     "db:seed:dev": "ts-node prisma/seed-dev.ts",
     "db:bootstrap:prod": "ts-node prisma/bootstrap-prod.ts",
     "db:seed:prod-demo": "ts-node prisma/seed-prod-demo.ts",
+    "db:rehearsal": "ts-node scripts/rehearsal-prod-like.ts",
+    "test:deployment": "jest --config ./test/jest-deployment.json --runInBand",
     "finmind:smoke": "ts-node scripts/finmind-smoke-test.ts",
     "prices:sync-tw": "ts-node -r tsconfig-paths/register scripts/sync-taiwan-prices.ts",
     "prices:sync-us": "ts-node -r tsconfig-paths/register scripts/sync-us-prices.ts",

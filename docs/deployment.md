@@ -118,17 +118,60 @@ the application.
 
 ### Production-like rehearsal on a temporary local database
 
-Use this to verify migrations without creating real cloud resources:
+Use this to verify migrations without creating real cloud resources.
 
-1. Start a local Postgres instance (for example `pnpm db:up`).
-2. Create a **dedicated** database or schema and set `DATABASE_URL` to it.
-3. Export `NODE_ENV=production`.
-4. Deploy migrations: `pnpm db:migrate:deploy`
-5. Confirm status: `pnpm db:migrate:status` — must exit **0** with no pending, failed, or diverged migrations
+**Automated rehearsal**
+
+```bash
+pnpm db:rehearsal
+```
+
+This recreates local database `trackvest_rehearsal` on the Docker Postgres instance,
+sets `NODE_ENV=production`, runs `migrate deploy`, bootstrap, prod-demo seed twice
+for idempotency, and verifies dev seed is refused.
+
+**Integration tests**
+
+```bash
+pnpm test:deployment
+```
+
+Uses an ephemeral `rehearsal_<uuid>` schema on the same Postgres instance; dropped after
+the suite completes.
+
+**Manual checklist**
+
+1. Start a local Postgres instance: `pnpm db:up`
+2. Point at a **dedicated** database — not your daily dev `trackvest` database:
+
+```bash
+export DATABASE_URL="postgresql://trackvest:trackvest@localhost:5433/trackvest_rehearsal?schema=public"
+export NODE_ENV=production
+```
+
+3. Deploy migrations: `pnpm db:migrate:deploy`
+4. Confirm status: `pnpm db:migrate:status` — must exit **0** with no pending, failed, or diverged migrations
+5. Bootstrap catalog: `pnpm db:bootstrap:prod`
+6. Load demo graph when needed:
+
+```bash
+DEMO_USER_PASSWORD=<secret> ALLOW_PRODUCTION_DEMO_SEED=true pnpm db:seed:prod-demo
+```
+
+7. Re-run steps 5–6 to confirm idempotency — row counts should not change
+8. Confirm dev seed is refused: `NODE_ENV=production pnpm db:seed:dev` must fail before any write
+9. Start the API with `ENABLE_SCHEDULED_JOBS` unset; verify manual sync endpoints work
 
 Do not run `prisma migrate reset`, `prisma db push`, or `pnpm db:seed` in this mode.
 Run `pnpm db:bootstrap:prod` and, when demo data is needed,
 `ALLOW_PRODUCTION_DEMO_SEED=true pnpm db:seed:prod-demo` instead of dev seed.
+
+After rehearsal, your daily dev database is unchanged. To restore dev fixtures on the
+main `trackvest` database:
+
+```bash
+npx prisma migrate reset --force
+```
 
 ## Forbidden in production and production-like
 
