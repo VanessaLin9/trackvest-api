@@ -6,7 +6,11 @@ import { PrismaClient } from '@prisma/client'
 import {
   assertLocalhostDatabaseUrl,
   assertRehearsalDbRecreateAllowed,
+  assertRehearsalRecreateTargetDatabaseName,
+  REHEARSAL_DATABASE_NAME,
 } from './rehearsal-guards'
+
+export { REHEARSAL_DATABASE_NAME } from './rehearsal-guards'
 
 export type RehearsalDatabaseConfig = {
   adminUrl: string
@@ -14,8 +18,6 @@ export type RehearsalDatabaseConfig = {
   schema: string
   rehearsalUrl: string
 }
-
-export const REHEARSAL_DATABASE_NAME = 'trackvest_rehearsal'
 
 export function readDatabaseUrlFromEnvFile() {
   const envPath = join(process.cwd(), '.env')
@@ -62,8 +64,8 @@ export function createEphemeralRehearsalConfig(): RehearsalDatabaseConfig {
   }
 }
 
-export function createNamedRehearsalDatabaseUrl(databaseName = REHEARSAL_DATABASE_NAME) {
-  return withDatabaseName(resolveBaseDatabaseUrl(), databaseName)
+export function createNamedRehearsalDatabaseUrl() {
+  return withDatabaseName(resolveBaseDatabaseUrl(), REHEARSAL_DATABASE_NAME)
 }
 
 export function postgresAdminUrl() {
@@ -124,21 +126,22 @@ export async function dropRehearsalSchema(adminUrl: string, schema: string) {
   }
 }
 
-export async function recreateNamedRehearsalDatabase(databaseName = REHEARSAL_DATABASE_NAME) {
+export async function recreateNamedRehearsalDatabase() {
   assertRehearsalDbRecreateAllowed()
+  assertRehearsalRecreateTargetDatabaseName(REHEARSAL_DATABASE_NAME)
 
   const adminUrl = postgresAdminUrl()
-  const rehearsalUrl = createNamedRehearsalDatabaseUrl(databaseName)
+  const rehearsalUrl = createNamedRehearsalDatabaseUrl()
   const admin = createPrismaClient(adminUrl)
 
   try {
     await admin.$executeRawUnsafe(`
       SELECT pg_terminate_backend(pid)
       FROM pg_stat_activity
-      WHERE datname = '${databaseName}' AND pid <> pg_backend_pid()
+      WHERE datname = '${REHEARSAL_DATABASE_NAME}' AND pid <> pg_backend_pid()
     `)
-    await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${databaseName}"`)
-    await admin.$executeRawUnsafe(`CREATE DATABASE "${databaseName}"`)
+    await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${REHEARSAL_DATABASE_NAME}"`)
+    await admin.$executeRawUnsafe(`CREATE DATABASE "${REHEARSAL_DATABASE_NAME}"`)
   } finally {
     await admin.$disconnect()
   }

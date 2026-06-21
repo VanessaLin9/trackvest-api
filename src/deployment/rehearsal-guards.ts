@@ -1,5 +1,7 @@
 import { isEnvFlagTrue } from './env-flags'
 
+export const REHEARSAL_DATABASE_NAME = 'trackvest_rehearsal'
+
 export class RehearsalGuardError extends Error {
   constructor(message: string) {
     super(message)
@@ -44,6 +46,16 @@ export function assertRehearsalDbRecreateAllowed(): void {
     throw new RehearsalGuardError(
       'Rehearsal refused: set ALLOW_REHEARSAL_DB_RECREATE=true. ' +
         'Run: ALLOW_REHEARSAL_DB_RECREATE=true pnpm db:rehearsal',
+    )
+  }
+}
+
+/** Only the dedicated rehearsal database may be dropped and recreated. */
+export function assertRehearsalRecreateTargetDatabaseName(databaseName: string): void {
+  if (databaseName !== REHEARSAL_DATABASE_NAME) {
+    throw new RehearsalGuardError(
+      `Rehearsal refused: database "${databaseName}" is not an allowed recreate target. ` +
+        `Only "${REHEARSAL_DATABASE_NAME}" may be dropped and recreated.`,
     )
   }
 }

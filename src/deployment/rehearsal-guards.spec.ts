@@ -2,7 +2,9 @@ import { withEnv } from './testing/with-env'
 import {
   assertLocalhostDatabaseUrl,
   assertRehearsalDbRecreateAllowed,
+  assertRehearsalRecreateTargetDatabaseName,
   isLocalhostDatabaseUrl,
+  REHEARSAL_DATABASE_NAME,
   RehearsalGuardError,
 } from './rehearsal-guards'
 
@@ -32,5 +34,16 @@ describe('rehearsal guards', () => {
     await withEnv({ ALLOW_REHEARSAL_DB_RECREATE: 'true' }, () => {
       expect(() => assertRehearsalDbRecreateAllowed()).not.toThrow()
     })
+  })
+
+  it('rejects dev database trackvest as a recreate target', () => {
+    expect(() => assertRehearsalRecreateTargetDatabaseName('trackvest')).toThrow(
+      RehearsalGuardError,
+    )
+    expect(() => assertRehearsalRecreateTargetDatabaseName('trackvest')).toThrow(/trackvest_rehearsal/)
+
+    expect(() =>
+      assertRehearsalRecreateTargetDatabaseName(REHEARSAL_DATABASE_NAME),
+    ).not.toThrow()
   })
 })
