@@ -1,4 +1,7 @@
 import { isEnvFlagTrue } from './env-flags'
+import { isLocalhostDatabaseUrl, parseDatabaseUrlHostname } from './database-url-guards'
+
+export { isLocalhostDatabaseUrl } from './database-url-guards'
 
 export const REHEARSAL_DATABASE_NAME = 'trackvest_rehearsal'
 
@@ -9,23 +12,11 @@ export class RehearsalGuardError extends Error {
   }
 }
 
-const LOCALHOST_HOSTS = new Set(['localhost', '127.0.0.1'])
-
-export function isLocalhostDatabaseUrl(databaseUrl: string): boolean {
-  try {
-    return LOCALHOST_HOSTS.has(new URL(databaseUrl).hostname.toLowerCase())
-  } catch {
-    return false
-  }
-}
-
 /** Rehearsal tooling may only target local Postgres — never remote hosts. */
 export function assertLocalhostDatabaseUrl(databaseUrl: string): void {
-  let hostname: string
+  const hostname = parseDatabaseUrlHostname(databaseUrl)
 
-  try {
-    hostname = new URL(databaseUrl).hostname
-  } catch {
+  if (!hostname) {
     throw new RehearsalGuardError(
       'Rehearsal refused: DATABASE_URL is not a valid URL. ' +
         'Rehearsal is limited to localhost or 127.0.0.1.',

@@ -1,5 +1,4 @@
 import { execFileSync } from 'child_process'
-import { assertDevSeedAllowed } from '../src/deployment/seed-guards'
 import { assertRehearsalDbRecreateAllowed } from '../src/deployment/rehearsal-guards'
 import {
   createNamedRehearsalDatabaseUrl,
@@ -144,33 +143,36 @@ async function main() {
     )
   }
 
-  console.log('Verifying dev seed is refused under NODE_ENV=production...')
-  await runWithRehearsalEnv(rehearsalUrl, {}, () => {
-    try {
-      assertDevSeedAllowed()
-      throw new Error('Dev seed guard should refuse NODE_ENV=production')
-    } catch (error) {
-      if (!(error instanceof Error) || !/NODE_ENV=production/.test(error.message)) {
-        throw error
-      }
-    }
-  })
-
+  console.log('Verifying dev seed entrypoint is refused under NODE_ENV=production...')
   try {
-    execFileSync('pnpm', ['exec', 'ts-node', 'prisma/seed-dev.ts'], {
+    const output = execFileSync('pnpm', ['exec', 'ts-node', 'prisma/seed-dev.ts'], {
       cwd: process.cwd(),
       env: {
         ...process.env,
         NODE_ENV: 'production',
         DATABASE_URL: rehearsalUrl,
       },
-      stdio: 'pipe',
+      encoding: 'utf8',
     })
-    throw new Error('pnpm db:seed:dev should fail under NODE_ENV=production')
+    throw new Error(
+      `pnpm db:seed:dev should fail under NODE_ENV=production, but exited 0 with:\n${output}`,
+    )
   } catch (error) {
-    const status = (error as { status?: number }).status
-    if (status === 0) {
+    if (!(error && typeof error === 'object' && 'status' in error)) {
       throw error
+    }
+
+    const execError = error as { status?: number; stdout?: string; stderr?: string }
+    if (execError.status === 0) {
+      throw error
+    }
+
+    const combinedOutput = `${execError.stderr ?? ''}${execError.stdout ?? ''}`
+    if (!combinedOutput.includes('Dev seed refused') || !combinedOutput.includes('NODE_ENV=production')) {
+      throw new Error(
+        'Expected dev seed guard refusal, but seed-dev.ts failed for another reason:\n' +
+          combinedOutput,
+      )
     }
   }
 

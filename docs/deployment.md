@@ -52,7 +52,9 @@ pnpm prisma:migrate
 prompt for a migration name. Commit the generated files under `prisma/migrations/`.
 
 The dev seed (`pnpm db:seed` / `pnpm db:seed:dev`) wipes and recreates demo fixtures.
-It is **not** safe for production or production-like databases.
+It is **not** safe for production or production-like databases. Dev seed is refused when
+`NODE_ENV=production` or when `DATABASE_URL` is missing, invalid, or not on
+`localhost` / `127.0.0.1`.
 
 ## Production bootstrap and demo seed
 

@@ -74,12 +74,35 @@ describe('seed entry points', () => {
   it('refuses dev seed in production before any Prisma write', async () => {
     const prisma = createMockPrisma()
 
-    await withEnv({ NODE_ENV: 'production' }, async () => {
-      await expect(runDevSeed(prisma)).rejects.toThrow(SeedGuardError)
-      expect(prisma.user.deleteMany).not.toHaveBeenCalled()
-      expect(prisma.user.create).not.toHaveBeenCalled()
-      expect(prisma.asset.deleteMany).not.toHaveBeenCalled()
-    })
+    await withEnv(
+      {
+        NODE_ENV: 'production',
+        DATABASE_URL: 'postgresql://trackvest:trackvest@localhost:5433/trackvest?schema=public',
+      },
+      async () => {
+        await expect(runDevSeed(prisma)).rejects.toThrow(SeedGuardError)
+        expect(prisma.user.deleteMany).not.toHaveBeenCalled()
+        expect(prisma.user.create).not.toHaveBeenCalled()
+        expect(prisma.asset.deleteMany).not.toHaveBeenCalled()
+      },
+    )
+  })
+
+  it('refuses dev seed against remote DATABASE_URL before any Prisma write', async () => {
+    const prisma = createMockPrisma()
+
+    await withEnv(
+      {
+        NODE_ENV: undefined,
+        DATABASE_URL: 'postgresql://trackvest:trackvest@db.example.com:5432/trackvest?schema=public',
+      },
+      async () => {
+        await expect(runDevSeed(prisma)).rejects.toThrow(SeedGuardError)
+        expect(prisma.user.deleteMany).not.toHaveBeenCalled()
+        expect(prisma.user.create).not.toHaveBeenCalled()
+        expect(prisma.asset.deleteMany).not.toHaveBeenCalled()
+      },
+    )
   })
 
   it('refuses production demo seed without ALLOW_PRODUCTION_DEMO_SEED=true', async () => {
