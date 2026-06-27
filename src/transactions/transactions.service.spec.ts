@@ -1,6 +1,7 @@
 import { Prisma, type Transaction } from '@prisma/client'
 import { TransactionsService } from './transactions.service'
 import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
+import { TransactionBusinessRulesValidator } from './transaction-business-rules-validator.service'
 import { TransactionRebuildPolicyService } from './transaction-rebuild-policy.service'
 
 describe('TransactionsService', () => {
@@ -105,11 +106,15 @@ describe('TransactionsService', () => {
       rebuildPolicy,
     )
 
+    const transactionBusinessRulesValidator =
+      new TransactionBusinessRulesValidator()
+
     const service = new TransactionsService(
       prisma as never,
       postingService as never,
       ownershipService as never,
       transactionPositionOrchestrator as never,
+      transactionBusinessRulesValidator,
     )
 
     txClient.transaction.findFirst.mockResolvedValue(null)

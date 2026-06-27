@@ -8,6 +8,7 @@ import { PostingService } from '../gl/posting.service'
 import { OwnershipService } from '../common/services/ownership.service'
 import { UserContext } from '../common/types/auth-user'
 import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
+import { TransactionBusinessRulesValidator } from './transaction-business-rules-validator.service'
 
 @Injectable()
 export class TransactionsService {
@@ -16,90 +17,13 @@ export class TransactionsService {
     private postingService: PostingService,
     private ownershipService: OwnershipService,
     private transactionPositionOrchestrator: TransactionPositionOrchestratorService,
+    private transactionBusinessRulesValidator: TransactionBusinessRulesValidator,
   ) {}
-
-  private validateTransactionBusinessRules(
-    dto: CreateTransactionDto | CreateAndUpdateTransactionDto,
-  ) {
-    const hasAsset = typeof dto.assetId === 'string' && dto.assetId.length > 0
-    const amount = Number(dto.amount)
-    const quantity = dto.quantity === undefined ? undefined : Number(dto.quantity)
-    const price = dto.price === undefined ? undefined : Number(dto.price)
-    const fee = dto.fee === undefined ? 0 : Number(dto.fee)
-    const tax = dto.tax === undefined ? 0 : Number(dto.tax)
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      throw new BadRequestException('Amount must be a positive number')
-    }
-
-    if (!Number.isFinite(fee) || fee < 0) {
-      throw new BadRequestException('Fee must be zero or a positive number')
-    }
-
-    if (!Number.isFinite(tax) || tax < 0) {
-      throw new BadRequestException('Tax must be zero or a positive number')
-    }
-
-    switch (dto.type) {
-      case 'buy':
-        if (!hasAsset) {
-          throw new BadRequestException(`Asset is required for ${dto.type} transactions`)
-        }
-        if (!Number.isFinite(quantity) || quantity <= 0) {
-          throw new BadRequestException(`Quantity must be a positive number for ${dto.type} transactions`)
-        }
-        if (!Number.isFinite(price) || price <= 0) {
-          throw new BadRequestException(`Price must be a positive number for ${dto.type} transactions`)
-        }
-        return
-      case 'sell':
-        if (!hasAsset) {
-          throw new BadRequestException(`Asset is required for ${dto.type} transactions`)
-        }
-        if (!Number.isFinite(quantity) || quantity <= 0) {
-          throw new BadRequestException(`Quantity must be a positive number for ${dto.type} transactions`)
-        }
-        if (!Number.isFinite(price) || price <= 0) {
-          throw new BadRequestException(`Price must be a positive number for ${dto.type} transactions`)
-        }
-        return
-      case 'dividend':
-        if (!hasAsset) {
-          throw new BadRequestException('Asset is required for dividend transactions')
-        }
-        if (dto.quantity !== undefined) {
-          throw new BadRequestException('Quantity is not allowed for dividend transactions')
-        }
-        if (dto.price !== undefined) {
-          throw new BadRequestException('Price is not allowed for dividend transactions')
-        }
-        return
-      case 'deposit':
-        if (hasAsset) {
-          throw new BadRequestException('Asset is not allowed for deposit transactions')
-        }
-        if (dto.quantity !== undefined) {
-          throw new BadRequestException('Quantity is not allowed for deposit transactions')
-        }
-        if (dto.price !== undefined) {
-          throw new BadRequestException('Price is not allowed for deposit transactions')
-        }
-        if (fee !== 0) {
-          throw new BadRequestException('Fee must be zero for deposit transactions')
-        }
-        if (tax !== 0) {
-          throw new BadRequestException('Tax must be zero for deposit transactions')
-        }
-        return
-      default:
-        return
-    }
-  }
 
   async create(dto: CreateTransactionDto, userId: string): Promise<Transaction> {
     // Validate account belongs to user
     await this.ownershipService.validateAccountOwnership(dto.accountId, userId)
-    this.validateTransactionBusinessRules(dto)
+    this.transactionBusinessRulesValidator.validate(dto)
 
     return this.prisma.$transaction(async (db) => {
       const tradeTime = dto.tradeTime ? new Date(dto.tradeTime) : new Date()
@@ -246,7 +170,7 @@ export class TransactionsService {
       note: dto.note === undefined ? existing.note ?? undefined : dto.note,
     }
 
-    this.validateTransactionBusinessRules(nextTransaction)
+    this.transactionBusinessRulesValidator.validate(nextTransaction)
 
     if (
       existing.type !== nextTransaction.type &&
