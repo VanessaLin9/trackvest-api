@@ -4,6 +4,7 @@ import { GlModule } from '../gl/gl.module'
 import { TransactionsController } from './transactions.controller'
 import { TransactionImportService } from './transaction-import.service'
 import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
+import { TransactionBusinessRulesValidator } from './transaction-business-rules-validator.service'
 import { TransactionRebuildPolicyService } from './transaction-rebuild-policy.service'
 import { TransactionsService } from './transactions.service'
 
@@ -13,6 +14,7 @@ import { TransactionsService } from './transactions.service'
   providers: [
     TransactionsService,
     TransactionImportService,
+    TransactionBusinessRulesValidator,
     TransactionRebuildPolicyService,
     TransactionPositionOrchestratorService,
   ],

@@ -3,6 +3,7 @@ import { BadRequestException } from '@nestjs/common'
 import { TransactionImportService } from './transaction-import.service'
 import { TransactionsService } from './transactions.service'
 import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
+import { TransactionBusinessRulesValidator } from './transaction-business-rules-validator.service'
 import { TransactionRebuildPolicyService } from './transaction-rebuild-policy.service'
 import { AccountType, Currency } from '@prisma/client'
 import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
@@ -107,11 +108,15 @@ describe('TransactionImportService', () => {
       rebuildPolicy,
     )
 
+    const transactionBusinessRulesValidator =
+      new TransactionBusinessRulesValidator()
+
     const transactionsService = new TransactionsService(
       prisma as never,
       postingService as never,
       ownershipService as never,
       transactionPositionOrchestrator as never,
+      transactionBusinessRulesValidator,
     )
 
     const importService = new TransactionImportService(
