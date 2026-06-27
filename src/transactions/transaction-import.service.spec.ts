@@ -1,6 +1,7 @@
 import { Prisma, type Transaction } from '@prisma/client'
 import { BadRequestException } from '@nestjs/common'
 import { TransactionImportService } from './transaction-import.service'
+import { BrokerImportFileParser } from './broker-import-file.parser'
 import { TransactionsService } from './transactions.service'
 import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
 import { TransactionBusinessRulesValidator } from './transaction-business-rules-validator.service'
@@ -119,10 +120,13 @@ describe('TransactionImportService', () => {
       transactionBusinessRulesValidator,
     )
 
+    const brokerImportFileParser = new BrokerImportFileParser()
+
     const importService = new TransactionImportService(
       prisma as never,
       ownershipService as never,
       transactionsService,
+      brokerImportFileParser,
     )
 
     txClient.transaction.findFirst.mockResolvedValue(null)
