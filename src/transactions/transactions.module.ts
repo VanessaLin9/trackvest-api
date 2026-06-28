@@ -7,6 +7,7 @@ import { TransactionImportService } from './transaction-import.service'
 import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
 import { TransactionBusinessRulesValidator } from './transaction-business-rules-validator.service'
 import { TransactionRebuildPolicyService } from './transaction-rebuild-policy.service'
+import { TransactionImportRowValidator } from './transaction-import-row.validator'
 import { TransactionsService } from './transactions.service'
 
 @Module({
@@ -16,6 +17,7 @@ import { TransactionsService } from './transactions.service'
     TransactionsService,
     TransactionImportService,
     BrokerImportFileParser,
+    TransactionImportRowValidator,
     TransactionBusinessRulesValidator,
     TransactionRebuildPolicyService,
     TransactionPositionOrchestratorService,
