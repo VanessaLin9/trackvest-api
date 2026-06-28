@@ -2,6 +2,7 @@ import { Prisma, type Transaction } from '@prisma/client'
 import { BadRequestException } from '@nestjs/common'
 import { TransactionImportService } from './transaction-import.service'
 import { BrokerImportFileParser } from './broker-import-file.parser'
+import { TransactionImportRowValidator } from './transaction-import-row.validator'
 import { TransactionsService } from './transactions.service'
 import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
 import { TransactionBusinessRulesValidator } from './transaction-business-rules-validator.service'
@@ -121,12 +122,14 @@ describe('TransactionImportService', () => {
     )
 
     const brokerImportFileParser = new BrokerImportFileParser()
+    const transactionImportRowValidator = new TransactionImportRowValidator()
 
     const importService = new TransactionImportService(
       prisma as never,
       ownershipService as never,
       transactionsService,
       brokerImportFileParser,
+      transactionImportRowValidator,
     )
 
     txClient.transaction.findFirst.mockResolvedValue(null)
@@ -978,15 +981,25 @@ describe('TransactionImportService', () => {
     ['EUR', Currency.EUR],
     ['歐元', Currency.EUR],
   ])('accepts supported imported currency %s', async (inputCurrency, expectedCurrency) => {
-    const { importService, prisma } = createHarness()
+    const validator = new TransactionImportRowValidator()
+    const result = validator.validateAndMap(
+      {
+        rowNumber: 2,
+        assetName: '富邦台50',
+        tradeDate: '2026/03/24',
+        quantity: '10',
+        netAmount: '-1015',
+        price: '100',
+        fee: '10',
+        tradeTax: '3',
+        taxAmount: '2',
+        brokerOrderNo: 'BRK-CURRENCY-001',
+        currency: inputCurrency,
+      },
+      { accountCurrency: expectedCurrency },
+    )
 
-    mockImportAccount(prisma)
-
-    const normalizedCurrency = (importService as unknown as {
-      normalizeCurrency(value: string): Currency | null
-    }).normalizeCurrency(inputCurrency)
-
-    expect(normalizedCurrency).toBe(expectedCurrency)
+    expect(result.ok).toBe(true)
   })
 
   it('returns a duplicate broker order error when create raises P2002 during import', async () => {
