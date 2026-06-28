@@ -1,9 +1,7 @@
 import { Injectable } from '@nestjs/common'
-import { Currency } from '@prisma/client'
 import { RawBrokerImportRow } from './broker-import-file.parser'
 import {
   importRowFailure,
-  ImportRowValidationContext,
   ImportRowValidationResult,
   IMPORT_ROW_FIELD_LABELS,
   NormalizedImportTransactionRow,
@@ -11,10 +9,7 @@ import {
 
 @Injectable()
 export class TransactionImportRowValidator {
-  validateAndMap(
-    raw: RawBrokerImportRow,
-    context: ImportRowValidationContext,
-  ): ImportRowValidationResult {
+  validateAndMap(raw: RawBrokerImportRow): ImportRowValidationResult {
     if (!raw.assetName) {
       return importRowFailure(
         raw.rowNumber,
@@ -94,23 +89,6 @@ export class TransactionImportRowValidator {
       )
     }
 
-    const currency = this.normalizeCurrency(raw.currency)
-    if (!currency) {
-      return importRowFailure(
-        raw.rowNumber,
-        IMPORT_ROW_FIELD_LABELS.currency,
-        `Unsupported currency: ${raw.currency}`,
-      )
-    }
-
-    if (currency !== context.accountCurrency) {
-      return importRowFailure(
-        raw.rowNumber,
-        IMPORT_ROW_FIELD_LABELS.currency,
-        `Currency ${raw.currency} does not match account currency ${context.accountCurrency}`,
-      )
-    }
-
     return {
       ok: true,
       row: this.mapNormalizedRow(raw, {
@@ -149,6 +127,7 @@ export class TransactionImportRowValidator {
       fee: fields.fee,
       tax: fields.tradeTax + fields.taxAmount,
       brokerOrderNo: raw.brokerOrderNo,
+      currency: raw.currency,
       tradeTime: fields.tradeDate.toISOString(),
       note: raw.note,
     }
@@ -172,28 +151,5 @@ export class TransactionImportRowValidator {
     const normalized = value.replace(/\//g, '-')
     const date = new Date(`${normalized}T00:00:00`)
     return Number.isNaN(date.getTime()) ? null : date
-  }
-
-  private normalizeCurrency(value: string): Currency | null {
-    const normalized = value.trim().toUpperCase()
-    switch (normalized) {
-      case 'TWD':
-      case '台幣':
-      case '新台幣':
-        return Currency.TWD
-      case 'USD':
-      case '美元':
-      case '美金':
-        return Currency.USD
-      case 'JPY':
-      case '日圓':
-      case '日元':
-        return Currency.JPY
-      case 'EUR':
-      case '歐元':
-        return Currency.EUR
-      default:
-        return null
-    }
   }
 }

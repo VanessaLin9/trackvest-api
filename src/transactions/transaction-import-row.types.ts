@@ -1,4 +1,3 @@
-import { Currency } from '@prisma/client'
 import { BROKER_IMPORT_HEADER_LABELS } from './broker-import-header.schema'
 import { RawBrokerImportRow } from './broker-import-file.parser'
 
@@ -18,12 +17,9 @@ export type NormalizedImportTransactionRow = {
   fee: number
   tax: number
   brokerOrderNo: string
+  currency: string
   tradeTime: string
   note?: string
-}
-
-export type ImportRowValidationContext = {
-  accountCurrency: Currency
 }
 
 export type ImportRowValidationResult =

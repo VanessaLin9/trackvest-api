@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
-import { AccountType, Prisma } from '@prisma/client'
+import { AccountType, Currency, Prisma } from '@prisma/client'
 import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
 import { OwnershipService } from '../common/services/ownership.service'
 import { PrismaService } from '../prisma.service'
@@ -8,6 +8,7 @@ import { CreateTransactionDto } from './dto/create-transaction.dto'
 import { ImportTransactionsDto } from './dto/import-transactions.dto'
 import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
 import { TransactionImportRowValidator } from './transaction-import-row.validator'
+import { IMPORT_ROW_FIELD_LABELS } from './transaction-import-row.types'
 import { TransactionsService } from './transactions.service'
 
 @Injectable()
@@ -19,6 +20,29 @@ export class TransactionImportService {
     private brokerImportFileParser: BrokerImportFileParser,
     private transactionImportRowValidator: TransactionImportRowValidator,
   ) {}
+
+  private normalizeCurrency(value: string): Currency | null {
+    const normalized = value.trim().toUpperCase()
+    switch (normalized) {
+      case 'TWD':
+      case '台幣':
+      case '新台幣':
+        return Currency.TWD
+      case 'USD':
+      case '美元':
+      case '美金':
+        return Currency.USD
+      case 'JPY':
+      case '日圓':
+      case '日元':
+        return Currency.JPY
+      case 'EUR':
+      case '歐元':
+        return Currency.EUR
+      default:
+        return null
+    }
+  }
 
   private async resolveAssetId(alias: string, broker: string) {
     const brokerAlias = await this.prisma.assetAlias.findUnique({
@@ -76,9 +100,7 @@ export class TransactionImportService {
     const seenBrokerRefs = new Set<string>()
 
     for (const row of rows) {
-      const validation = this.transactionImportRowValidator.validateAndMap(row, {
-        accountCurrency: account.currency,
-      })
+      const validation = this.transactionImportRowValidator.validateAndMap(row)
       if (validation.ok === false) {
         errors.push(validation.error)
         continue
@@ -108,6 +130,24 @@ export class TransactionImportService {
           row: normalized.rowNumber,
           field: '委託書號',
           message: 'Duplicate broker order number for selected account',
+        })
+        continue
+      }
+
+      const currency = this.normalizeCurrency(normalized.currency)
+      if (!currency) {
+        errors.push({
+          row: normalized.rowNumber,
+          field: IMPORT_ROW_FIELD_LABELS.currency,
+          message: `Unsupported currency: ${normalized.currency}`,
+        })
+        continue
+      }
+      if (currency !== account.currency) {
+        errors.push({
+          row: normalized.rowNumber,
+          field: IMPORT_ROW_FIELD_LABELS.currency,
+          message: `Currency ${normalized.currency} does not match account currency ${account.currency}`,
         })
         continue
       }

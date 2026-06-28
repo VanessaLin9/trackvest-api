@@ -1,10 +1,8 @@
-import { Currency } from '@prisma/client'
 import { TransactionImportRowValidator } from './transaction-import-row.validator'
 import { RawBrokerImportRow } from './broker-import-file.parser'
 
 describe('TransactionImportRowValidator', () => {
   const validator = new TransactionImportRowValidator()
-  const accountCurrency = Currency.TWD
 
   const validBuyRow: RawBrokerImportRow = {
     rowNumber: 2,
@@ -22,7 +20,7 @@ describe('TransactionImportRowValidator', () => {
   }
 
   function validate(row: RawBrokerImportRow) {
-    return validator.validateAndMap(row, { accountCurrency })
+    return validator.validateAndMap(row)
   }
 
   it('maps a valid buy row into a normalized transaction row', () => {
@@ -40,6 +38,7 @@ describe('TransactionImportRowValidator', () => {
         fee: 10,
         tax: 5,
         brokerOrderNo: 'BRK-001',
+        currency: 'TWD',
         tradeTime: new Date('2026-03-24T00:00:00').toISOString(),
         note: '整股',
       },
@@ -165,32 +164,13 @@ describe('TransactionImportRowValidator', () => {
     })
   })
 
-  it('rejects unsupported currency', () => {
+  it('passes through raw currency without validating it', () => {
     const result = validate({ ...validBuyRow, currency: 'GBP' })
 
-    expect(result).toEqual({
-      ok: false,
-      error: { row: 2, field: '幣別', message: 'Unsupported currency: GBP' },
-    })
-  })
-
-  it('rejects currency mismatch with account currency', () => {
-    const result = validate({ ...validBuyRow, currency: 'USD' })
-
-    expect(result).toEqual({
-      ok: false,
-      error: {
-        row: 2,
-        field: '幣別',
-        message: 'Currency USD does not match account currency TWD',
-      },
-    })
-  })
-
-  it('normalizes Chinese currency labels', () => {
-    const result = validate({ ...validBuyRow, currency: '台幣' })
-
     expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.row.currency).toBe('GBP')
+    }
   })
 
   it('reports the first validation error when multiple fields are invalid', () => {

@@ -981,25 +981,118 @@ describe('TransactionImportService', () => {
     ['EUR', Currency.EUR],
     ['歐元', Currency.EUR],
   ])('accepts supported imported currency %s', async (inputCurrency, expectedCurrency) => {
-    const validator = new TransactionImportRowValidator()
-    const result = validator.validateAndMap(
+    const { importService, prisma, txClient, postingService } = createHarness()
+    const importedTransaction = buildCreatedTransaction({
+      id: 'tx-import-currency-1',
+      brokerOrderNo: 'BRK-CURRENCY-001',
+      tradeTime: importedTradeTime,
+    })
+
+    mockImportAccount(prisma, { currency: expectedCurrency })
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.assetAlias.findUnique.mockResolvedValueOnce({ assetId })
+    txClient.transaction.create.mockResolvedValue(importedTransaction)
+    txClient.position.findFirst.mockResolvedValue(null)
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-import-currency-1' })
+
+    const result = await importService.importTransactions(
       {
-        rowNumber: 2,
-        assetName: '富邦台50',
-        tradeDate: '2026/03/24',
-        quantity: '10',
-        netAmount: '-1015',
-        price: '100',
-        fee: '10',
-        tradeTax: '3',
-        taxAmount: '2',
-        brokerOrderNo: 'BRK-CURRENCY-001',
-        currency: inputCurrency,
+        accountId,
+        csvContent: buildImportContent([
+          [
+            '富邦台50',
+            '2026/03/24',
+            '10',
+            '-1,015',
+            '100',
+            '10',
+            '3',
+            '2',
+            'BRK-CURRENCY-001',
+            inputCurrency,
+            '支援幣別',
+          ],
+        ]),
       },
-      { accountCurrency: expectedCurrency },
+      userId,
     )
 
-    expect(result.ok).toBe(true)
+    expect(result.successCount).toBe(1)
+    expect(result.failureCount).toBe(0)
+  })
+
+  it('returns a file duplicate error before currency validation on a later row with the same broker order number', async () => {
+    const { importService, prisma, txClient, postingService } = createHarness()
+
+    mockImportAccount(prisma)
+    prisma.transaction.findFirst.mockResolvedValue(null)
+
+    const result = await importService.importTransactions(
+      {
+        accountId,
+        csvContent: buildImportContent([
+          ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-SAME-001', 'USD', '第一筆幣別錯'],
+          ['富邦台50', '2026/03/25', '10', '-1,015', '100', '10', '3', '2', 'BRK-SAME-001', 'TWD', '第二筆重複'],
+        ]),
+      },
+      userId,
+    )
+
+    expect(prisma.assetAlias.findUnique).not.toHaveBeenCalled()
+    expect(txClient.transaction.create).not.toHaveBeenCalled()
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      totalRows: 2,
+      successCount: 0,
+      failureCount: 2,
+      createdTransactionIds: [],
+      errors: [
+        {
+          row: 2,
+          field: '幣別',
+          message: 'Currency USD does not match account currency TWD',
+        },
+        {
+          row: 3,
+          field: '委託書號',
+          message: 'Duplicate broker order number in import file',
+        },
+      ],
+    })
+  })
+
+  it('returns a database duplicate error before currency validation when the broker order already exists', async () => {
+    const { importService, prisma, txClient, postingService } = createHarness()
+
+    mockImportAccount(prisma)
+    prisma.transaction.findFirst.mockResolvedValue({ id: 'existing-tx' })
+
+    const result = await importService.importTransactions(
+      {
+        accountId,
+        csvContent: buildImportContent([
+          ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-EXIST-001', 'USD', '幣別也錯'],
+        ]),
+      },
+      userId,
+    )
+
+    expect(prisma.assetAlias.findUnique).not.toHaveBeenCalled()
+    expect(txClient.transaction.create).not.toHaveBeenCalled()
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      totalRows: 1,
+      successCount: 0,
+      failureCount: 1,
+      createdTransactionIds: [],
+      errors: [
+        {
+          row: 2,
+          field: '委託書號',
+          message: 'Duplicate broker order number for selected account',
+        },
+      ],
+    })
   })
 
   it('returns a duplicate broker order error when create raises P2002 during import', async () => {
