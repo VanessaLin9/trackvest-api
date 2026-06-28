@@ -3,6 +3,7 @@ import { AccountType, Currency, Prisma } from '@prisma/client'
 import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
 import { OwnershipService } from '../common/services/ownership.service'
 import { PrismaService } from '../prisma.service'
+import { BrokerImportFileParser } from './broker-import-file.parser'
 import { CreateTransactionDto } from './dto/create-transaction.dto'
 import { ImportTransactionsDto } from './dto/import-transactions.dto'
 import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
@@ -14,84 +15,8 @@ export class TransactionImportService {
     private prisma: PrismaService,
     private ownershipService: OwnershipService,
     private transactionsService: TransactionsService,
+    private brokerImportFileParser: BrokerImportFileParser,
   ) {}
-
-  private readonly importHeaderMap = {
-    assetName: '股名',
-    tradeDate: '日期',
-    quantity: '成交股數',
-    netAmount: '淨收付',
-    price: '成交單價',
-    fee: '手續費',
-    tradeTax: '交易稅',
-    taxAmount: '稅款',
-    brokerOrderNo: '委託書號',
-    currency: '幣別',
-    note: '備註',
-  } as const
-
-  private detectDelimiter(headerLine: string): ',' | '\t' {
-    const tabCount = headerLine.split('\t').length
-    const commaCount = headerLine.split(',').length
-    return tabCount > commaCount ? '\t' : ','
-  }
-
-  private parseDelimitedLine(line: string, delimiter: ',' | '\t'): string[] {
-    const values: string[] = []
-    let current = ''
-    let inQuotes = false
-
-    for (let index = 0; index < line.length; index += 1) {
-      const char = line[index]
-
-      if (char === '"') {
-        const next = line[index + 1]
-        if (inQuotes && next === '"') {
-          current += '"'
-          index += 1
-        } else {
-          inQuotes = !inQuotes
-        }
-        continue
-      }
-
-      if (char === delimiter && !inQuotes) {
-        values.push(current.trim())
-        current = ''
-        continue
-      }
-
-      current += char
-    }
-
-    values.push(current.trim())
-    return values
-  }
-
-  private parseCsvRows(csvContent: string) {
-    const normalized = csvContent.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').trim()
-    if (!normalized) {
-      throw new BadRequestException('CSV content is empty')
-    }
-
-    const lines = normalized
-      .split('\n')
-      .map((line) => line.trimEnd())
-      .filter((line) => line.trim().length > 0)
-
-    if (lines.length < 2) {
-      throw new BadRequestException('CSV content must include a header row and at least one data row')
-    }
-
-    const delimiter = this.detectDelimiter(lines[0])
-    const headers = this.parseDelimitedLine(lines[0], delimiter)
-    const rows = lines.slice(1).map((line, index) => ({
-      rowNumber: index + 2,
-      values: this.parseDelimitedLine(line, delimiter),
-    }))
-
-    return { headers, rows }
-  }
 
   private parseNumberField(value: string | undefined, defaultValue = 0): number {
     if (value === undefined || value === '') {
@@ -134,14 +59,6 @@ export class TransactionImportService {
       default:
         return null
     }
-  }
-
-  private getRequiredHeaderIndex(headers: string[], headerName: string): number {
-    const index = headers.indexOf(headerName)
-    if (index === -1) {
-      throw new BadRequestException(`Missing required import column: ${headerName}`)
-    }
-    return index
   }
 
   private async resolveAssetId(alias: string, broker: string) {
@@ -193,36 +110,24 @@ export class TransactionImportService {
       throw new BadRequestException(`Only ${SUPPORTED_BROKER} broker accounts are supported for CSV import`)
     }
 
-    const { headers, rows } = this.parseCsvRows(dto.csvContent)
-
-    const assetNameIndex = this.getRequiredHeaderIndex(headers, this.importHeaderMap.assetName)
-    const tradeDateIndex = this.getRequiredHeaderIndex(headers, this.importHeaderMap.tradeDate)
-    const quantityIndex = this.getRequiredHeaderIndex(headers, this.importHeaderMap.quantity)
-    const netAmountIndex = this.getRequiredHeaderIndex(headers, this.importHeaderMap.netAmount)
-    const priceIndex = this.getRequiredHeaderIndex(headers, this.importHeaderMap.price)
-    const feeIndex = this.getRequiredHeaderIndex(headers, this.importHeaderMap.fee)
-    const tradeTaxIndex = this.getRequiredHeaderIndex(headers, this.importHeaderMap.tradeTax)
-    const taxAmountIndex = this.getRequiredHeaderIndex(headers, this.importHeaderMap.taxAmount)
-    const brokerOrderNoIndex = this.getRequiredHeaderIndex(headers, this.importHeaderMap.brokerOrderNo)
-    const currencyIndex = this.getRequiredHeaderIndex(headers, this.importHeaderMap.currency)
-    const noteIndex = headers.indexOf(this.importHeaderMap.note)
+    const { rows } = this.brokerImportFileParser.parse(dto.csvContent)
 
     const createdTransactionIds: string[] = []
     const errors: ImportTransactionsResponseDto['errors'] = []
     const seenBrokerRefs = new Set<string>()
 
     for (const row of rows) {
-      const assetName = row.values[assetNameIndex]?.trim() ?? ''
-      const tradeDateValue = row.values[tradeDateIndex]?.trim() ?? ''
-      const quantityValue = row.values[quantityIndex]?.trim() ?? ''
-      const netAmountValue = row.values[netAmountIndex]?.trim() ?? ''
-      const priceValue = row.values[priceIndex]?.trim() ?? ''
-      const feeValue = row.values[feeIndex]?.trim() ?? ''
-      const tradeTaxValue = row.values[tradeTaxIndex]?.trim() ?? ''
-      const taxAmountValue = row.values[taxAmountIndex]?.trim() ?? ''
-      const brokerOrderNo = row.values[brokerOrderNoIndex]?.trim() ?? ''
-      const currencyValue = row.values[currencyIndex]?.trim() ?? ''
-      const note = noteIndex >= 0 ? row.values[noteIndex]?.trim() || undefined : undefined
+      const assetName = row.assetName
+      const tradeDateValue = row.tradeDate
+      const quantityValue = row.quantity
+      const netAmountValue = row.netAmount
+      const priceValue = row.price
+      const feeValue = row.fee
+      const tradeTaxValue = row.tradeTax
+      const taxAmountValue = row.taxAmount
+      const brokerOrderNo = row.brokerOrderNo
+      const currencyValue = row.currency
+      const note = row.note
 
       if (!assetName) {
         errors.push({ row: row.rowNumber, field: '股名', message: 'Asset name is required' })
