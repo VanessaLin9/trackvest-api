@@ -1173,4 +1173,38 @@ describe('TransactionImportService', () => {
       ],
     })
   })
+
+  it('returns a generic row error message when create throws a non-error value', async () => {
+    const { importService, prisma, txClient, postingService } = createHarness()
+
+    mockImportAccount(prisma)
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.assetAlias.findUnique.mockResolvedValueOnce({ assetId })
+    txClient.transaction.create.mockRejectedValue('unexpected-create-failure')
+
+    const result = await importService.importTransactions(
+      {
+        accountId,
+        csvContent: buildImportContent([
+          ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-UNKNOWN-001', 'TWD', '未知錯誤'],
+        ]),
+      },
+      userId,
+    )
+
+    expect(result).toEqual({
+      totalRows: 1,
+      successCount: 0,
+      failureCount: 1,
+      createdTransactionIds: [],
+      errors: [
+        {
+          row: 2,
+          field: 'row',
+          message: 'Failed to import row',
+        },
+      ],
+    })
+    expect(postingService.postTransaction).not.toHaveBeenCalled()
+  })
 })
