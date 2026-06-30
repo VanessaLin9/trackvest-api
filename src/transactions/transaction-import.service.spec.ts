@@ -2,6 +2,9 @@ import { Prisma, type Transaction } from '@prisma/client'
 import { BadRequestException } from '@nestjs/common'
 import { TransactionImportService } from './transaction-import.service'
 import { BrokerImportFileParser } from './broker-import-file.parser'
+import { ImportAssetAliasResolver } from './import-asset-alias.resolver'
+import { ImportBrokerAccountGuard } from './import-broker-account.guard'
+import { ImportBrokerOrderDuplicateChecker } from './import-broker-order-duplicate.checker'
 import { TransactionImportRowValidator } from './transaction-import-row.validator'
 import { TransactionsService } from './transactions.service'
 import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
@@ -123,6 +126,11 @@ describe('TransactionImportService', () => {
 
     const brokerImportFileParser = new BrokerImportFileParser()
     const transactionImportRowValidator = new TransactionImportRowValidator()
+    const importBrokerAccountGuard = new ImportBrokerAccountGuard()
+    const importAssetAliasResolver = new ImportAssetAliasResolver(prisma as never)
+    const importBrokerOrderDuplicateChecker = new ImportBrokerOrderDuplicateChecker(
+      prisma as never,
+    )
 
     const importService = new TransactionImportService(
       prisma as never,
@@ -130,6 +138,9 @@ describe('TransactionImportService', () => {
       transactionsService,
       brokerImportFileParser,
       transactionImportRowValidator,
+      importBrokerAccountGuard,
+      importAssetAliasResolver,
+      importBrokerOrderDuplicateChecker,
     )
 
     txClient.transaction.findFirst.mockResolvedValue(null)
