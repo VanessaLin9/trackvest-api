@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common'
-import { Currency } from '@prisma/client'
 import { OwnershipService } from '../common/services/ownership.service'
 import { PrismaService } from '../prisma.service'
 import { ImportAssetAliasResolver } from './import-asset-alias.resolver'

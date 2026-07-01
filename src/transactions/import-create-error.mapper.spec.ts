@@ -1,8 +1,6 @@
 import { BadRequestException } from '@nestjs/common'
-import { AccountType } from '@prisma/client'
-import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
-import { mapImportCreateError } from './import-create-error.mapper'
 import { Prisma } from '@prisma/client'
+import { mapImportCreateError } from './import-create-error.mapper'
 
 describe('mapImportCreateError', () => {
   it('maps P2002 to a duplicate broker order row error', () => {
