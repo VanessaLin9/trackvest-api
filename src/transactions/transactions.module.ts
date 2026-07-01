@@ -3,6 +3,9 @@ import { CorporateActionsModule } from '../corporate-actions/corporate-actions.m
 import { GlModule } from '../gl/gl.module'
 import { TransactionsController } from './transactions.controller'
 import { BrokerImportFileParser } from './broker-import-file.parser'
+import { ImportAssetAliasResolver } from './import-asset-alias.resolver'
+import { ImportBrokerAccountGuard } from './import-broker-account.guard'
+import { ImportBrokerOrderDuplicateChecker } from './import-broker-order-duplicate.checker'
 import { TransactionImportService } from './transaction-import.service'
 import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
 import { TransactionBusinessRulesValidator } from './transaction-business-rules-validator.service'
@@ -17,6 +20,9 @@ import { TransactionsService } from './transactions.service'
     TransactionsService,
     TransactionImportService,
     BrokerImportFileParser,
+    ImportBrokerAccountGuard,
+    ImportAssetAliasResolver,
+    ImportBrokerOrderDuplicateChecker,
     TransactionImportRowValidator,
     TransactionBusinessRulesValidator,
     TransactionRebuildPolicyService,

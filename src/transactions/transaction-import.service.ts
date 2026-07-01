@@ -1,14 +1,24 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
-import { AccountType, Currency, Prisma } from '@prisma/client'
-import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
+import { Injectable } from '@nestjs/common'
 import { OwnershipService } from '../common/services/ownership.service'
 import { PrismaService } from '../prisma.service'
+import { ImportAssetAliasResolver } from './import-asset-alias.resolver'
+import { ImportBrokerAccountGuard } from './import-broker-account.guard'
+import { ImportBrokerOrderDuplicateChecker } from './import-broker-order-duplicate.checker'
+import { ImportBrokerOrderDuplicateTracker } from './import-broker-order-duplicate.tracker'
+import { mapImportCreateError } from './import-create-error.mapper'
+import { validateImportRowCurrency } from './import-row-currency.validator'
 import { BrokerImportFileParser } from './broker-import-file.parser'
 import { CreateTransactionDto } from './dto/create-transaction.dto'
 import { ImportTransactionsDto } from './dto/import-transactions.dto'
 import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
+import { NormalizedImportTransactionRow } from './transaction-import-row.types'
 import { TransactionImportRowValidator } from './transaction-import-row.validator'
-import { IMPORT_ROW_FIELD_LABELS } from './transaction-import-row.types'
+import {
+  buildImportTransactionsResponse,
+  createEmptyImportRunAggregate,
+  ImportBrokerAccount,
+  ImportRunAggregate,
+} from './transaction-import-orchestration.types'
 import { TransactionsService } from './transactions.service'
 
 @Injectable()
@@ -19,56 +29,10 @@ export class TransactionImportService {
     private transactionsService: TransactionsService,
     private brokerImportFileParser: BrokerImportFileParser,
     private transactionImportRowValidator: TransactionImportRowValidator,
+    private importBrokerAccountGuard: ImportBrokerAccountGuard,
+    private importAssetAliasResolver: ImportAssetAliasResolver,
+    private importBrokerOrderDuplicateChecker: ImportBrokerOrderDuplicateChecker,
   ) {}
-
-  private normalizeCurrency(value: string): Currency | null {
-    const normalized = value.trim().toUpperCase()
-    switch (normalized) {
-      case 'TWD':
-      case '台幣':
-      case '新台幣':
-        return Currency.TWD
-      case 'USD':
-      case '美元':
-      case '美金':
-        return Currency.USD
-      case 'JPY':
-      case '日圓':
-      case '日元':
-        return Currency.JPY
-      case 'EUR':
-      case '歐元':
-        return Currency.EUR
-      default:
-        return null
-    }
-  }
-
-  private async resolveAssetId(alias: string, broker: string) {
-    const brokerAlias = await this.prisma.assetAlias.findUnique({
-      where: {
-        alias_broker: {
-          alias,
-          broker,
-        },
-      },
-      select: { assetId: true },
-    })
-    if (brokerAlias) {
-      return brokerAlias.assetId
-    }
-
-    const globalAlias = await this.prisma.assetAlias.findUnique({
-      where: {
-        alias_broker: {
-          alias,
-          broker: '',
-        },
-      },
-      select: { assetId: true },
-    })
-    return globalAlias?.assetId ?? null
-  }
 
   async importTransactions(
     dto: ImportTransactionsDto,
@@ -76,139 +40,133 @@ export class TransactionImportService {
   ): Promise<ImportTransactionsResponseDto> {
     await this.ownershipService.validateAccountOwnership(dto.accountId, userId)
 
-    const account = await this.prisma.account.findUniqueOrThrow({
-      where: { id: dto.accountId },
-      select: { id: true, type: true, broker: true, currency: true },
-    })
-
-    if (account.type !== AccountType.broker) {
-      throw new BadRequestException('Selected account is not a broker account')
-    }
-
-    if (!account.broker) {
-      throw new BadRequestException('Selected account does not have a broker configured')
-    }
-
-    if (account.broker !== SUPPORTED_BROKER) {
-      throw new BadRequestException(`Only ${SUPPORTED_BROKER} broker accounts are supported for CSV import`)
-    }
+    const account = await this.loadImportAccount(dto.accountId)
+    this.importBrokerAccountGuard.assertEligible(account)
 
     const { rows } = this.brokerImportFileParser.parse(dto.csvContent)
-
-    const createdTransactionIds: string[] = []
-    const errors: ImportTransactionsResponseDto['errors'] = []
-    const seenBrokerRefs = new Set<string>()
+    const aggregate = createEmptyImportRunAggregate()
+    const duplicateTracker = new ImportBrokerOrderDuplicateTracker()
 
     for (const row of rows) {
-      const validation = this.transactionImportRowValidator.validateAndMap(row)
-      if (validation.ok === false) {
-        errors.push(validation.error)
-        continue
-      }
-
-      const normalized = validation.row
-
-      if (seenBrokerRefs.has(normalized.brokerOrderNo)) {
-        errors.push({
-          row: normalized.rowNumber,
-          field: '委託書號',
-          message: 'Duplicate broker order number in import file',
-        })
-        continue
-      }
-      seenBrokerRefs.add(normalized.brokerOrderNo)
-
-      const existingTransaction = await this.prisma.transaction.findFirst({
-        where: {
-          accountId: dto.accountId,
-          brokerOrderNo: normalized.brokerOrderNo,
-        },
-        select: { id: true },
+      await this.processParsedImportRow({
+        rawRow: row,
+        account,
+        dto,
+        userId,
+        duplicateTracker,
+        aggregate,
       })
-      if (existingTransaction) {
-        errors.push({
-          row: normalized.rowNumber,
-          field: '委託書號',
-          message: 'Duplicate broker order number for selected account',
-        })
-        continue
-      }
-
-      const currency = this.normalizeCurrency(normalized.currency)
-      if (!currency) {
-        errors.push({
-          row: normalized.rowNumber,
-          field: IMPORT_ROW_FIELD_LABELS.currency,
-          message: `Unsupported currency: ${normalized.currency}`,
-        })
-        continue
-      }
-      if (currency !== account.currency) {
-        errors.push({
-          row: normalized.rowNumber,
-          field: IMPORT_ROW_FIELD_LABELS.currency,
-          message: `Currency ${normalized.currency} does not match account currency ${account.currency}`,
-        })
-        continue
-      }
-
-      const assetId = await this.resolveAssetId(
-        normalized.assetName,
-        account.broker,
-      )
-      if (!assetId) {
-        errors.push({
-          row: normalized.rowNumber,
-          field: '股名',
-          message: `Asset alias not found for ${normalized.assetName}`,
-        })
-        continue
-      }
-
-      const importDto: CreateTransactionDto = {
-        accountId: dto.accountId,
-        assetId,
-        type: normalized.type,
-        amount: normalized.amount,
-        quantity: normalized.quantity,
-        price: normalized.price,
-        fee: normalized.fee,
-        tax: normalized.tax,
-        brokerOrderNo: normalized.brokerOrderNo,
-        tradeTime: normalized.tradeTime,
-        note: normalized.note,
-      }
-
-      try {
-        const created = await this.transactionsService.create(importDto, userId)
-        createdTransactionIds.push(created.id)
-      } catch (error: unknown) {
-        if (
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === 'P2002'
-        ) {
-          errors.push({
-            row: normalized.rowNumber,
-            field: '委託書號',
-            message: 'Duplicate broker order number for selected account',
-          })
-          continue
-        }
-
-        errors.push({
-          row: normalized.rowNumber,
-          field: 'row',
-          message: error instanceof Error ? error.message : 'Failed to import row',
-        })
-      }
     }
 
+    return buildImportTransactionsResponse(rows.length, aggregate)
+  }
+
+  private async loadImportAccount(accountId: string): Promise<ImportBrokerAccount> {
+    return this.prisma.account.findUniqueOrThrow({
+      where: { id: accountId },
+      select: { id: true, type: true, broker: true, currency: true },
+    })
+  }
+
+  private async processParsedImportRow(params: {
+    rawRow: Parameters<TransactionImportRowValidator['validateAndMap']>[0]
+    account: ImportBrokerAccount
+    dto: ImportTransactionsDto
+    userId: string
+    duplicateTracker: ImportBrokerOrderDuplicateTracker
+    aggregate: ImportRunAggregate
+  }): Promise<void> {
+    const { rawRow, account, dto, userId, duplicateTracker, aggregate } = params
+
+    const validation = this.transactionImportRowValidator.validateAndMap(rawRow)
+    if (validation.ok === false) {
+      aggregate.errors.push(validation.error)
+      return
+    }
+
+    const normalized = validation.row
+    const rowError = await this.resolveImportRowError(
+      normalized,
+      account,
+      dto.accountId,
+      duplicateTracker,
+    )
+    if (rowError) {
+      aggregate.errors.push(rowError)
+      return
+    }
+
+    const assetId = await this.importAssetAliasResolver.resolve(
+      normalized.assetName,
+      account.broker!,
+    )
+    if (!assetId) {
+      aggregate.errors.push({
+        row: normalized.rowNumber,
+        field: '股名',
+        message: `Asset alias not found for ${normalized.assetName}`,
+      })
+      return
+    }
+
+    const importDto = this.buildCreateTransactionDto(dto.accountId, assetId, normalized)
+
+    try {
+      const created = await this.transactionsService.create(importDto, userId)
+      aggregate.createdTransactionIds.push(created.id)
+    } catch (error: unknown) {
+      aggregate.errors.push(mapImportCreateError(error, normalized.rowNumber))
+    }
+  }
+
+  private async resolveImportRowError(
+    normalized: NormalizedImportTransactionRow,
+    account: ImportBrokerAccount,
+    accountId: string,
+    duplicateTracker: ImportBrokerOrderDuplicateTracker,
+  ) {
+    const fileDuplicateError = duplicateTracker.checkFileDuplicate(
+      normalized.brokerOrderNo,
+      normalized.rowNumber,
+    )
+    if (fileDuplicateError) {
+      return fileDuplicateError
+    }
+
+    const databaseDuplicateError =
+      await this.importBrokerOrderDuplicateChecker.findExistingInAccount(
+        accountId,
+        normalized.brokerOrderNo,
+        normalized.rowNumber,
+      )
+    if (databaseDuplicateError) {
+      return databaseDuplicateError
+    }
+
+    return validateImportRowCurrency(
+      normalized.currency,
+      account.currency,
+      normalized.rowNumber,
+    )
+  }
+
+  private buildCreateTransactionDto(
+    accountId: string,
+    assetId: string,
+    normalized: NormalizedImportTransactionRow,
+  ): CreateTransactionDto {
     return {
-      totalRows: rows.length,
-      successCount: createdTransactionIds.length,
-      failureCount: errors.length,
-      createdTransactionIds,
-      errors,
+      accountId,
+      assetId,
+      type: normalized.type,
+      amount: normalized.amount,
+      quantity: normalized.quantity,
+      price: normalized.price,
+      fee: normalized.fee,
+      tax: normalized.tax,
+      brokerOrderNo: normalized.brokerOrderNo,
+      tradeTime: normalized.tradeTime,
+      note: normalized.note,
     }
   }
 }
