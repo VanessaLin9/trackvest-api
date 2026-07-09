@@ -61,7 +61,7 @@ curl -s -b /tmp/trackvest.cookies http://localhost:3000/auth/me
 
 ```json
 {
-  "user": { "id": "...", "email": "...", "role": "USER", "createdAt": "..." },
+  "user": { "id": "...", "email": "...", "role": "user", "createdAt": "..." },
   "starterAccount": { "id": "...", "userId": "...", "name": "...", "type": "broker", "currency": "TWD", "broker": "cathay", "createdAt": "..." }
 }
 ```
@@ -456,7 +456,7 @@ Backend checkpoint PR is complete when this contract is stable. Frontend should 
 
 ```typescript
 {
-  user: { id, email, role, createdAt }
+  user: { id, email, role: 'user' | 'admin', createdAt }  // Prisma enum, lowercase
   starterAccount: { id, userId, name, type, currency, broker?, createdAt }
 }
 ```
