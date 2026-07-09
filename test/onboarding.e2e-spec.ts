@@ -112,6 +112,20 @@ describe('Onboarding (e2e)', () => {
     expect(await prisma.account.count()).toBe(1)
   })
 
+  it('rejects missing starterAccount without creating a user', async () => {
+    const { starterAccount: _starterAccount, ...payloadWithoutStarterAccount } = signupPayload
+
+    const res = await request(app.getHttpServer())
+      .post('/onboarding/signup')
+      .send(payloadWithoutStarterAccount)
+      .expect(400)
+
+    const messages = Array.isArray(res.body.message) ? res.body.message : [res.body.message]
+    expect(messages.some((message: string) => /starterAccount/i.test(message))).toBe(true)
+    expect(await prisma.user.count()).toBe(0)
+    expect(await prisma.glAccount.count()).toBe(0)
+  })
+
   it('rejects invalid starter account input without creating a user', async () => {
     const res = await request(app.getHttpServer())
       .post('/onboarding/signup')

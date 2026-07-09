@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
-import { IsEmail, IsString, Length, ValidateNested } from 'class-validator'
+import { IsDefined, IsEmail, IsString, Length, ValidateNested } from 'class-validator'
 import { OnboardingStarterAccountDto } from './onboarding-starter-account.dto'
 
 export class OnboardingSignupDto {
@@ -14,6 +14,7 @@ export class OnboardingSignupDto {
   password!: string
 
   @ApiProperty({ type: OnboardingStarterAccountDto })
+  @IsDefined()
   @ValidateNested()
   @Type(() => OnboardingStarterAccountDto)
   starterAccount!: OnboardingStarterAccountDto
