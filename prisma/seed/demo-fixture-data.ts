@@ -1,4 +1,5 @@
 import { GlAccountPurpose } from '@prisma/client'
+import { buildDefaultSystemGlAccountCreateData } from '../../src/gl/default-chart/default-chart.definitions'
 import {
   ASSET_IDS,
   BANK_ACCOUNT_ID,
@@ -6,6 +7,22 @@ import {
   BROKER_USD_ACCOUNT_ID,
   GL_ACCOUNT_IDS,
 } from './demo-identity'
+
+const DEMO_SYSTEM_GL_ACCOUNT_IDS: Record<GlAccountPurpose, string> = {
+  [GlAccountPurpose.investment_bucket]: GL_ACCOUNT_IDS.investment,
+  [GlAccountPurpose.equity_contribution]: GL_ACCOUNT_IDS.equity,
+  [GlAccountPurpose.dividend_income]: GL_ACCOUNT_IDS.dividendIncome,
+  [GlAccountPurpose.realized_gain_income]: GL_ACCOUNT_IDS.realizedGain,
+  [GlAccountPurpose.fee_expense]: GL_ACCOUNT_IDS.feeExpense,
+  [GlAccountPurpose.realized_loss_expense]: GL_ACCOUNT_IDS.realizedLoss,
+}
+
+function getDemoSystemGlAccountsData(userId: string) {
+  return buildDefaultSystemGlAccountCreateData(userId).map((row) => ({
+    id: DEMO_SYSTEM_GL_ACCOUNT_IDS[row.purpose!],
+    ...row,
+  }))
+}
 
 export const TRANSACTION_IDS = {
   depositBroker: '675676e8-3f24-4cbc-b210-b5efea213001',
@@ -287,54 +304,7 @@ export function getDemoGlAccountsData(userId: string) {
       currency: 'TWD' as const,
       linkedAccountId: BROKER_ACCOUNT_ID,
     },
-    {
-      id: GL_ACCOUNT_IDS.investment,
-      userId,
-      name: '資產-投資-股票(台幣)',
-      type: 'asset' as const,
-      purpose: GlAccountPurpose.investment_bucket,
-      currency: 'TWD' as const,
-    },
-    {
-      id: GL_ACCOUNT_IDS.equity,
-      userId,
-      name: '權益-投入資本',
-      type: 'equity' as const,
-      purpose: GlAccountPurpose.equity_contribution,
-      currency: 'TWD' as const,
-    },
-    {
-      id: GL_ACCOUNT_IDS.dividendIncome,
-      userId,
-      name: '收入-股利',
-      type: 'income' as const,
-      purpose: GlAccountPurpose.dividend_income,
-      currency: 'TWD' as const,
-    },
-    {
-      id: GL_ACCOUNT_IDS.realizedGain,
-      userId,
-      name: '收入-已實現損益-收益',
-      type: 'income' as const,
-      purpose: GlAccountPurpose.realized_gain_income,
-      currency: 'TWD' as const,
-    },
-    {
-      id: GL_ACCOUNT_IDS.feeExpense,
-      userId,
-      name: '費用-手續費',
-      type: 'expense' as const,
-      purpose: GlAccountPurpose.fee_expense,
-      currency: 'TWD' as const,
-    },
-    {
-      id: GL_ACCOUNT_IDS.realizedLoss,
-      userId,
-      name: '費用-已實現損益-損失',
-      type: 'expense' as const,
-      purpose: GlAccountPurpose.realized_loss_expense,
-      currency: 'TWD' as const,
-    },
+    ...getDemoSystemGlAccountsData(userId),
     {
       id: GL_ACCOUNT_IDS.diningExpense,
       userId,
