@@ -14,6 +14,7 @@ import { CorporateActionsModule } from './corporate-actions/corporate-actions.mo
 import { MarketPriceModule } from './market-price/market-price.module'
 import { GlModule } from './gl/gl.module'
 import { HealthModule } from './health/health.module'
+import { OnboardingModule } from './onboarding/onboarding.module'
 import { PortfolioModule } from './portfolio/portfolio.module'
 import { PrismaModule } from './prisma.module'
 import { TransactionsModule } from './transactions/transactions.module'
@@ -34,6 +35,7 @@ import { UsersModule } from './users/users.module'
     CorporateActionsModule,
     AccountsModule,
     GlModule,
+    OnboardingModule,
     TransactionsModule,
     DashboardModule,
     PortfolioModule,

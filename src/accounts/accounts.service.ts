@@ -101,16 +101,18 @@ export class AccountsService {
     })
   }
 
+  async createInTransaction(dto: CreateAndUpdateAccountDto, db: DbClient) {
+    const account = await db.account.create({ data: this.buildAccountData(dto) })
+    await this.ensureLinkedGlAccount(account, db)
+    return account
+  }
+
   async create(dto: CreateAndUpdateAccountDto, _user: UserContext) {
     // Controller is responsible for `assertSameUserOrAdmin(dto.userId, user)`
     // before reaching here. We still verify the target user exists.
     await this.ownershipService.validateUserExists(dto.userId)
 
-    return this.prisma.$transaction(async (db) => {
-      const account = await db.account.create({ data: this.buildAccountData(dto) })
-      await this.ensureLinkedGlAccount(account, db)
-      return account
-    })
+    return this.prisma.$transaction(async (db) => this.createInTransaction(dto, db))
   }
 
   async findAll(user: UserContext) {
