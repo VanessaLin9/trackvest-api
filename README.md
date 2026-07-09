@@ -223,12 +223,26 @@ Swagger:
 
 - `http://localhost:3000/docs`
 
-Authentication is still simplified for local development:
+Authentication uses **httpOnly cookie sessions** (not `X-User-Id` headers):
 
-- controllers read `X-User-Id`
-- there is no final user auth flow yet
+- `POST /auth/login` sets `access_token` and `refresh_token` cookies
+- Protected routes read `access_token` from the cookie jar
+- `POST /auth/refresh` rotates tokens; `POST /auth/logout` clears them
+- CORS must allow credentials (`credentials: true` on the frontend; default origin `http://localhost:3001`)
 
-This is a development convenience, not the intended long-term agent auth model.
+### Local onboarding flow (new user)
+
+For a fresh local database, prefer **`POST /onboarding/signup`** instead of manually seeding GL accounts:
+
+1. `POST /onboarding/signup` — creates user, TWD default GL chart, starter account, and linked cash GL in one transaction (no session cookies)
+2. `POST /auth/login` — obtain cookie session with the same email/password
+3. Call protected endpoints (e.g. `GET /auth/me`, `POST /transactions`) with credentials
+
+Low-level `POST /users` still exists but only creates the user row; it does not provision GL accounts.
+
+See [USAGE_GUIDE.md](USAGE_GUIDE.md) for curl examples and the **frontend onboarding contract** (trackvest-web PR 2).
+
+This is the current local-dev auth model. MCP agent credentials remain a separate follow-up.
 
 ## MCP server
 
@@ -300,7 +314,8 @@ There are also older root-level markdown files such as [FEATURES.md](FEATURES.md
 
 ## Known gaps
 
-- final user auth flow is not implemented yet
+- email verification, password reset, and production-grade public signup policy are not implemented
+- onboarding v1 is TWD-only; multi-currency chart provisioning is follow-up work
 - MCP still uses a local-dev owner user scope instead of real agent credentials
 - MCP currently focuses on read-only investment queries
 - CSV import is still broker-format specific

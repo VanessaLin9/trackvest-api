@@ -47,6 +47,7 @@ async function bootstrap() {
     .addTag('auth', 'Login / refresh / logout / me')
     .addTag('health', 'Health check')
     .addTag('users', 'User management')
+    .addTag('onboarding', 'First-run signup and initialization')
     .addTag('accounts', 'Cash/Broker/Bank accounts')
     .addTag('assets', 'Tradable assets catalog')
     .addTag('transactions', 'Transaction records')
