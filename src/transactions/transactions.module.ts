@@ -11,6 +11,7 @@ import { TransactionPositionOrchestratorService } from './transaction-position-o
 import { TransactionBusinessRulesValidator } from './transaction-business-rules-validator.service'
 import { TransactionRebuildPolicyService } from './transaction-rebuild-policy.service'
 import { TransactionImportRowValidator } from './transaction-import-row.validator'
+import { TransactionImportEvaluationService } from './transaction-import-evaluation.service'
 import { TransactionsService } from './transactions.service'
 
 @Module({
@@ -24,6 +25,7 @@ import { TransactionsService } from './transactions.service'
     ImportAssetAliasResolver,
     ImportBrokerOrderDuplicateChecker,
     TransactionImportRowValidator,
+    TransactionImportEvaluationService,
     TransactionBusinessRulesValidator,
     TransactionRebuildPolicyService,
     TransactionPositionOrchestratorService,

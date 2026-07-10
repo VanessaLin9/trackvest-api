@@ -5,6 +5,7 @@ import { BrokerImportFileParser } from './broker-import-file.parser'
 import { ImportAssetAliasResolver } from './import-asset-alias.resolver'
 import { ImportBrokerAccountGuard } from './import-broker-account.guard'
 import { ImportBrokerOrderDuplicateChecker } from './import-broker-order-duplicate.checker'
+import { TransactionImportEvaluationService } from './transaction-import-evaluation.service'
 import { TransactionImportRowValidator } from './transaction-import-row.validator'
 import { TransactionsService } from './transactions.service'
 import { TransactionPositionOrchestratorService } from './transaction-position-orchestrator.service'
@@ -77,6 +78,9 @@ describe('TransactionImportService', () => {
       account: {
         findUniqueOrThrow: jest.fn(),
       },
+      asset: {
+        findUnique: jest.fn(),
+      },
       assetAlias: {
         findUnique: jest.fn(),
       },
@@ -131,6 +135,12 @@ describe('TransactionImportService', () => {
     const importBrokerOrderDuplicateChecker = new ImportBrokerOrderDuplicateChecker(
       prisma as never,
     )
+    const transactionImportEvaluationService = new TransactionImportEvaluationService(
+      prisma as never,
+      transactionImportRowValidator,
+      importAssetAliasResolver,
+      importBrokerOrderDuplicateChecker,
+    )
 
     const importService = new TransactionImportService(
       prisma as never,
@@ -141,6 +151,7 @@ describe('TransactionImportService', () => {
       importBrokerAccountGuard,
       importAssetAliasResolver,
       importBrokerOrderDuplicateChecker,
+      transactionImportEvaluationService,
     )
 
     txClient.transaction.findFirst.mockResolvedValue(null)
@@ -1217,5 +1228,76 @@ describe('TransactionImportService', () => {
       ],
     })
     expect(postingService.postTransaction).not.toHaveBeenCalled()
+  })
+
+  describe('previewImportTransactions', () => {
+    it('does not call transactionsService.create', async () => {
+      const { importService, prisma, transactionsService } = createHarness()
+      const createSpy = jest.spyOn(transactionsService, 'create')
+
+      mockImportAccount(prisma)
+      prisma.assetAlias.findUnique.mockResolvedValueOnce({ assetId })
+      prisma.transaction.findFirst.mockResolvedValue(null)
+      prisma.asset.findUnique.mockResolvedValue({
+        id: assetId,
+        symbol: '006208',
+        name: '富邦台50',
+      })
+
+      const result = await importService.previewImportTransactions(
+        {
+          accountId,
+          csvContent: buildImportContent([
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-PREVIEW-001', 'TWD', '預覽'],
+          ]),
+        },
+        userId,
+      )
+
+      expect(createSpy).not.toHaveBeenCalled()
+      expect(result).toEqual(
+        expect.objectContaining({
+          totalRows: 1,
+          readyCount: 1,
+          errorCount: 0,
+          canCommit: true,
+        }),
+      )
+    })
+
+    it('returns structured preview errors for unknown asset alias', async () => {
+      const { importService, prisma, transactionsService } = createHarness()
+      const createSpy = jest.spyOn(transactionsService, 'create')
+
+      mockImportAccount(prisma)
+      prisma.assetAlias.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+      prisma.transaction.findFirst.mockResolvedValue(null)
+
+      const result = await importService.previewImportTransactions(
+        {
+          accountId,
+          csvContent: buildImportContent([
+            ['未知標的', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-PREVIEW-002', 'TWD', '缺別名'],
+          ]),
+        },
+        userId,
+      )
+
+      expect(createSpy).not.toHaveBeenCalled()
+      expect(result.canCommit).toBe(false)
+      expect(result.rows[0]).toEqual(
+        expect.objectContaining({
+          status: 'error',
+          errors: [
+            expect.objectContaining({
+              code: 'ASSET_ALIAS_NOT_FOUND',
+              field: 'assetName',
+            }),
+          ],
+        }),
+      )
+    })
   })
 })

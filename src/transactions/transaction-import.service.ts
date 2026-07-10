@@ -20,6 +20,8 @@ import {
   ImportRunAggregate,
 } from './transaction-import-orchestration.types'
 import { TransactionsService } from './transactions.service'
+import { TransactionImportEvaluationService } from './transaction-import-evaluation.service'
+import { ImportPreviewResponseDto } from './dto/import-preview.response.dto'
 
 @Injectable()
 export class TransactionImportService {
@@ -32,7 +34,25 @@ export class TransactionImportService {
     private importBrokerAccountGuard: ImportBrokerAccountGuard,
     private importAssetAliasResolver: ImportAssetAliasResolver,
     private importBrokerOrderDuplicateChecker: ImportBrokerOrderDuplicateChecker,
+    private transactionImportEvaluationService: TransactionImportEvaluationService,
   ) {}
+
+  async previewImportTransactions(
+    dto: ImportTransactionsDto,
+    userId: string,
+  ): Promise<ImportPreviewResponseDto> {
+    await this.ownershipService.validateAccountOwnership(dto.accountId, userId)
+
+    const account = await this.loadImportAccount(dto.accountId)
+    this.importBrokerAccountGuard.assertEligible(account)
+
+    const { rows } = this.brokerImportFileParser.parse(dto.csvContent)
+    return this.transactionImportEvaluationService.evaluateImportRows({
+      rawRows: rows,
+      account,
+      accountId: dto.accountId,
+    })
+  }
 
   async importTransactions(
     dto: ImportTransactionsDto,
