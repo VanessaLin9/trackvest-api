@@ -12,31 +12,84 @@ Trackvest is an **investment bookkeeping system** that combines:
 
 ## 🚀 Quick Start Workflow
 
-### Step 1: Set Up User & Accounts
+### Step 1: Onboard a new user (recommended)
+
+Use **`POST /onboarding/signup`** to create a user plus the minimum bookkeeping graph in one atomic transaction:
+
+- TWD default system GL accounts (`investment_bucket`, `equity_contribution`, fee/dividend/realized P&L purposes)
+- One starter account (`broker`, `bank`, or `cash`)
+- Linked cash GL account for that starter account
+
+The onboarding endpoint does **not** set session cookies. Log in immediately after signup.
+
 ```bash
-# 1. Create user
+# 1. Sign up + initialize (public)
+curl -s -X POST http://localhost:3000/onboarding/signup \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "email": "user@example.com",
+    "password": "password123",
+    "starterAccount": {
+      "name": "My Broker",
+      "type": "broker",
+      "currency": "TWD",
+      "broker": "cathay"
+    }
+  }'
+
+# 2. Login (sets httpOnly cookies — save jar for curl)
+curl -s -c /tmp/trackvest.cookies -X POST http://localhost:3000/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{ "email": "user@example.com", "password": "password123" }'
+
+# 3. Verify session
+curl -s -b /tmp/trackvest.cookies http://localhost:3000/auth/me
+```
+
+**Onboarding request notes (v1):**
+
+| Field | Rules |
+|-------|-------|
+| `email` | Valid email |
+| `password` | 6–100 characters |
+| `starterAccount.name` | 1–100 characters |
+| `starterAccount.type` | `broker` \| `bank` \| `cash` |
+| `starterAccount.currency` | `TWD` only in v1 |
+| `starterAccount.broker` | Optional; if `type` is `broker`, must be `cathay` or omitted |
+
+**Onboarding response (201):**
+
+```json
+{
+  "user": { "id": "...", "email": "...", "role": "user", "createdAt": "..." },
+  "starterAccount": { "id": "...", "userId": "...", "name": "...", "type": "broker", "currency": "TWD", "broker": "cathay", "createdAt": "..." }
+}
+```
+
+Duplicate email → `409`. Invalid starter account → `400` (no partial user created).
+
+### Step 1 (alternative): low-level user creation
+
+`POST /users` only creates a `User` row. You must still provision GL system accounts manually (or via seed) before transactions can auto-post. Prefer onboarding signup for local dev.
+
+```bash
 POST /users
 { "email": "user@example.com", "password": "password123" }
+```
 
-# 2. Create broker account
-POST /accounts
-Headers: X-User-Id: <user-id>
-{ "userId": "<user-id>", "name": "My Broker", "type": "broker", "currency": "TWD" }
+### Step 2: Create additional accounts (optional)
 
-# 3. Create bank account
+After login, create more accounts with cookie auth:
+
+```bash
 POST /accounts
+Cookie: access_token=...   # or curl -b /tmp/trackvest.cookies
 { "userId": "<user-id>", "name": "My Bank", "type": "bank", "currency": "TWD" }
 ```
 
-### Step 2: Set Up GL Accounts (Chart of Accounts)
-**Note:** Currently GL accounts need to be created manually in database. The system looks for:
-- Investment accounts: Name contains "投資" + currency match
-- Fee accounts: Name contains "手續費"
-- Dividend accounts: Name contains "股利"
-- Equity accounts: Name contains "權益"
-- P&L accounts: Name contains "已實現損益"
+Each account automatically gets a linked cash GL account. System purpose GL accounts come from onboarding (or seed), not from `POST /accounts`.
 
-### Step 3: Add Assets to Catalog
+### Step 3: Add assets to catalog
 ```bash
 # Add stock to catalog
 POST /assets
@@ -45,9 +98,9 @@ POST /assets
 
 ### Step 4: Record Transactions
 ```bash
-# Buy stock
+# Buy stock (use cookie session)
 POST /transactions
-Headers: X-User-Id: <user-id>
+Cookie: access_token=...   # or curl -b /tmp/trackvest.cookies
 {
   "accountId": "<broker-account-id>",
   "assetId": "<asset-id>",
@@ -292,15 +345,15 @@ POST /transactions
 ## 🔐 Security Considerations
 
 ### Current Implementation
-- Header-based user ID (`X-User-Id`)
-- Ownership validation on all endpoints
-- Admin override capability
+- Cookie-based JWT sessions (`access_token` + `refresh_token` httpOnly cookies)
+- Global `AuthGuard` on protected HTTP routes
+- Ownership validation on resource endpoints
+- Admin role for selected routes (e.g. `GET /users`)
+- Public routes: health, `POST /users`, `POST /onboarding/signup`, `POST /auth/login`, `POST /auth/refresh`, FX reference data
 
 ### Recommended Enhancements
-- JWT authentication (replace header-based)
-- Password reset functionality
-- Session management
-- Rate limiting
+- Email verification and password reset
+- Rate limiting and bot protection for public signup
 - Audit logging
 
 ---
@@ -354,30 +407,83 @@ GL Entry Created:
 ## 🛠️ Development Tips
 
 ### Testing Endpoints
-1. Use Swagger UI at `/docs` for interactive testing
-2. Always include `X-User-Id` header for protected endpoints
-3. Use admin user ID to test admin features
+1. Use Swagger UI at `/docs` for interactive testing (`withCredentials: true` for cookie auth)
+2. For curl, use `-c`/`-b` cookie jars after `POST /auth/login`
+3. New users: run `POST /onboarding/signup` then login before hitting protected routes
 
 ### Common Patterns
-- Create account before transactions
-- Create asset before referencing in transactions
-- Set up GL accounts before automatic posting works
+- Onboard via `POST /onboarding/signup` before first transactions (or seed GL accounts manually for low-level `POST /users` users)
+- Create asset before referencing in buy/sell/dividend transactions
 - Use soft delete for audit trail
 
 ### Error Handling
-- 401: Missing user ID
+- 401: Missing or expired session (try `POST /auth/refresh` or re-login)
 - 403: Ownership violation
 - 404: Resource not found
 - 400: Validation error
+- 409: Duplicate email on signup
+
+---
+
+## 📚 Frontend onboarding contract (trackvest-web PR 2)
+
+Backend checkpoint PR is complete when this contract is stable. Frontend should **not** call `POST /users` directly for the signup page.
+
+### Flow
+
+1. User submits signup form → `POST /onboarding/signup`
+2. On `201`, call existing `POST /auth/login` with the same `email` / `password` (cookies set by backend)
+3. Redirect to `/` (dashboard) or `/accounts` (product decision — TBD)
+4. On `409`, show duplicate-email error; do **not** retry signup automatically
+5. If login fails after successful signup, prompt user to use `/login` manually
+
+### Signup request body
+
+```typescript
+{
+  email: string
+  password: string          // 6–100 chars
+  starterAccount: {
+    name: string            // 1–100 chars
+    type: 'broker' | 'bank' | 'cash'
+    currency: 'TWD'         // only TWD in v1
+    broker?: string         // broker only: 'cathay' or omit
+  }
+}
+```
+
+### Signup response body (`201`)
+
+```typescript
+{
+  user: { id, email, role: 'user' | 'admin', createdAt }  // Prisma enum, lowercase
+  starterAccount: { id, userId, name, type, currency, broker?, createdAt }
+}
+```
+
+No `Set-Cookie` on onboarding signup. Session comes only from `/auth/login`.
+
+### HTTP client requirements
+
+- `withCredentials: true` (already configured in trackvest-web `api.ts`)
+- API base URL: `VITE_API_BASE_URL` (default `http://localhost:3000`)
+- CORS: backend allows `http://localhost:3001` with `credentials: true`
+
+### Out of scope for frontend PR 2
+
+- Email verification, invite codes, password reset
+- Multi-currency onboarding
+- Post-signup wizard beyond a single signup form
+- Direct DB/seed workarounds
 
 ---
 
 ## 📚 Next Steps for Frontend
 
-1. **User Management UI**
-   - Login/registration (when auth is implemented)
-   - User profile
-   - Account selection
+1. **Signup / onboarding page**
+   - Route: `/signup` (or `/onboarding`)
+   - Wire `POST /onboarding/signup` + auto `authService.login()`
+   - Login ↔ Signup navigation and error states
 
 2. **Account Management UI**
    - Account list
