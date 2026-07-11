@@ -14,12 +14,17 @@ import { ImportTransactionsResponseDto } from './dto/import-transactions.respons
 import { NormalizedImportTransactionRow } from './transaction-import-row.types'
 import { TransactionImportRowValidator } from './transaction-import-row.validator'
 import {
-  buildImportTransactionsResponse,
   createEmptyImportRunAggregate,
   ImportBrokerAccount,
   ImportRunAggregate,
 } from './transaction-import-orchestration.types'
 import { TransactionsService } from './transactions.service'
+import { TransactionImportEvaluationService } from './transaction-import-evaluation.service'
+import { ImportPreviewResponseDto } from './dto/import-preview.response.dto'
+import { ImportCommitResponseDto } from './dto/import-commit.response.dto'
+import { ImportCommitRejectedException } from './import-commit-rejected.exception'
+import { ImportPreviewResult } from './transaction-import-evaluation.types'
+import { IMPORT_ERROR_CODES } from './import-error-codes'
 
 @Injectable()
 export class TransactionImportService {
@@ -32,18 +37,36 @@ export class TransactionImportService {
     private importBrokerAccountGuard: ImportBrokerAccountGuard,
     private importAssetAliasResolver: ImportAssetAliasResolver,
     private importBrokerOrderDuplicateChecker: ImportBrokerOrderDuplicateChecker,
+    private transactionImportEvaluationService: TransactionImportEvaluationService,
   ) {}
 
-  async importTransactions(
+  async previewImportTransactions(
     dto: ImportTransactionsDto,
     userId: string,
-  ): Promise<ImportTransactionsResponseDto> {
-    await this.ownershipService.validateAccountOwnership(dto.accountId, userId)
+  ): Promise<ImportPreviewResponseDto> {
+    const { account, rows, accountId } = await this.prepareImportContext(dto, userId)
+    return this.transactionImportEvaluationService.evaluateImportRows({
+      rawRows: rows,
+      account,
+      accountId,
+    })
+  }
 
-    const account = await this.loadImportAccount(dto.accountId)
-    this.importBrokerAccountGuard.assertEligible(account)
+  async commitImportTransactions(
+    dto: ImportTransactionsDto,
+    userId: string,
+  ): Promise<ImportCommitResponseDto> {
+    const { account, rows, accountId } = await this.prepareImportContext(dto, userId)
 
-    const { rows } = this.brokerImportFileParser.parse(dto.csvContent)
+    const preview = await this.transactionImportEvaluationService.evaluateImportRows({
+      rawRows: rows,
+      account,
+      accountId,
+    })
+    if (!preview.canCommit) {
+      throw ImportCommitRejectedException.forPreviewErrors(preview)
+    }
+
     const aggregate = createEmptyImportRunAggregate()
     const duplicateTracker = new ImportBrokerOrderDuplicateTracker()
 
@@ -58,7 +81,79 @@ export class TransactionImportService {
       })
     }
 
-    return buildImportTransactionsResponse(rows.length, aggregate)
+    if (aggregate.errors.length > 0) {
+      throw ImportCommitRejectedException.forPartialCommitFailure({
+        preview: this.buildCommitFailurePreview(preview, aggregate),
+        aggregate,
+      })
+    }
+
+    return {
+      totalRows: rows.length,
+      successCount: aggregate.createdTransactionIds.length,
+      failureCount: 0,
+      createdTransactionIds: aggregate.createdTransactionIds,
+    }
+  }
+
+  private async prepareImportContext(dto: ImportTransactionsDto, userId: string) {
+    await this.ownershipService.validateAccountOwnership(dto.accountId, userId)
+
+    const account = await this.loadImportAccount(dto.accountId)
+    this.importBrokerAccountGuard.assertEligible(account)
+
+    const { rows } = this.brokerImportFileParser.parse(dto.csvContent)
+    return { account, rows, accountId: dto.accountId }
+  }
+
+  private buildCommitFailurePreview(
+    preview: ImportPreviewResult,
+    aggregate: ImportRunAggregate,
+  ): ImportPreviewResult {
+    const erroredRows = new Set(aggregate.errors.map((error) => error.row))
+
+    return {
+      ...preview,
+      canCommit: false,
+      readyCount: preview.rows.filter(
+        (row) => row.status === 'ready' && !erroredRows.has(row.row),
+      ).length,
+      errorCount: preview.errorCount + aggregate.errors.length,
+      rows: preview.rows.map((row) => {
+        const commitError = aggregate.errors.find((error) => error.row === row.row)
+        if (!commitError) {
+          return row
+        }
+
+        return {
+          ...row,
+          status: 'error' as const,
+          errors: [
+            ...row.errors,
+            {
+              code: IMPORT_ERROR_CODES.IMPORT_COMMIT_FAILED,
+              field: commitError.field,
+              message: commitError.message,
+            },
+          ],
+        }
+      }),
+    }
+  }
+
+  async importTransactions(
+    dto: ImportTransactionsDto,
+    userId: string,
+  ): Promise<ImportTransactionsResponseDto> {
+    const result = await this.commitImportTransactions(dto, userId)
+
+    return {
+      totalRows: result.totalRows,
+      successCount: result.successCount,
+      failureCount: result.failureCount,
+      createdTransactionIds: result.createdTransactionIds,
+      errors: [],
+    }
   }
 
   private async loadImportAccount(accountId: string): Promise<ImportBrokerAccount> {

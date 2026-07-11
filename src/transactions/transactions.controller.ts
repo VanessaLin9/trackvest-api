@@ -1,5 +1,12 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common'
-import { ApiBadRequestResponse, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger'
+import {
+  ApiBadRequestResponse,
+  ApiCookieAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger'
 import { TransactionImportService } from './transaction-import.service'
 import { TransactionsService } from './transactions.service'
 import { FindTransactionsDto } from './dto/find-transaction.dto'
@@ -8,6 +15,9 @@ import { CreateAndUpdateTransactionDto } from './dto/transaction.createAndUpdate
 import { TransactionResponseDto } from './dto/transaction.response.dto'
 import { ImportTransactionsDto } from './dto/import-transactions.dto'
 import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
+import { ImportPreviewResponseDto } from './dto/import-preview.response.dto'
+import { ImportCommitResponseDto } from './dto/import-commit.response.dto'
+import { ImportCommitRejectedResponseDto } from './dto/import-commit-rejected.response.dto'
 import { ErrorResponse } from 'src/common/dto'
 import { AuthUser } from '../common/decorators/auth-user.decorator'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
@@ -35,12 +45,38 @@ export class TransactionsController {
   }
 
   @Post('import')
+  @ApiOperation({
+    deprecated: true,
+    summary: 'Deprecated: use POST /transactions/import/preview then /transactions/import/commit',
+    description:
+      'This endpoint now follows the safe commit policy (all rows must be ready). ' +
+      'Prefer preview + commit for new integrations.',
+  })
   @ApiCreatedResponse({ type: ImportTransactionsResponseDto })
   async importTransactions(
     @Body() dto: ImportTransactionsDto,
     @CurrentUser() userId: string,
   ): Promise<ImportTransactionsResponseDto> {
     return this.importService.importTransactions(dto, userId)
+  }
+
+  @Post('import/preview')
+  @ApiOkResponse({ type: ImportPreviewResponseDto })
+  async previewImportTransactions(
+    @Body() dto: ImportTransactionsDto,
+    @CurrentUser() userId: string,
+  ): Promise<ImportPreviewResponseDto> {
+    return this.importService.previewImportTransactions(dto, userId)
+  }
+
+  @Post('import/commit')
+  @ApiCreatedResponse({ type: ImportCommitResponseDto })
+  @ApiBadRequestResponse({ type: ImportCommitRejectedResponseDto })
+  async commitImportTransactions(
+    @Body() dto: ImportTransactionsDto,
+    @CurrentUser() userId: string,
+  ): Promise<ImportCommitResponseDto> {
+    return this.importService.commitImportTransactions(dto, userId)
   }
 
   @Get()
