@@ -21,6 +21,7 @@ import {
   getDemoSellLotMatchesData,
   getDemoTransactionsData,
 } from './demo-fixture-data'
+import { runTwCatalogBootstrapSeed } from './tw-catalog-bootstrap-runner'
 
 export async function wipeAllData(prisma: PrismaClient) {
   await prisma.glLine.deleteMany()
@@ -78,6 +79,7 @@ export async function runDevSeed(prisma: PrismaClient) {
   assertDevSeedAllowed()
   await wipeAllData(prisma)
   await seedGlobalCatalog(prisma)
+  await runTwCatalogBootstrapSeed(prisma)
   await seedDemoUserGraphCreate(prisma)
 
   console.log('Seed completed successfully for demo user:', DEMO_USER_EMAIL)
