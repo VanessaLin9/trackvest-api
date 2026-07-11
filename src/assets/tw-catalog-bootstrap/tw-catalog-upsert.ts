@@ -107,6 +107,7 @@ export async function planTwCatalogUpserts(
 ): Promise<TwCatalogUpsertCounts> {
   const counts = createEmptyUpsertCounts()
   const resolvedAssetIds = new Map<string, string>()
+  const plannedAliasOwners = new Map<string, string>()
 
   for (const record of records) {
     const existing = await db.asset.findUnique({
@@ -139,28 +140,47 @@ export async function planTwCatalogUpserts(
         select: { assetId: true },
       })
 
-      if (!existingAlias) {
-        counts.aliases.created += 1
+      if (existingAlias) {
+        if (existingAlias.assetId === assetId) {
+          counts.aliases.skippedExisting += 1
+        } else {
+          recordAliasConflict(counts, alias, existingAlias.assetId, record.symbol)
+        }
         continue
       }
 
-      if (existingAlias.assetId === assetId || existingAlias.assetId === existing?.id) {
-        counts.aliases.skippedExisting += 1
+      const plannedOwner = plannedAliasOwners.get(alias)
+      if (plannedOwner) {
+        if (plannedOwner === assetId) {
+          counts.aliases.skippedExisting += 1
+        } else {
+          recordAliasConflict(counts, alias, plannedOwner, record.symbol)
+        }
         continue
       }
 
-      counts.aliases.conflicts += 1
-      if (counts.aliases.conflictExamples.length < 5) {
-        counts.aliases.conflictExamples.push({
-          alias,
-          existingAssetId: existingAlias.assetId,
-          expectedSymbol: record.symbol,
-        })
-      }
+      plannedAliasOwners.set(alias, assetId)
+      counts.aliases.created += 1
     }
   }
 
   return counts
+}
+
+function recordAliasConflict(
+  counts: TwCatalogUpsertCounts,
+  alias: string,
+  existingAssetId: string,
+  expectedSymbol: string,
+): void {
+  counts.aliases.conflicts += 1
+  if (counts.aliases.conflictExamples.length < 5) {
+    counts.aliases.conflictExamples.push({
+      alias,
+      existingAssetId,
+      expectedSymbol,
+    })
+  }
 }
 
 function createEmptyUpsertCounts(): TwCatalogUpsertCounts {

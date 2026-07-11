@@ -189,6 +189,35 @@ describe('tw-catalog-upsert', () => {
     expect(db.assetAlias.create).not.toHaveBeenCalled()
   })
 
+  it('detects planned alias conflicts across new assets in dry-run', async () => {
+    const db = createMockDb()
+    const first = { ...SAMPLE_RECORD, globalAliases: ['台積電', '2330'] }
+    const second = {
+      ...SAMPLE_RECORD,
+      symbol: '2317',
+      name: '其他股票',
+      globalAliases: ['台積電'],
+    }
+
+    const plan = await planTwCatalogUpserts(db, [first, second])
+
+    expect(plan.assets).toEqual({ created: 2, skippedExisting: 0 })
+    expect(plan.aliases).toEqual({
+      created: 2,
+      skippedExisting: 0,
+      conflicts: 1,
+      conflictExamples: [
+        {
+          alias: '台積電',
+          existingAssetId: 'planned-2330',
+          expectedSymbol: '2317',
+        },
+      ],
+    })
+    expect(db.asset.create).not.toHaveBeenCalled()
+    expect(db.assetAlias.create).not.toHaveBeenCalled()
+  })
+
   it('runs writes inside a transaction when available', async () => {
     const db = createMockDb()
 
