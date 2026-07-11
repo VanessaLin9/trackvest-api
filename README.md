@@ -89,6 +89,8 @@ pnpm db:seed:dev
 
 See [docs/deployment.md](docs/deployment.md) for production bootstrap and demo seed commands.
 
+Dev and production bootstrap also fetch official TWSE/TPEX open data to populate Taiwan listed/OTC stocks and listed ETFs (non-destructive upsert). Use `pnpm assets:bootstrap:tw -- --dry-run` to inspect the plan without writing.
+
 4. Start the HTTP API
 
 ```bash
@@ -206,6 +208,22 @@ Admin HTTP (admin role): `POST /prices/sync/taiwan`, `POST /prices/sync/us`.
 
 Portfolio valuation uses `Close` for US symbols; `adjClose` is stored for future trend/split work.
 
+## Taiwan asset catalog bootstrap
+
+Official TWSE/TPEX open data populates Taiwan **Asset** and global **AssetAlias** rows (create-only; reruns skip existing records).
+
+```bash
+# dry-run — fetch, parse, and print summary; no DB writes
+pnpm assets:bootstrap:tw -- --dry-run
+
+# write missing catalog rows
+pnpm assets:bootstrap:tw
+```
+
+`pnpm db:seed` and `pnpm db:bootstrap:prod` call the same bootstrap implementation after demo catalog fixtures. This does **not** fix broker-specific import aliases (e.g. Cathay CSV display names) — that remains a separate follow-up.
+
+Details: [docs/deployment.md](docs/deployment.md#production-bootstrap-and-demo-seed).
+
 ## HTTP API
 
 The HTTP API is still useful for:
@@ -314,6 +332,12 @@ Corporate actions / split replay:
 
 ```bash
 npx jest src/corporate-actions --runInBand
+```
+
+Taiwan asset catalog bootstrap:
+
+```bash
+npx jest src/assets/tw-catalog-bootstrap src/deployment/tw-catalog-seed.spec.ts --runInBand
 ```
 
 HTTP e2e tests:

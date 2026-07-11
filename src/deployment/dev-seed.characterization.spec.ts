@@ -50,6 +50,13 @@ describe('Dev seed (CP2 layout)', () => {
     expect(devSource).toMatch(/export async function seedGlobalCatalog\(prisma: PrismaClient\)/)
     expect(devSource).toMatch(/await prisma\.asset\.createMany\(/)
     expect(devSource).toMatch(/await prisma\.price\.createMany\(/)
+    expect(devSource).toMatch(/runTwCatalogBootstrapSeed\(prisma\)/)
+
+    const globalCatalogIndex = devSource.indexOf('seedGlobalCatalog(prisma)')
+    const twBootstrapIndex = devSource.indexOf('runTwCatalogBootstrapSeed(prisma)')
+    const demoGraphIndex = devSource.indexOf('seedDemoUserGraphCreate(prisma)')
+    expect(twBootstrapIndex).toBeGreaterThan(globalCatalogIndex)
+    expect(demoGraphIndex).toBeGreaterThan(twBootstrapIndex)
 
     expect(upsertSource).not.toMatch(/prisma\.asset\./)
     expect(upsertSource).not.toMatch(/prisma\.price\./)
@@ -62,10 +69,12 @@ describe('Dev seed (CP2 layout)', () => {
 
   it('bootstrap catalog uses preflight and transaction before upsert', () => {
     const source = readSource(CATALOG_BOOTSTRAP_PATH)
+    const bootstrapRunner = readSource(join(process.cwd(), 'prisma', 'seed', 'bootstrap-runner.ts'))
 
     expect(source).toMatch(/assertCatalogBootstrapSafeForUpsert/)
     expect(source).toMatch(/\$transaction/)
     expect(source).toMatch(/asset\.upsert/)
+    expect(bootstrapRunner).toMatch(/runTwCatalogBootstrapSeed\(prisma\)/)
   })
 
   it('prod-demo runner requires ALLOW_PRODUCTION_DEMO_SEED and catalog assets', () => {
