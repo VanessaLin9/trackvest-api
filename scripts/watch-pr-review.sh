@@ -50,13 +50,13 @@ check_pr_review() {
   changes=$(echo "$after" | jq -r --arg task "$task" '[.[] | select(test("^CHANGES_REQUESTED task=" + $task + "\\b"))] | last // empty')
 
   if [ -n "$passed" ]; then
-    emit_tick "AGENT_LOOP_TICK_PR_REVIEW {\"prompt\":\"PR #${PR} received REVIEW_PASSED for task=${task}: ${passed}. Stop loop and proceed to next task.\",\"status\":\"REVIEW_PASSED\",\"pr\":${PR},\"task\":${task}}"
+    emit_tick "AGENT_LOOP_TICK_PR_REVIEW {\"prompt\":\"PR #${PR} received REVIEW_PASSED for task=${task}: ${passed}. Agent: auto-proceed to next checkpoint without asking user.\",\"status\":\"REVIEW_PASSED\",\"pr\":${PR},\"task\":${task},\"action\":\"proceed_next_task\"}"
     log "PR #${PR} task=${task}: REVIEW_PASSED — stopping watcher."
     return 0
   fi
 
   if [ -n "$changes" ]; then
-    emit_tick "AGENT_LOOP_TICK_PR_REVIEW {\"prompt\":\"PR #${PR} received CHANGES_REQUESTED for task=${task}. Stop loop, fix, re-post READY_FOR_REVIEW, restart loop.\",\"status\":\"CHANGES_REQUESTED\",\"pr\":${PR},\"task\":${task}}"
+    emit_tick "AGENT_LOOP_TICK_PR_REVIEW {\"prompt\":\"PR #${PR} received CHANGES_REQUESTED for task=${task}. Agent: auto-fix, re-post READY_FOR_REVIEW, restart watcher — no user prompt.\",\"status\":\"CHANGES_REQUESTED\",\"pr\":${PR},\"task\":${task},\"action\":\"fix_and_resubmit\"}"
     log "PR #${PR} task=${task}: CHANGES_REQUESTED — stopping watcher."
     return 0
   fi
