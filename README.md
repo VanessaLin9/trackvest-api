@@ -19,7 +19,7 @@ Current implemented investment behavior:
 - TW stock splits sync from FinMind, replay affected scopes chronologically, and repost sell GL
 - transaction create/update/delete keeps GL entries in sync
 - backdated buy/sell changes rebuild affected position scopes
-- CSV import currently supports Cathay-style broker exports
+- CSV import supports Cathay-style broker exports via preview + safe commit
 
 Current MCP status:
 
@@ -241,6 +241,28 @@ For a fresh local database, prefer **`POST /onboarding/signup`** instead of manu
 Low-level `POST /users` still exists but only creates the user row; it does not provision GL accounts.
 
 See [USAGE_GUIDE.md](USAGE_GUIDE.md) for curl examples and the **frontend onboarding contract** (trackvest-web PR 2).
+
+### Broker CSV import (preview + commit)
+
+Recommended flow for new integrations:
+
+1. `POST /transactions/import/preview` — parse and evaluate rows **without writing** to the database. Response includes per-row `status`, machine-readable `code`, and `canCommit`.
+2. `POST /transactions/import/commit` — re-runs the same evaluation, then creates transactions only when **all rows are ready**. Rejects with `400` when preview has errors or when a row fails during create.
+
+Request body for all three endpoints (`ImportTransactionsDto`):
+
+- `accountId` — brokerage account UUID
+- `csvContent` — raw CSV/TSV pasted from the broker export
+
+Commit rejection body (`ImportCommitRejectedResponseDto`):
+
+- `errorCode`: `COMMIT_NOT_ALLOWED_WITH_ERRORS` when preview rows have errors (no DB writes)
+- `errorCode`: `IMPORT_COMMIT_FAILED` when create fails mid-batch; `successCount` and `createdTransactionIds` reflect rows already persisted
+- `preview` — full preview snapshot for UI display
+
+`POST /transactions/import` is **deprecated**. It now delegates to the safe commit policy (no partial success) and returns an empty `errors` array on success. Prefer preview + commit.
+
+Swagger models: `ImportPreviewResponseDto`, `ImportCommitResponseDto`, `ImportCommitRejectedResponseDto`.
 
 This is the current local-dev auth model. MCP agent credentials remain a separate follow-up.
 
