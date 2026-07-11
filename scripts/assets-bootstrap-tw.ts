@@ -3,9 +3,11 @@
  *
  * Usage:
  *   pnpm assets:bootstrap:tw -- --dry-run
+ *   pnpm assets:bootstrap:tw
  */
 
-import { runTwCatalogDryRunPipeline } from '../src/assets/tw-catalog-bootstrap/tw-catalog-pipeline'
+import { PrismaClient } from '@prisma/client'
+import { runTwCatalogBootstrapPipeline } from '../src/assets/tw-catalog-bootstrap/tw-catalog-pipeline'
 import { TwCatalogBootstrapError } from '../src/assets/tw-catalog-bootstrap/tw-catalog-bootstrap.error'
 
 function parseArgs(argv: string[]): { dryRun: boolean } {
@@ -15,25 +17,29 @@ function parseArgs(argv: string[]): { dryRun: boolean } {
 
 async function main() {
   const { dryRun } = parseArgs(process.argv.slice(2))
+  const prisma = new PrismaClient()
+  let failed = false
 
-  if (!dryRun) {
-    console.error(
-      'Only --dry-run is supported in Task 1. Database writes will be added in Task 2.',
-    )
-    process.exit(1)
+  try {
+    const summary = await runTwCatalogBootstrapPipeline({
+      dryRun,
+      db: prisma,
+    })
+    console.log(JSON.stringify(summary, null, 2))
+  } catch (error) {
+    failed = true
+    if (error instanceof TwCatalogBootstrapError) {
+      console.error(error.message)
+    } else {
+      console.error(error)
+    }
+  } finally {
+    await prisma.$disconnect()
   }
 
-  const summary = await runTwCatalogDryRunPipeline({ dryRun: true })
-  console.log(JSON.stringify(summary, null, 2))
+  if (failed) {
+    process.exit(1)
+  }
 }
 
-main().catch((error) => {
-  if (error instanceof TwCatalogBootstrapError) {
-    console.error(error.message)
-    process.exit(1)
-    return
-  }
-
-  console.error(error)
-  process.exit(1)
-})
+main()

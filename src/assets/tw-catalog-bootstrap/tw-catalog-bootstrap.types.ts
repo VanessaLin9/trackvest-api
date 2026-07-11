@@ -66,3 +66,24 @@ export type TwCatalogDryRunSummary = {
     conflictingSource: TwCatalogSourceId
   }>
 }
+
+export type TwCatalogUpsertSummary = {
+  assets: {
+    created: number
+    skippedExisting: number
+  }
+  aliases: {
+    created: number
+    skippedExisting: number
+    conflicts: number
+    conflictExamples: Array<{
+      alias: string
+      existingAssetId: string
+      expectedSymbol: string
+    }>
+  }
+}
+
+export type TwCatalogBootstrapSummary = TwCatalogDryRunSummary & {
+  upsert?: TwCatalogUpsertSummary
+}

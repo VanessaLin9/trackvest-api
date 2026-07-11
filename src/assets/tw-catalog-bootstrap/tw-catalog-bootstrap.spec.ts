@@ -8,7 +8,7 @@ import {
   TWSE_LISTED_STOCK_FIXTURE,
   createTwCatalogFetchMock,
 } from './tw-catalog-bootstrap.fixtures'
-import { runTwCatalogDryRunPipeline } from './tw-catalog-pipeline'
+import { runTwCatalogBootstrapPipeline } from './tw-catalog-pipeline'
 
 describe('tw-catalog-parser', () => {
   it('maps TWSE listed stock Chinese fields', () => {
@@ -202,7 +202,7 @@ describe('tw-catalog-pipeline dry-run', () => {
   it('produces a summary without database writes', async () => {
     const fetchMock = createTwCatalogFetchMock()
 
-    const summary = await runTwCatalogDryRunPipeline({ dryRun: true })
+    const summary = await runTwCatalogBootstrapPipeline({ dryRun: true })
 
     expect(summary.dryRun).toBe(true)
     expect(summary.sources.twse_listed_stock).toEqual({
