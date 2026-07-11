@@ -216,6 +216,8 @@ export async function applyTwCatalogUpserts(
   return counts
 }
 
+export const TW_CATALOG_UPSERT_TRANSACTION_TIMEOUT_MS = 300_000
+
 export async function runTwCatalogUpsertTransaction(
   db: SeedDbClient,
   records: TwAssetBootstrapRecord[],
@@ -224,5 +226,7 @@ export async function runTwCatalogUpsertTransaction(
     return applyTwCatalogUpserts(db, records)
   }
 
-  return db.$transaction(async (tx) => applyTwCatalogUpserts(tx, records))
+  return db.$transaction(async (tx) => applyTwCatalogUpserts(tx, records), {
+    timeout: TW_CATALOG_UPSERT_TRANSACTION_TIMEOUT_MS,
+  })
 }
