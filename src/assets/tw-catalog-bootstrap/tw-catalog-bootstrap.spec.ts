@@ -116,6 +116,33 @@ describe('tw-catalog-classifier', () => {
       reason: 'symbol format is not supported for this source',
     })
   })
+
+  it('rejects listed ETFs with missing fund type', () => {
+    expect(
+      classifyTwCatalogRecord({
+        source: 'twse_listed_etf',
+        symbol: '00888',
+        shortName: '缺基金類型',
+      }),
+    ).toEqual({
+      accepted: false,
+      reason: 'missing ETF fund type',
+    })
+  })
+
+  it('rejects listed ETFs with unrecognized fund type', () => {
+    expect(
+      classifyTwCatalogRecord({
+        source: 'twse_listed_etf',
+        symbol: '00889',
+        shortName: '未知類型ETF',
+        fundType: '其他不確定類型',
+      }),
+    ).toEqual({
+      accepted: false,
+      reason: 'unrecognized ETF fund type',
+    })
+  })
 })
 
 describe('tw-catalog-normalizer', () => {
@@ -189,9 +216,9 @@ describe('tw-catalog-pipeline dry-run', () => {
       filtered: 0,
     })
     expect(summary.sources.twse_listed_etf).toEqual({
-      fetched: 4,
+      fetched: 6,
       valid: 2,
-      filtered: 2,
+      filtered: 4,
     })
     expect(summary.records.uniqueSymbols).toBe(6)
     expect(summary.records.byType).toEqual({ equity: 4, etf: 2 })

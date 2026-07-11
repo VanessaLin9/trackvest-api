@@ -59,6 +59,16 @@ export const TWSE_LISTED_ETF_FIXTURE = [
     基金簡稱: '',
     基金類型: '國內成分證券指數股票型基金',
   },
+  {
+    基金代號: '00888',
+    基金簡稱: '缺基金類型',
+    基金類型: '',
+  },
+  {
+    基金代號: '00889',
+    基金簡稱: '未知類型ETF',
+    基金類型: '其他不確定類型',
+  },
 ]
 
 export const TW_CATALOG_FIXTURE_URLS: Record<string, unknown[]> = {

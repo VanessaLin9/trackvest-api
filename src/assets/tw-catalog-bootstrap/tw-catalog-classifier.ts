@@ -22,6 +22,44 @@ function isValidSymbol(record: TwCatalogRawRecord): boolean {
   return LISTED_STOCK_SYMBOL_REGEX.test(record.symbol)
 }
 
+function classifyListedEtfFundType(fundType: string | undefined): TwCatalogClassification {
+  const normalizedFundType = fundType?.trim() ?? ''
+  if (!normalizedFundType) {
+    return {
+      accepted: false,
+      reason: 'missing ETF fund type',
+    }
+  }
+
+  if (ETN_KEYWORD_REGEX.test(normalizedFundType)) {
+    return {
+      accepted: false,
+      reason: 'ETN is excluded from v1 catalog',
+    }
+  }
+
+  if (normalizedFundType.includes('債券')) {
+    return {
+      accepted: true,
+      type: 'etf',
+      assetClass: 'bond',
+    }
+  }
+
+  if (normalizedFundType.includes('股票型基金')) {
+    return {
+      accepted: true,
+      type: 'etf',
+      assetClass: 'equity',
+    }
+  }
+
+  return {
+    accepted: false,
+    reason: 'unrecognized ETF fund type',
+  }
+}
+
 export function classifyTwCatalogRecord(record: TwCatalogRawRecord): TwCatalogClassification {
   if (!isValidSymbol(record)) {
     return {
@@ -39,20 +77,14 @@ export function classifyTwCatalogRecord(record: TwCatalogRawRecord): TwCatalogCl
         assetClass: 'equity',
       }
     case 'twse_listed_etf': {
-      const fundType = record.fundType ?? ''
-      if (ETN_KEYWORD_REGEX.test(fundType) || ETN_KEYWORD_REGEX.test(record.shortName)) {
+      if (ETN_KEYWORD_REGEX.test(record.shortName)) {
         return {
           accepted: false,
           reason: 'ETN is excluded from v1 catalog',
         }
       }
 
-      const assetClass = fundType.includes('債券') ? 'bond' : 'equity'
-      return {
-        accepted: true,
-        type: 'etf',
-        assetClass,
-      }
+      return classifyListedEtfFundType(record.fundType)
     }
     default:
       return {
