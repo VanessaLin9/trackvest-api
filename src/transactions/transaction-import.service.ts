@@ -14,7 +14,6 @@ import { ImportTransactionsResponseDto } from './dto/import-transactions.respons
 import { NormalizedImportTransactionRow } from './transaction-import-row.types'
 import { TransactionImportRowValidator } from './transaction-import-row.validator'
 import {
-  buildImportTransactionsResponse,
   createEmptyImportRunAggregate,
   ImportBrokerAccount,
   ImportRunAggregate,
@@ -146,27 +145,15 @@ export class TransactionImportService {
     dto: ImportTransactionsDto,
     userId: string,
   ): Promise<ImportTransactionsResponseDto> {
-    await this.ownershipService.validateAccountOwnership(dto.accountId, userId)
+    const result = await this.commitImportTransactions(dto, userId)
 
-    const account = await this.loadImportAccount(dto.accountId)
-    this.importBrokerAccountGuard.assertEligible(account)
-
-    const { rows } = this.brokerImportFileParser.parse(dto.csvContent)
-    const aggregate = createEmptyImportRunAggregate()
-    const duplicateTracker = new ImportBrokerOrderDuplicateTracker()
-
-    for (const row of rows) {
-      await this.processParsedImportRow({
-        rawRow: row,
-        account,
-        dto,
-        userId,
-        duplicateTracker,
-        aggregate,
-      })
+    return {
+      totalRows: result.totalRows,
+      successCount: result.successCount,
+      failureCount: result.failureCount,
+      createdTransactionIds: result.createdTransactionIds,
+      errors: [],
     }
-
-    return buildImportTransactionsResponse(rows.length, aggregate)
   }
 
   private async loadImportAccount(accountId: string): Promise<ImportBrokerAccount> {

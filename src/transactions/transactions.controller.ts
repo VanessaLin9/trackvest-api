@@ -1,5 +1,12 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common'
-import { ApiBadRequestResponse, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger'
+import {
+  ApiBadRequestResponse,
+  ApiCookieAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger'
 import { TransactionImportService } from './transaction-import.service'
 import { TransactionsService } from './transactions.service'
 import { FindTransactionsDto } from './dto/find-transaction.dto'
@@ -38,6 +45,13 @@ export class TransactionsController {
   }
 
   @Post('import')
+  @ApiOperation({
+    deprecated: true,
+    summary: 'Deprecated: use POST /transactions/import/preview then /transactions/import/commit',
+    description:
+      'This endpoint now follows the safe commit policy (all rows must be ready). ' +
+      'Prefer preview + commit for new integrations.',
+  })
   @ApiCreatedResponse({ type: ImportTransactionsResponseDto })
   async importTransactions(
     @Body() dto: ImportTransactionsDto,
