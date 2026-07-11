@@ -64,7 +64,27 @@ After migrations are applied, production and production-like environments should
 pnpm db:bootstrap:prod
 ```
 
-Idempotent shared catalog bootstrap — upserts **Asset** and **AssetAlias** fixtures required by the demo portfolio. Does not seed Price, FxRate, or demo-user data.
+Idempotent shared catalog bootstrap — upserts **Asset** and **AssetAlias** fixtures required by the demo portfolio, then fetches official TWSE/TPEX open data to bootstrap Taiwan listed stocks, OTC stocks, and listed ETFs (create-only; does not overwrite existing assets or aliases). Does not seed Price, FxRate, or demo-user data.
+
+Standalone TW catalog command (same implementation as seed integration):
+
+```bash
+# plan only — no database writes
+pnpm assets:bootstrap:tw -- --dry-run
+
+# write missing assets and global aliases
+pnpm assets:bootstrap:tw
+```
+
+**Scope (v1):** TWSE listed stocks, TPEX OTC stocks, TWSE listed ETFs with recognised `基金類型`. Excludes emerging market, ETN, warrants, futures, and uncertain products.
+
+**Data sources:** TWSE `t187ap03_L`, `t187ap47_L`; TPEX `mopsfin_t187ap03_O`. Requires outbound HTTPS to official open-data endpoints.
+
+**Failure behaviour:** If any required source is unavailable or returns an unexpected payload, the TW bootstrap fails closed before writing Taiwan catalog rows. Retry with the standalone command above.
+
+**Not solved by catalog bootstrap:** broker-specific CSV aliases (e.g. Cathay display names) still require separate alias resolution work. Import preview/commit remains independent.
+
+Dev seed (`pnpm db:seed`) wipes the database, loads demo catalog fixtures, then runs the same TW bootstrap before seeding the demo user graph.
 
 To load the demo user graph without wiping global catalog data:
 
