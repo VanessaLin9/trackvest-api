@@ -15,6 +15,12 @@ export class ImportCommitRejectedResponseDto {
   @ApiProperty({ example: IMPORT_ERROR_CODES.COMMIT_NOT_ALLOWED_WITH_ERRORS })
   errorCode!: string
 
+  @ApiProperty({
+    example: ['9f5a51ae-1cca-401e-afa7-1ebf541d0000'],
+    type: [String],
+  })
+  createdTransactionIds!: string[]
+
   @ApiProperty({ type: ImportPreviewResponseDto })
   preview!: ImportPreviewResponseDto
 }

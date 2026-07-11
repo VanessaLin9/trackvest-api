@@ -65,7 +65,7 @@ export class TransactionImportService {
       accountId,
     })
     if (!preview.canCommit) {
-      throw new ImportCommitRejectedException(preview)
+      throw ImportCommitRejectedException.forPreviewErrors(preview)
     }
 
     const aggregate = createEmptyImportRunAggregate()
@@ -83,9 +83,10 @@ export class TransactionImportService {
     }
 
     if (aggregate.errors.length > 0) {
-      throw new ImportCommitRejectedException(
-        this.buildCommitFailurePreview(preview, aggregate),
-      )
+      throw ImportCommitRejectedException.forPartialCommitFailure({
+        preview: this.buildCommitFailurePreview(preview, aggregate),
+        aggregate,
+      })
     }
 
     return {

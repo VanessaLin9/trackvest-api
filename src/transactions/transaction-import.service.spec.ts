@@ -1394,5 +1394,47 @@ describe('TransactionImportService', () => {
 
       expect(createSpy).not.toHaveBeenCalled()
     })
+
+    it('reports partial commit state when create fails after earlier rows succeeded', async () => {
+      const { importService, prisma, txClient, transactionsService } = createHarness()
+      const createSpy = jest
+        .spyOn(transactionsService, 'create')
+        .mockResolvedValueOnce(buildCreatedTransaction({ id: 'tx-commit-partial-1' }))
+        .mockRejectedValueOnce(new BadRequestException('Amount must be a positive number'))
+
+      mockImportAccount(prisma)
+      prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+      prisma.transaction.findFirst.mockResolvedValue(null)
+      prisma.asset.findUnique.mockResolvedValue({
+        id: assetId,
+        symbol: '006208',
+        name: '富邦台50',
+      })
+      txClient.transaction.create
+        .mockResolvedValueOnce(buildCreatedTransaction({ id: 'tx-commit-partial-1' }))
+        .mockRejectedValueOnce(new BadRequestException('Amount must be a positive number'))
+
+      await expect(
+        importService.commitImportTransactions(
+          {
+            accountId,
+            csvContent: buildImportContent([
+              ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-COMMIT-A', 'TWD', '第一列'],
+              ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-COMMIT-B', 'TWD', '第二列'],
+            ]),
+          },
+          userId,
+        ),
+      ).rejects.toMatchObject({
+        response: {
+          successCount: 1,
+          failureCount: 1,
+          errorCode: 'IMPORT_COMMIT_FAILED',
+          createdTransactionIds: ['tx-commit-partial-1'],
+        },
+      })
+
+      expect(createSpy).toHaveBeenCalledTimes(2)
+    })
   })
 })
