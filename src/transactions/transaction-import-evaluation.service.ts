@@ -80,7 +80,7 @@ export class TransactionImportEvaluationService {
         ...baseRow,
         status: 'error',
         brokerOrderNo: normalized.brokerOrderNo,
-        tradeDate: this.formatTradeDate(normalized.tradeTime),
+        tradeDate: formatImportPreviewTradeDate(rawRow.tradeDate),
         errors: [mapImportRowErrorToIssue(rowError)],
         warnings: [],
       }
@@ -95,7 +95,7 @@ export class TransactionImportEvaluationService {
         ...baseRow,
         status: 'error',
         brokerOrderNo: normalized.brokerOrderNo,
-        tradeDate: this.formatTradeDate(normalized.tradeTime),
+        tradeDate: formatImportPreviewTradeDate(rawRow.tradeDate),
         errors: [
           {
             code: IMPORT_ERROR_CODES.ASSET_ALIAS_NOT_FOUND,
@@ -112,7 +112,7 @@ export class TransactionImportEvaluationService {
       status: 'ready',
       rawAssetName: normalized.assetName,
       brokerOrderNo: normalized.brokerOrderNo,
-      tradeDate: this.formatTradeDate(normalized.tradeTime),
+      tradeDate: formatImportPreviewTradeDate(rawRow.tradeDate),
       resolvedAsset,
       normalizedTransaction: this.buildNormalizedTransaction(
         normalized,
@@ -136,7 +136,7 @@ export class TransactionImportEvaluationService {
       status: 'error',
       rawAssetName: rawRow.assetName,
       brokerOrderNo: rawRow.brokerOrderNo,
-      tradeDate: rawRow.tradeDate,
+      tradeDate: formatImportPreviewTradeDate(rawRow.tradeDate),
       resolvedAsset: null,
       normalizedTransaction: null,
       errors: [],
@@ -206,9 +206,10 @@ export class TransactionImportEvaluationService {
     }
   }
 
-  private formatTradeDate(tradeTime: string): string {
-    return tradeTime.slice(0, 10)
-  }
+}
+
+function formatImportPreviewTradeDate(rawTradeDate: string): string {
+  return rawTradeDate.trim().replace(/\//g, '-')
 }
 
 function formatImportPreviewDecimal(value: number): string {

@@ -103,7 +103,7 @@ describe('TransactionImportEvaluationService', () => {
           status: 'ready',
           rawAssetName: '富邦台50',
           brokerOrderNo: 'BRK-001',
-          tradeDate: '2026-03-23',
+          tradeDate: '2026-03-24',
           resolvedAsset: {
             id: assetId,
             symbol: '006208',
