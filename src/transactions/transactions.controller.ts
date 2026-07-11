@@ -9,6 +9,8 @@ import { TransactionResponseDto } from './dto/transaction.response.dto'
 import { ImportTransactionsDto } from './dto/import-transactions.dto'
 import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
 import { ImportPreviewResponseDto } from './dto/import-preview.response.dto'
+import { ImportCommitResponseDto } from './dto/import-commit.response.dto'
+import { ImportCommitRejectedResponseDto } from './dto/import-commit-rejected.response.dto'
 import { ErrorResponse } from 'src/common/dto'
 import { AuthUser } from '../common/decorators/auth-user.decorator'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
@@ -51,6 +53,16 @@ export class TransactionsController {
     @CurrentUser() userId: string,
   ): Promise<ImportPreviewResponseDto> {
     return this.importService.previewImportTransactions(dto, userId)
+  }
+
+  @Post('import/commit')
+  @ApiCreatedResponse({ type: ImportCommitResponseDto })
+  @ApiBadRequestResponse({ type: ImportCommitRejectedResponseDto })
+  async commitImportTransactions(
+    @Body() dto: ImportTransactionsDto,
+    @CurrentUser() userId: string,
+  ): Promise<ImportCommitResponseDto> {
+    return this.importService.commitImportTransactions(dto, userId)
   }
 
   @Get()

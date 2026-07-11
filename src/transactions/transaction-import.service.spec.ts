@@ -1,6 +1,7 @@
 import { Prisma, type Transaction } from '@prisma/client'
 import { BadRequestException } from '@nestjs/common'
 import { TransactionImportService } from './transaction-import.service'
+import { ImportCommitRejectedException } from './import-commit-rejected.exception'
 import { BrokerImportFileParser } from './broker-import-file.parser'
 import { ImportAssetAliasResolver } from './import-asset-alias.resolver'
 import { ImportBrokerAccountGuard } from './import-broker-account.guard'
@@ -1298,6 +1299,100 @@ describe('TransactionImportService', () => {
           ],
         }),
       )
+    })
+  })
+
+  describe('commitImportTransactions', () => {
+    it('rejects commit when preview has error rows and does not create transactions', async () => {
+      const { importService, prisma, transactionsService } = createHarness()
+      const createSpy = jest.spyOn(transactionsService, 'create')
+
+      mockImportAccount(prisma)
+      prisma.assetAlias.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+      prisma.transaction.findFirst.mockResolvedValue(null)
+
+      await expect(
+        importService.commitImportTransactions(
+          {
+            accountId,
+            csvContent: buildImportContent([
+              ['未知標的', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-COMMIT-001', 'TWD', '缺別名'],
+            ]),
+          },
+          userId,
+        ),
+      ).rejects.toBeInstanceOf(ImportCommitRejectedException)
+
+      expect(createSpy).not.toHaveBeenCalled()
+    })
+
+    it('creates transactions when all rows are ready', async () => {
+      const { importService, prisma, txClient, transactionsService } = createHarness()
+      const createSpy = jest.spyOn(transactionsService, 'create')
+      const importedTransaction = buildCreatedTransaction({
+        id: 'tx-commit-1',
+        brokerOrderNo: 'BRK-COMMIT-002',
+      })
+
+      mockImportAccount(prisma)
+      prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+      prisma.transaction.findFirst.mockResolvedValue(null)
+      prisma.asset.findUnique.mockResolvedValue({
+        id: assetId,
+        symbol: '006208',
+        name: '富邦台50',
+      })
+      txClient.transaction.create.mockResolvedValue(importedTransaction)
+
+      const result = await importService.commitImportTransactions(
+        {
+          accountId,
+          csvContent: buildImportContent([
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-COMMIT-002', 'TWD', '提交'],
+          ]),
+        },
+        userId,
+      )
+
+      expect(createSpy).toHaveBeenCalledTimes(1)
+      expect(result).toEqual({
+        totalRows: 1,
+        successCount: 1,
+        failureCount: 0,
+        createdTransactionIds: ['tx-commit-1'],
+      })
+    })
+
+    it('revalidates duplicate broker orders during commit', async () => {
+      const { importService, prisma, transactionsService } = createHarness()
+      const createSpy = jest.spyOn(transactionsService, 'create')
+
+      mockImportAccount(prisma)
+      prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+      prisma.asset.findUnique.mockResolvedValue({
+        id: assetId,
+        symbol: '006208',
+        name: '富邦台50',
+      })
+      prisma.transaction.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'existing-tx' })
+
+      await expect(
+        importService.commitImportTransactions(
+          {
+            accountId,
+            csvContent: buildImportContent([
+              ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-COMMIT-003', 'TWD', '重複'],
+            ]),
+          },
+          userId,
+        ),
+      ).rejects.toBeInstanceOf(ImportCommitRejectedException)
+
+      expect(createSpy).not.toHaveBeenCalled()
     })
   })
 })
