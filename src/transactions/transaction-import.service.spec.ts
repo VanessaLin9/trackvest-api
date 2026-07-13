@@ -560,19 +560,34 @@ describe('TransactionImportService', () => {
     expect(postingService.postTransaction).not.toHaveBeenCalled()
   })
 
-  it('rejects deprecated import when broker order number already exists', async () => {
+  it('treats an already-imported broker order as a successful skipped no-op', async () => {
     const { importService, prisma, txClient, postingService } = createHarness()
 
     mockImportAccount(prisma)
     prisma.transaction.findFirst.mockResolvedValue({ id: 'existing-tx' })
-
-    await expectDeprecatedImportRejected(importService, {
-      accountId,
-      csvContent: buildImportContent([
-        ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-001', 'TWD', '重複單號'],
-      ]),
+    prisma.asset.findUnique.mockResolvedValue({
+      id: assetId,
+      symbol: '006208',
+      name: '富邦台50',
     })
 
+    const result = await importService.importTransactions(
+      {
+        accountId,
+        csvContent: buildImportContent([
+          ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-001', 'TWD', '重複單號'],
+        ]),
+      },
+      userId,
+    )
+
+    expect(result).toEqual({
+      totalRows: 1,
+      successCount: 0,
+      failureCount: 0,
+      createdTransactionIds: [],
+      errors: [],
+    })
     expect(txClient.transaction.create).not.toHaveBeenCalled()
     expect(postingService.postTransaction).not.toHaveBeenCalled()
   })
@@ -948,25 +963,35 @@ describe('TransactionImportService', () => {
     expect(postingService.postTransaction).not.toHaveBeenCalled()
   })
 
-  it('rejects deprecated import when broker order already exists before currency validation', async () => {
+  it('treats already-imported broker order as no-op even when currency would also fail', async () => {
     const { importService, prisma, txClient, postingService } = createHarness()
 
     mockImportAccount(prisma)
     prisma.transaction.findFirst.mockResolvedValue({ id: 'existing-tx' })
 
-    await expectDeprecatedImportRejected(importService, {
-      accountId,
-      csvContent: buildImportContent([
-        ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-EXIST-001', 'USD', '幣別也錯'],
-      ]),
+    await expect(
+      importService.importTransactions(
+        {
+          accountId,
+          csvContent: buildImportContent([
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-EXIST-001', 'USD', '幣別也錯'],
+          ]),
+        },
+        userId,
+      ),
+    ).resolves.toEqual({
+      totalRows: 1,
+      successCount: 0,
+      failureCount: 0,
+      createdTransactionIds: [],
+      errors: [],
     })
 
-    expect(prisma.assetAlias.findUnique).not.toHaveBeenCalled()
     expect(txClient.transaction.create).not.toHaveBeenCalled()
     expect(postingService.postTransaction).not.toHaveBeenCalled()
   })
 
-  it('rejects deprecated import when create raises P2002 during commit', async () => {
+  it('treats P2002 during deprecated import commit as successful no-op', async () => {
     const { importService, prisma, txClient, postingService } = createHarness()
     const duplicateError = new Prisma.PrismaClientKnownRequestError(
       'Unique constraint failed',
@@ -979,6 +1004,11 @@ describe('TransactionImportService', () => {
     mockImportAccount(prisma)
     prisma.transaction.findFirst.mockResolvedValue(null)
     prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+    prisma.asset.findUnique.mockResolvedValue({
+      id: assetId,
+      symbol: '006208',
+      name: '富邦台50',
+    })
     txClient.transaction.create.mockRejectedValue(duplicateError)
 
     await expect(
@@ -991,11 +1021,12 @@ describe('TransactionImportService', () => {
         },
         userId,
       ),
-    ).rejects.toMatchObject({
-      response: expect.objectContaining({
-        errorCode: 'IMPORT_COMMIT_FAILED',
-        successCount: 0,
-      }),
+    ).resolves.toEqual({
+      totalRows: 1,
+      successCount: 0,
+      failureCount: 0,
+      createdTransactionIds: [],
+      errors: [],
     })
 
     expect(postingService.postTransaction).not.toHaveBeenCalled()
@@ -1090,8 +1121,54 @@ describe('TransactionImportService', () => {
         expect.objectContaining({
           totalRows: 1,
           readyCount: 1,
+          skippedCount: 0,
           errorCount: 0,
           canCommit: true,
+        }),
+      )
+    })
+
+    it('marks already-imported broker orders as skipped and still allows commit', async () => {
+      const { importService, prisma, transactionsService } = createHarness()
+      const createSpy = jest.spyOn(transactionsService, 'create')
+
+      mockImportAccount(prisma)
+      prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+      prisma.transaction.findFirst.mockResolvedValue({ id: 'existing-tx' })
+      prisma.asset.findUnique.mockResolvedValue({
+        id: assetId,
+        symbol: '006208',
+        name: '富邦台50',
+      })
+
+      const result = await importService.previewImportTransactions(
+        {
+          accountId,
+          csvContent: buildImportContent([
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-SKIP-001', 'TWD', '已匯入'],
+          ]),
+        },
+        userId,
+      )
+
+      expect(createSpy).not.toHaveBeenCalled()
+      expect(result).toEqual(
+        expect.objectContaining({
+          totalRows: 1,
+          readyCount: 0,
+          skippedCount: 1,
+          errorCount: 0,
+          canCommit: true,
+        }),
+      )
+      expect(result.rows[0]).toEqual(
+        expect.objectContaining({
+          status: 'skipped',
+          warnings: [
+            expect.objectContaining({
+              code: 'DUPLICATE_BROKER_ORDER_ALREADY_IMPORTED',
+            }),
+          ],
         }),
       )
     })
@@ -1190,12 +1267,13 @@ describe('TransactionImportService', () => {
       expect(result).toEqual({
         totalRows: 1,
         successCount: 1,
+        skippedCount: 0,
         failureCount: 0,
         createdTransactionIds: ['tx-commit-1'],
       })
     })
 
-    it('revalidates duplicate broker orders during commit', async () => {
+    it('skips commit-time duplicates without double-inserting', async () => {
       const { importService, prisma, transactionsService } = createHarness()
       const createSpy = jest.spyOn(transactionsService, 'create')
 
@@ -1210,19 +1288,138 @@ describe('TransactionImportService', () => {
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ id: 'existing-tx' })
 
-      await expect(
-        importService.commitImportTransactions(
-          {
-            accountId,
-            csvContent: buildImportContent([
-              ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-COMMIT-003', 'TWD', '重複'],
-            ]),
-          },
-          userId,
-        ),
-      ).rejects.toBeInstanceOf(ImportCommitRejectedException)
+      const result = await importService.commitImportTransactions(
+        {
+          accountId,
+          csvContent: buildImportContent([
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-COMMIT-003', 'TWD', '重複'],
+          ]),
+        },
+        userId,
+      )
 
+      expect(result).toEqual({
+        totalRows: 1,
+        successCount: 0,
+        skippedCount: 1,
+        failureCount: 0,
+        createdTransactionIds: [],
+      })
       expect(createSpy).not.toHaveBeenCalled()
+    })
+
+    it('treats an all-skipped commit as a successful no-op', async () => {
+      const { importService, prisma, transactionsService } = createHarness()
+      const createSpy = jest.spyOn(transactionsService, 'create')
+
+      mockImportAccount(prisma)
+      prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+      prisma.asset.findUnique.mockResolvedValue({
+        id: assetId,
+        symbol: '006208',
+        name: '富邦台50',
+      })
+      prisma.transaction.findFirst.mockResolvedValue({ id: 'existing-tx' })
+
+      const result = await importService.commitImportTransactions(
+        {
+          accountId,
+          csvContent: buildImportContent([
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-ALL-SKIP', 'TWD', '全跳過'],
+          ]),
+        },
+        userId,
+      )
+
+      expect(result).toEqual({
+        totalRows: 1,
+        successCount: 0,
+        skippedCount: 1,
+        failureCount: 0,
+        createdTransactionIds: [],
+      })
+      expect(createSpy).not.toHaveBeenCalled()
+    })
+
+    it('treats P2002 unique conflicts as skipped during commit', async () => {
+      const { importService, prisma, txClient, transactionsService } = createHarness()
+      const createSpy = jest.spyOn(transactionsService, 'create')
+      const duplicateError = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed',
+        {
+          code: 'P2002',
+          clientVersion: 'test',
+        },
+      )
+
+      mockImportAccount(prisma)
+      prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+      prisma.asset.findUnique.mockResolvedValue({
+        id: assetId,
+        symbol: '006208',
+        name: '富邦台50',
+      })
+      prisma.transaction.findFirst.mockResolvedValue(null)
+      txClient.transaction.create.mockRejectedValue(duplicateError)
+
+      const result = await importService.commitImportTransactions(
+        {
+          accountId,
+          csvContent: buildImportContent([
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-P2002-COMMIT', 'TWD', '競態重複'],
+          ]),
+        },
+        userId,
+      )
+
+      expect(result).toEqual({
+        totalRows: 1,
+        successCount: 0,
+        skippedCount: 1,
+        failureCount: 0,
+        createdTransactionIds: [],
+      })
+      expect(createSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('imports ready rows while skipping already-imported rows in the same batch', async () => {
+      const { importService, prisma, txClient, postingService } = createHarness()
+
+      mockImportAccount(prisma)
+      prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+      prisma.asset.findUnique.mockResolvedValue({
+        id: assetId,
+        symbol: '006208',
+        name: '富邦台50',
+      })
+      prisma.transaction.findFirst
+        .mockResolvedValueOnce({ id: 'existing-tx' })
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'existing-tx' })
+        .mockResolvedValueOnce(null)
+      txClient.transaction.create.mockResolvedValue(
+        buildCreatedTransaction({ id: 'tx-commit-new', brokerOrderNo: 'BRK-NEW' }),
+      )
+      postingService.postTransaction.mockResolvedValue({ id: 'entry-1' })
+
+      const result = await importService.commitImportTransactions(
+        {
+          accountId,
+          csvContent: buildImportContent([
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-EXISTING', 'TWD', '已存在'],
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-NEW', 'TWD', '新單'],
+          ]),
+        },
+        userId,
+      )
+
+      expect(result).toEqual({
+        totalRows: 2,
+        successCount: 1,
+        skippedCount: 1,
+        failureCount: 0,
+        createdTransactionIds: ['tx-commit-new'],
+      })
     })
 
     it('reports partial commit state when create fails after earlier rows succeeded', async () => {
@@ -1258,6 +1455,7 @@ describe('TransactionImportService', () => {
       ).rejects.toMatchObject({
         response: {
           successCount: 1,
+          skippedCount: 0,
           failureCount: 1,
           errorCode: 'IMPORT_COMMIT_FAILED',
           createdTransactionIds: ['tx-commit-partial-1'],

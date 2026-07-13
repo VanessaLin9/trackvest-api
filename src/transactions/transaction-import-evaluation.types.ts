@@ -1,6 +1,6 @@
 import { ImportErrorCode } from './import-error-codes'
 
-export type ImportPreviewRowStatus = 'ready' | 'error' | 'warning'
+export type ImportPreviewRowStatus = 'ready' | 'skipped' | 'error' | 'warning'
 
 export type ImportRowIssue = {
   code: ImportErrorCode
@@ -38,6 +38,7 @@ export type ImportPreviewRow = {
 export type ImportPreviewResult = {
   totalRows: number
   readyCount: number
+  skippedCount: number
   errorCount: number
   warningCount: number
   canCommit: boolean
@@ -46,14 +47,17 @@ export type ImportPreviewResult = {
 
 export function buildImportPreviewResult(rows: ImportPreviewRow[]): ImportPreviewResult {
   const readyCount = rows.filter((row) => row.status === 'ready').length
+  const skippedCount = rows.filter((row) => row.status === 'skipped').length
   const errorCount = rows.filter((row) => row.status === 'error').length
   const warningCount = rows.filter((row) => row.status === 'warning').length
 
   return {
     totalRows: rows.length,
     readyCount,
+    skippedCount,
     errorCount,
     warningCount,
+    // Skipped rows are neutral. All-skipped uploads are a successful no-op.
     canCommit: rows.length > 0 && errorCount === 0,
     rows,
   }

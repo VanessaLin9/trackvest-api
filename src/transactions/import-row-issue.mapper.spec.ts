@@ -16,7 +16,7 @@ describe('mapImportRowErrorToIssue', () => {
     })
   })
 
-  it('maps database duplicate broker order errors', () => {
+  it('maps already-imported broker order duplicates', () => {
     expect(
       mapImportRowErrorToIssue({
         row: 2,
@@ -24,7 +24,7 @@ describe('mapImportRowErrorToIssue', () => {
         message: 'Duplicate broker order number for selected account',
       }),
     ).toEqual({
-      code: IMPORT_ERROR_CODES.DUPLICATE_BROKER_ORDER_IN_ACCOUNT,
+      code: IMPORT_ERROR_CODES.DUPLICATE_BROKER_ORDER_ALREADY_IMPORTED,
       field: 'brokerOrderNo',
       message: 'Duplicate broker order number for selected account',
     })

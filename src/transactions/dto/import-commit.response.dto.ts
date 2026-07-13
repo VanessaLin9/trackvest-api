@@ -8,6 +8,9 @@ export class ImportCommitResponseDto {
   successCount!: number
 
   @ApiProperty({ example: 0 })
+  skippedCount!: number
+
+  @ApiProperty({ example: 0 })
   failureCount!: number
 
   @ApiProperty({

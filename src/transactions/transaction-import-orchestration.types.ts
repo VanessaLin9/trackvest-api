@@ -8,6 +8,7 @@ export type ImportRowError = {
 
 export type ImportRunAggregate = {
   createdTransactionIds: string[]
+  skippedCount: number
   errors: ImportRowError[]
 }
 
@@ -21,6 +22,7 @@ export type ImportBrokerAccount = {
 export function createEmptyImportRunAggregate(): ImportRunAggregate {
   return {
     createdTransactionIds: [],
+    skippedCount: 0,
     errors: [],
   }
 }
@@ -32,6 +34,7 @@ export function buildImportTransactionsResponse(
   return {
     totalRows,
     successCount: aggregate.createdTransactionIds.length,
+    skippedCount: aggregate.skippedCount,
     failureCount: aggregate.errors.length,
     createdTransactionIds: aggregate.createdTransactionIds,
     errors: aggregate.errors,

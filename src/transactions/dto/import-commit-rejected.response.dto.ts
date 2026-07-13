@@ -9,6 +9,9 @@ export class ImportCommitRejectedResponseDto {
   @ApiProperty({ example: 0 })
   successCount!: number
 
+  @ApiProperty({ example: 0 })
+  skippedCount!: number
+
   @ApiProperty({ example: 2 })
   failureCount!: number
 

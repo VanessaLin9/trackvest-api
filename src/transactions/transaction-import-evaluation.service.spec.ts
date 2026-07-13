@@ -96,6 +96,7 @@ describe('TransactionImportEvaluationService', () => {
       readyCount: 1,
       errorCount: 0,
       warningCount: 0,
+      skippedCount: 0,
       canCommit: true,
       rows: [
         {
@@ -186,11 +187,16 @@ describe('TransactionImportEvaluationService', () => {
     })
   })
 
-  it('returns row-level DUPLICATE_BROKER_ORDER_IN_ACCOUNT', async () => {
+  it('returns row-level DUPLICATE_BROKER_ORDER_ALREADY_IMPORTED as skipped', async () => {
     const { evaluationService, prisma } = createHarness()
 
     prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
     prisma.transaction.findFirst.mockResolvedValue({ id: 'existing-tx' })
+    prisma.asset.findUnique.mockResolvedValue({
+      id: assetId,
+      symbol: '006208',
+      name: '富邦台50',
+    })
 
     const result = await evaluationService.evaluateImportRows({
       rawRows: [buildRawRow()],
@@ -198,12 +204,55 @@ describe('TransactionImportEvaluationService', () => {
       accountId,
     })
 
-    expect(result.canCommit).toBe(false)
-    expect(result.rows[0].errors[0]).toEqual({
-      code: IMPORT_ERROR_CODES.DUPLICATE_BROKER_ORDER_IN_ACCOUNT,
-      field: 'brokerOrderNo',
-      message: 'Duplicate broker order number for selected account',
+    expect(result.canCommit).toBe(true)
+    expect(result.readyCount).toBe(0)
+    expect(result.skippedCount).toBe(1)
+    expect(result.errorCount).toBe(0)
+    expect(result.rows[0]).toEqual(
+      expect.objectContaining({
+        status: 'skipped',
+        errors: [],
+        warnings: [
+          {
+            code: IMPORT_ERROR_CODES.DUPLICATE_BROKER_ORDER_ALREADY_IMPORTED,
+            field: 'brokerOrderNo',
+            message: 'Duplicate broker order number for selected account',
+          },
+        ],
+      }),
+    )
+  })
+
+  it('keeps mixed ready + skipped rows committable', async () => {
+    const { evaluationService, prisma } = createHarness()
+
+    prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+    prisma.transaction.findFirst
+      .mockResolvedValueOnce({ id: 'existing-tx' })
+      .mockResolvedValueOnce(null)
+    prisma.asset.findUnique.mockResolvedValue({
+      id: assetId,
+      symbol: '006208',
+      name: '富邦台50',
     })
+
+    const result = await evaluationService.evaluateImportRows({
+      rawRows: [
+        buildRawRow({ rowNumber: 2, brokerOrderNo: 'BRK-EXISTING' }),
+        buildRawRow({ rowNumber: 3, brokerOrderNo: 'BRK-NEW' }),
+      ],
+      account,
+      accountId,
+    })
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        readyCount: 1,
+        skippedCount: 1,
+        errorCount: 0,
+        canCommit: true,
+      }),
+    )
   })
 
   it('returns row-level CURRENCY_MISMATCH', async () => {
