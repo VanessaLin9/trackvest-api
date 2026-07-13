@@ -1,11 +1,15 @@
 /**
- * Phase 0 diagnostics: import sell-readiness vs CSV source order.
+ * Phase 0 diagnostics: import sell-readiness gaps.
  *
  * Documents current behavior (not desired behavior):
  * - Preview does not check position/lot readiness.
  * - Commit processes rows in CSV source order, not trade-time order.
- * - Newest-first (or sell-before-buy) files can preview all rows as ready
- *   while commit fails on sell rows.
+ * - Newest-first / sell-before-buy / missing history / oversell / same-date
+ *   cases can all preview as ready while commit fails.
+ * - Failure classes observed at commit:
+ *   - Active position not found for sell transaction
+ *   - sell quantity exceeds the remaining open position lots
+ *   - sell quantity exceeds open lots during replay
  */
 import { ValidationPipe, type INestApplication } from '@nestjs/common'
 import { Test, type TestingModule } from '@nestjs/testing'
@@ -283,5 +287,221 @@ describe('Transaction import sell-readiness diagnostics (e2e)', () => {
     const commit = await commitImport(user.id, account.id, csvContent).expect(201)
     expect(commit.body.successCount).toBe(3)
     expect(commit.body.failureCount).toBe(0)
+  })
+
+  async function seedBuyViaApi(params: {
+    userId: string
+    accountId: string
+    assetId: string
+    quantity: number
+    price: number
+    tradeTime: string
+    brokerOrderNo: string
+  }) {
+    const amount = params.quantity * params.price
+    return request(app.getHttpServer())
+      .post('/transactions')
+      .set(auth(params.userId))
+      .send({
+        accountId: params.accountId,
+        assetId: params.assetId,
+        type: 'buy',
+        amount,
+        quantity: params.quantity,
+        price: params.price,
+        fee: 0,
+        tax: 0,
+        brokerOrderNo: params.brokerOrderNo,
+        tradeTime: params.tradeTime,
+        note: 'seed-buy',
+      })
+      .expect(201)
+  }
+
+  async function redactedScopeState(accountId: string, assetId: string) {
+    const [transactions, positions, lots, sellMatches] = await Promise.all([
+      prisma.transaction.findMany({
+        where: { accountId, assetId, isDeleted: false },
+        select: { type: true, quantity: true, tradeTime: true, brokerOrderNo: true },
+        orderBy: [{ tradeTime: 'asc' }, { id: 'asc' }],
+      }),
+      prisma.position.findMany({
+        where: { accountId, assetId },
+        select: { quantity: true, closedAt: true },
+      }),
+      prisma.positionLot.findMany({
+        where: { accountId, assetId },
+        select: { remainingQuantity: true, closedAt: true },
+      }),
+      prisma.sellLotMatch.count({
+        where: { sellTransaction: { accountId, assetId } },
+      }),
+    ])
+
+    return {
+      transactionCount: transactions.length,
+      transactionTypes: transactions.map((tx) => tx.type),
+      openPositionCount: positions.filter((position) => position.closedAt === null).length,
+      openLotCount: lots.filter((lot) => Number(lot.remainingQuantity) > 0).length,
+      sellMatchCount: sellMatches,
+    }
+  }
+
+  function failureMessages(commitBody: {
+    preview?: { rows?: Array<{ row: number; errors?: Array<{ message: string }> }> }
+  }) {
+    return (commitBody.preview?.rows ?? []).flatMap((row) =>
+      (row.errors ?? []).map((issue) => ({ row: row.row, message: issue.message })),
+    )
+  }
+
+  it('pre-existing newer DB buy + imported historical sell: preview ready, commit fails via replay', async () => {
+    const { user, account, asset } = await createImportFixture()
+
+    await seedBuyViaApi({
+      userId: user.id,
+      accountId: account.id,
+      assetId: asset.id,
+      quantity: 2,
+      price: 845,
+      tradeTime: '2024-08-05T00:00:00.000Z',
+      brokerOrderNo: 'DB-BUY-NEW',
+    })
+
+    const before = await redactedScopeState(account.id, asset.id)
+    expect(before).toEqual({
+      transactionCount: 1,
+      transactionTypes: ['buy'],
+      openPositionCount: 1,
+      openLotCount: 1,
+      sellMatchCount: 0,
+    })
+
+    // Historical sell of 5 shares; only 2 exist in DB and they are later than the sell.
+    const csvContent = buildCsv([
+      ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'IMP-SELL-OLD', '台幣', 'historical-sell'],
+    ])
+
+    const preview = await previewImport(user.id, account.id, csvContent).expect(201)
+    expect(preview.body.canCommit).toBe(true)
+    expect(preview.body.readyCount).toBe(1)
+
+    const commit = await commitImport(user.id, account.id, csvContent).expect(400)
+    expect(commit.body.errorCode).toBe('IMPORT_COMMIT_FAILED')
+    expect(commit.body.successCount).toBe(0)
+
+    const messages = failureMessages(commit.body)
+    expect(messages).toEqual([
+      expect.objectContaining({
+        row: 2,
+        message: expect.stringMatching(
+          /sell quantity exceeds open lots during replay|sell quantity exceeds the remaining open position lots|Active position not found/,
+        ),
+      }),
+    ])
+    // With later DB activity, historical sell should take the full-scope replay path.
+    expect(messages[0].message).toContain('sell quantity exceeds open lots during replay')
+
+    const after = await redactedScopeState(account.id, asset.id)
+    expect(after).toEqual(before)
+  })
+
+  it('genuine oversell in chronological order: preview ready, commit fails with insufficient lots', async () => {
+    const { user, account, asset } = await createImportFixture()
+
+    await seedBuyViaApi({
+      userId: user.id,
+      accountId: account.id,
+      assetId: asset.id,
+      quantity: 3,
+      price: 400,
+      tradeTime: '2020-09-28T00:00:00.000Z',
+      brokerOrderNo: 'DB-BUY-SMALL',
+    })
+
+    const before = await redactedScopeState(account.id, asset.id)
+    expect(before.openLotCount).toBe(1)
+
+    const csvContent = buildCsv([
+      ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'OVERSELL', '台幣', 'oversell'],
+    ])
+
+    const preview = await previewImport(user.id, account.id, csvContent).expect(201)
+    expect(preview.body.canCommit).toBe(true)
+
+    const commit = await commitImport(user.id, account.id, csvContent).expect(400)
+    expect(commit.body.errorCode).toBe('IMPORT_COMMIT_FAILED')
+    expect(commit.body.successCount).toBe(0)
+
+    const sellRow = commit.body.preview.rows.find((row: { row: number }) => row.row === 2)
+    expect(sellRow?.status).toBe('error')
+    expect(sellRow?.errors[0]?.message).toBe(
+      'sell quantity exceeds the remaining open position lots',
+    )
+
+    const after = await redactedScopeState(account.id, asset.id)
+    expect(after).toEqual(before)
+  })
+
+  it('sell with funding buy outside imported file: preview ready, commit fails with no active position', async () => {
+    const { user, account, asset } = await createImportFixture()
+
+    const before = await redactedScopeState(account.id, asset.id)
+    expect(before.transactionCount).toBe(0)
+    expect(before.openPositionCount).toBe(0)
+
+    const csvContent = buildCsv([
+      ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'ORPHAN-SELL', '台幣', 'no-history'],
+    ])
+
+    const preview = await previewImport(user.id, account.id, csvContent).expect(201)
+    expect(preview.body).toEqual(
+      expect.objectContaining({
+        canCommit: true,
+        readyCount: 1,
+        errorCount: 0,
+      }),
+    )
+
+    const commit = await commitImport(user.id, account.id, csvContent).expect(400)
+    expect(commit.body.errorCode).toBe('IMPORT_COMMIT_FAILED')
+    expect(commit.body.successCount).toBe(0)
+    expect(commit.body.preview.rows[0].errors[0].message).toBe(
+      'Active position not found for sell transaction',
+    )
+
+    const after = await redactedScopeState(account.id, asset.id)
+    expect(after).toEqual(before)
+  })
+
+  it('same-date sell before buy in CSV: preview ready, commit fails because source order wins over equal dates', async () => {
+    const { user, account, asset } = await createImportFixture()
+
+    // Broker date-only fields become midnight timestamps; import does not reorder by date.
+    const csvContent = buildCsv([
+      ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'SAME-DAY-SELL', '台幣', 'sell'],
+      ['E2E台積電', '2022/01/04', '10', '-4335', '433.5', '1', '0', '0', 'SAME-DAY-BUY', '台幣', 'buy'],
+    ])
+
+    const preview = await previewImport(user.id, account.id, csvContent).expect(201)
+    expect(preview.body.canCommit).toBe(true)
+    expect(preview.body.rows.map((row: { tradeDate: string }) => row.tradeDate)).toEqual([
+      '2022-01-04',
+      '2022-01-04',
+    ])
+
+    const commit = await commitImport(user.id, account.id, csvContent).expect(400)
+    expect(commit.body.errorCode).toBe('IMPORT_COMMIT_FAILED')
+
+    const sellRow = commit.body.preview.rows.find((row: { row: number }) => row.row === 2)
+    expect(sellRow?.errors[0]?.message).toBe(
+      'Active position not found for sell transaction',
+    )
+
+    // Current behavior continues after failure; later same-day buy may still write.
+    expect(commit.body.successCount).toBe(1)
+    const after = await redactedScopeState(account.id, asset.id)
+    expect(after.transactionTypes).toEqual(['buy'])
+    expect(after.openPositionCount).toBe(1)
   })
 })
