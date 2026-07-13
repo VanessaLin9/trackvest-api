@@ -271,6 +271,34 @@ describe('planImportSellReadiness', () => {
     )
   })
 
+  it('classifies insufficient same-day buy with no prior holdings as oversell', () => {
+    const plan = planImportSellReadiness({
+      history: [],
+      candidates: [
+        candidate({
+          rowNumber: 2,
+          type: 'sell',
+          tradeCalendarDate: '2022-01-04',
+          quantity: 10,
+        }),
+        candidate({
+          rowNumber: 3,
+          type: 'buy',
+          tradeCalendarDate: '2022-01-04',
+          quantity: 4,
+        }),
+      ],
+    })
+
+    expect(plan.scopes[0].entries.find((entry) => entry.rowNumber === 2)).toEqual(
+      expect.objectContaining({
+        status: 'blocked',
+        blockReason: SELL_READINESS_BLOCK_REASONS.SELL_INSUFFICIENT_LOTS,
+      }),
+    )
+    expect(plan.writeOrderRowNumbers).toEqual([3])
+  })
+
   it('plans independent scopes separately', () => {
     const plan = planImportSellReadiness({
       history: [],

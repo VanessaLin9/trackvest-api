@@ -172,14 +172,18 @@ function classifyBlockedSell(params: {
   sameDayBuyQuantity: number
 }): SellReadinessBlockReason {
   const { sellQuantity, priorAvailable, sameDayBuyQuantity } = params
-  const coveredWithSameDay =
+  // Ambiguous only when the shortfall would be fully covered if a same-day
+  // buy were allowed to precede the sell. An insufficient same-day buy is
+  // still an oversell, not missing history.
+  const fundableOnlyIfSameDayBuyFirst =
+    sameDayBuyQuantity > QTY_EPS &&
     priorAvailable + sameDayBuyQuantity >= sellQuantity - QTY_EPS
 
-  if (sameDayBuyQuantity > QTY_EPS && coveredWithSameDay) {
+  if (fundableOnlyIfSameDayBuyFirst) {
     return SELL_READINESS_BLOCK_REASONS.SELL_SAME_DAY_ORDER_AMBIGUOUS
   }
 
-  if (priorAvailable <= QTY_EPS) {
+  if (priorAvailable <= QTY_EPS && sameDayBuyQuantity <= QTY_EPS) {
     return SELL_READINESS_BLOCK_REASONS.SELL_HISTORY_REQUIRED
   }
 
