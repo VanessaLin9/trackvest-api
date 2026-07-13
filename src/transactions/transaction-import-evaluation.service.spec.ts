@@ -99,6 +99,7 @@ describe('TransactionImportEvaluationService', () => {
       warningCount: 0,
       skippedCount: 0,
       canCommit: true,
+      writeOrderRowNumbers: [2],
       rows: [
         {
           row: 2,

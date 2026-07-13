@@ -67,12 +67,10 @@ export class TransactionImportEvaluationService {
       )
     }
 
-    const rowsWithSellReadiness = await this.applySellReadinessPlan(
-      rows,
-      params.accountId,
-    )
+    const { rows: rowsWithSellReadiness, writeOrderRowNumbers } =
+      await this.applySellReadinessPlan(rows, params.accountId)
 
-    return buildImportPreviewResult(rowsWithSellReadiness)
+    return buildImportPreviewResult(rowsWithSellReadiness, writeOrderRowNumbers)
   }
 
   private async evaluateParsedImportRow(params: {
@@ -189,10 +187,10 @@ export class TransactionImportEvaluationService {
   private async applySellReadinessPlan(
     rows: ImportPreviewRow[],
     accountId: string,
-  ): Promise<ImportPreviewRow[]> {
+  ): Promise<{ rows: ImportPreviewRow[]; writeOrderRowNumbers: number[] }> {
     const candidates = buildSellReadinessCandidates(rows, accountId)
     if (candidates.length === 0) {
-      return rows
+      return { rows, writeOrderRowNumbers: [] }
     }
 
     const assetIds = [...new Set(candidates.map((candidate) => candidate.assetId))]
@@ -209,21 +207,24 @@ export class TransactionImportEvaluationService {
     }
 
     if (blockedByRow.size === 0) {
-      return rows
+      return { rows, writeOrderRowNumbers: plan.writeOrderRowNumbers }
     }
 
-    return rows.map((row) => {
-      const blockReason = blockedByRow.get(row.row)
-      if (!blockReason || row.status !== 'ready') {
-        return row
-      }
+    return {
+      rows: rows.map((row) => {
+        const blockReason = blockedByRow.get(row.row)
+        if (!blockReason || row.status !== 'ready') {
+          return row
+        }
 
-      return {
-        ...row,
-        status: 'error' as const,
-        errors: [...row.errors, buildSellReadinessIssue(blockReason)],
-      }
-    })
+        return {
+          ...row,
+          status: 'error' as const,
+          errors: [...row.errors, buildSellReadinessIssue(blockReason)],
+        }
+      }),
+      writeOrderRowNumbers: plan.writeOrderRowNumbers,
+    }
   }
 
   private async loadSellReadinessHistory(

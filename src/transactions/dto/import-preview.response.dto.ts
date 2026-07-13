@@ -94,6 +94,13 @@ export class ImportPreviewResponseDto {
   @ApiProperty({ example: false })
   canCommit!: boolean
 
+  @ApiProperty({
+    example: [3, 2],
+    type: [Number],
+    description: 'Ready row numbers in chronological write order for commit',
+  })
+  writeOrderRowNumbers!: number[]
+
   @ApiProperty({ type: [ImportPreviewRowDto] })
   rows!: ImportPreviewRowDto[]
 }

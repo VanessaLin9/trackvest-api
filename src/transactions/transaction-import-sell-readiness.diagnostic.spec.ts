@@ -7,7 +7,6 @@ import { BrokerImportFileParser } from './broker-import-file.parser'
 import { ImportAssetAliasResolver } from './import-asset-alias.resolver'
 import { ImportBrokerAccountGuard } from './import-broker-account.guard'
 import { ImportBrokerOrderDuplicateChecker } from './import-broker-order-duplicate.checker'
-import { ImportCommitRejectedException } from './import-commit-rejected.exception'
 import { TransactionImportEvaluationService } from './transaction-import-evaluation.service'
 import { TransactionImportRowValidator } from './transaction-import-row.validator'
 import { TransactionImportService } from './transaction-import.service'
@@ -204,32 +203,70 @@ describe('Transaction import sell-readiness diagnostics (unit)', () => {
     expect(preview.rows.every((row) => row.status === 'ready')).toBe(true)
   })
 
-  it('commit processes sell row before buy row in source order and rejects with IMPORT_COMMIT_FAILED', async () => {
-    const { importService, txClient } = createHarness()
+  it('commit processes sell-before-buy using chronological write order and succeeds', async () => {
+    const { importService, txClient, postingService } = createHarness()
+    const buyTradeTime = new Date('2020-09-27T16:00:00.000Z')
+    const sellTradeTime = new Date('2022-01-03T16:00:00.000Z')
 
-    txClient.position.findFirst.mockResolvedValue(null)
-    txClient.positionLot.findMany.mockResolvedValue([])
+    txClient.transaction.create
+      .mockResolvedValueOnce(
+        buildCreatedTransaction({
+          id: 'tx-buy',
+          type: 'buy',
+          quantity: 10,
+          brokerOrderNo: 'BUY-LATER',
+          tradeTime: buyTradeTime,
+        }),
+      )
+      .mockResolvedValueOnce(
+        buildCreatedTransaction({
+          id: 'tx-sell',
+          type: 'sell',
+          quantity: 5,
+          amount: 3250,
+          price: 650,
+          brokerOrderNo: 'SELL-FIRST',
+          tradeTime: sellTradeTime,
+        }),
+      )
+    txClient.position.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'position-1',
+        quantity: 10,
+        avgCost: 433.5,
+        openedAt: buyTradeTime,
+        closedAt: null,
+      })
+    txClient.positionLot.findMany.mockResolvedValueOnce([
+      {
+        id: 'lot-1',
+        accountId,
+        assetId,
+        sourceTransactionId: 'tx-buy',
+        originalQuantity: 10,
+        remainingQuantity: 10,
+        unitCost: 433.5,
+        openedAt: buyTradeTime,
+        closedAt: null,
+      },
+    ])
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-1' })
 
     const csvContent = buildImportContent([
       ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'SELL-FIRST', 'TWD', ''],
       ['E2E台積電', '2020/09/28', '10', '-4335', '433.5', '1', '0', '0', 'BUY-LATER', 'TWD', ''],
     ])
 
-    const rejection = await importService
-      .commitImportTransactions({ accountId, csvContent }, userId)
-      .then(() => null)
-      .catch((error) => error)
+    const result = await importService.commitImportTransactions(
+      { accountId, csvContent },
+      userId,
+    )
 
-    expect(rejection).toBeInstanceOf(ImportCommitRejectedException)
-    const body = rejection.response as {
-      errorCode: string
-      preview: { rows: Array<{ row: number; status: string; errors: Array<{ message: string }> }> }
-    }
-    expect(body.errorCode).toBe('IMPORT_COMMIT_FAILED')
-
-    const sellRow = body.preview.rows.find((row) => row.row === 2)
-    expect(sellRow?.status).toBe('error')
-    expect(sellRow?.errors[0]?.message).toContain('Active position not found for sell transaction')
+    expect(result.successCount).toBe(2)
+    expect(result.createdTransactionIds).toEqual(['tx-buy', 'tx-sell'])
+    expect(txClient.transaction.create.mock.calls[0][0].data.brokerOrderNo).toBe('BUY-LATER')
+    expect(txClient.transaction.create.mock.calls[1][0].data.brokerOrderNo).toBe('SELL-FIRST')
   })
 
   it('commit succeeds for chronological buy-then-sell source order', async () => {
