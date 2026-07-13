@@ -47,8 +47,11 @@ export class ImportPreviewRowDto {
   @ApiProperty({ example: 2 })
   row!: number
 
-  @ApiProperty({ example: 'ready', enum: ['ready', 'error', 'warning'] })
-  status!: 'ready' | 'error' | 'warning'
+  @ApiProperty({
+    example: 'ready',
+    enum: ['ready', 'skipped', 'error', 'warning'],
+  })
+  status!: 'ready' | 'skipped' | 'error' | 'warning'
 
   @ApiProperty({ example: '台積電' })
   rawAssetName!: string
@@ -78,6 +81,9 @@ export class ImportPreviewResponseDto {
 
   @ApiProperty({ example: 8 })
   readyCount!: number
+
+  @ApiProperty({ example: 1 })
+  skippedCount!: number
 
   @ApiProperty({ example: 2 })
   errorCount!: number

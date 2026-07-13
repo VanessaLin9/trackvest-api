@@ -28,7 +28,7 @@ function resolveImportRowErrorCode(error: ImportRowError): ImportRowIssue['code'
   }
 
   if (error.message === 'Duplicate broker order number for selected account') {
-    return IMPORT_ERROR_CODES.DUPLICATE_BROKER_ORDER_IN_ACCOUNT
+    return IMPORT_ERROR_CODES.DUPLICATE_BROKER_ORDER_ALREADY_IMPORTED
   }
 
   if (error.message.startsWith('Unsupported currency:')) {

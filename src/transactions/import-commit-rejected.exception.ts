@@ -6,6 +6,7 @@ import { ImportRunAggregate } from './transaction-import-orchestration.types'
 export type ImportCommitRejectedBody = {
   totalRows: number
   successCount: number
+  skippedCount: number
   failureCount: number
   errorCode: ImportErrorCode
   createdTransactionIds: string[]
@@ -17,6 +18,7 @@ export class ImportCommitRejectedException extends BadRequestException {
     return new ImportCommitRejectedException({
       totalRows: preview.totalRows,
       successCount: 0,
+      skippedCount: preview.skippedCount,
       failureCount: preview.errorCount,
       errorCode: IMPORT_ERROR_CODES.COMMIT_NOT_ALLOWED_WITH_ERRORS,
       createdTransactionIds: [],
@@ -33,6 +35,7 @@ export class ImportCommitRejectedException extends BadRequestException {
     return new ImportCommitRejectedException({
       totalRows: preview.totalRows,
       successCount: aggregate.createdTransactionIds.length,
+      skippedCount: aggregate.skippedCount,
       failureCount: aggregate.errors.length,
       errorCode: IMPORT_ERROR_CODES.IMPORT_COMMIT_FAILED,
       createdTransactionIds: aggregate.createdTransactionIds,

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import { OwnershipService } from '../common/services/ownership.service'
 import { PrismaService } from '../prisma.service'
 import { ImportAssetAliasResolver } from './import-asset-alias.resolver'
@@ -91,6 +92,7 @@ export class TransactionImportService {
     return {
       totalRows: rows.length,
       successCount: aggregate.createdTransactionIds.length,
+      skippedCount: aggregate.skippedCount,
       failureCount: 0,
       createdTransactionIds: aggregate.createdTransactionIds,
     }
@@ -118,6 +120,7 @@ export class TransactionImportService {
       readyCount: preview.rows.filter(
         (row) => row.status === 'ready' && !erroredRows.has(row.row),
       ).length,
+      skippedCount: aggregate.skippedCount,
       errorCount: preview.errorCount + aggregate.errors.length,
       rows: preview.rows.map((row) => {
         const commitError = aggregate.errors.find((error) => error.row === row.row)
@@ -180,14 +183,33 @@ export class TransactionImportService {
     }
 
     const normalized = validation.row
-    const rowError = await this.resolveImportRowError(
-      normalized,
-      account,
-      dto.accountId,
-      duplicateTracker,
+    const fileDuplicateError = duplicateTracker.checkFileDuplicate(
+      normalized.brokerOrderNo,
+      normalized.rowNumber,
     )
-    if (rowError) {
-      aggregate.errors.push(rowError)
+    if (fileDuplicateError) {
+      aggregate.errors.push(fileDuplicateError)
+      return
+    }
+
+    const alreadyImported =
+      await this.importBrokerOrderDuplicateChecker.findExistingInAccount(
+        dto.accountId,
+        normalized.brokerOrderNo,
+        normalized.rowNumber,
+      )
+    if (alreadyImported) {
+      aggregate.skippedCount += 1
+      return
+    }
+
+    const currencyError = validateImportRowCurrency(
+      normalized.currency,
+      account.currency,
+      normalized.rowNumber,
+    )
+    if (currencyError) {
+      aggregate.errors.push(currencyError)
       return
     }
 
@@ -210,39 +232,12 @@ export class TransactionImportService {
       const created = await this.transactionsService.create(importDto, userId)
       aggregate.createdTransactionIds.push(created.id)
     } catch (error: unknown) {
+      if (isAlreadyImportedUniqueConflict(error)) {
+        aggregate.skippedCount += 1
+        return
+      }
       aggregate.errors.push(mapImportCreateError(error, normalized.rowNumber))
     }
-  }
-
-  private async resolveImportRowError(
-    normalized: NormalizedImportTransactionRow,
-    account: ImportBrokerAccount,
-    accountId: string,
-    duplicateTracker: ImportBrokerOrderDuplicateTracker,
-  ) {
-    const fileDuplicateError = duplicateTracker.checkFileDuplicate(
-      normalized.brokerOrderNo,
-      normalized.rowNumber,
-    )
-    if (fileDuplicateError) {
-      return fileDuplicateError
-    }
-
-    const databaseDuplicateError =
-      await this.importBrokerOrderDuplicateChecker.findExistingInAccount(
-        accountId,
-        normalized.brokerOrderNo,
-        normalized.rowNumber,
-      )
-    if (databaseDuplicateError) {
-      return databaseDuplicateError
-    }
-
-    return validateImportRowCurrency(
-      normalized.currency,
-      account.currency,
-      normalized.rowNumber,
-    )
   }
 
   private buildCreateTransactionDto(
@@ -264,4 +259,10 @@ export class TransactionImportService {
       note: normalized.note,
     }
   }
+}
+
+function isAlreadyImportedUniqueConflict(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+  )
 }

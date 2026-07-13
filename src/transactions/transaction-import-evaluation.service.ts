@@ -15,8 +15,12 @@ import {
   ImportPreviewResult,
   ImportPreviewRow,
   ImportResolvedAsset,
+  ImportRowIssue,
 } from './transaction-import-evaluation.types'
 import { ImportBrokerAccount } from './transaction-import-orchestration.types'
+
+const ALREADY_IMPORTED_MESSAGE =
+  'Duplicate broker order number for selected account'
 
 @Injectable()
 export class TransactionImportEvaluationService {
@@ -69,19 +73,40 @@ export class TransactionImportEvaluationService {
     }
 
     const normalized = validation.row
-    const rowError = await this.resolveImportRowError(
-      normalized,
-      account,
-      accountId,
-      duplicateTracker,
+    const fileDuplicateError = duplicateTracker.checkFileDuplicate(
+      normalized.brokerOrderNo,
+      normalized.rowNumber,
     )
-    if (rowError) {
+    if (fileDuplicateError) {
       return {
         ...baseRow,
         status: 'error',
         brokerOrderNo: normalized.brokerOrderNo,
         tradeDate: formatImportPreviewTradeDate(rawRow.tradeDate),
-        errors: [mapImportRowErrorToIssue(rowError)],
+        errors: [mapImportRowErrorToIssue(fileDuplicateError)],
+        warnings: [],
+      }
+    }
+
+    const alreadyImported =
+      await this.importBrokerOrderDuplicateChecker.findExistingInAccount(
+        accountId,
+        normalized.brokerOrderNo,
+        normalized.rowNumber,
+      )
+
+    const currencyError = validateImportRowCurrency(
+      normalized.currency,
+      account.currency,
+      normalized.rowNumber,
+    )
+    if (currencyError && !alreadyImported) {
+      return {
+        ...baseRow,
+        status: 'error',
+        brokerOrderNo: normalized.brokerOrderNo,
+        tradeDate: formatImportPreviewTradeDate(rawRow.tradeDate),
+        errors: [mapImportRowErrorToIssue(currencyError)],
         warnings: [],
       }
     }
@@ -90,7 +115,7 @@ export class TransactionImportEvaluationService {
       normalized.assetName,
       account.broker!,
     )
-    if (!resolvedAsset) {
+    if (!resolvedAsset && !alreadyImported) {
       return {
         ...baseRow,
         status: 'error',
@@ -107,13 +132,29 @@ export class TransactionImportEvaluationService {
       }
     }
 
+    if (alreadyImported) {
+      return {
+        row: normalized.rowNumber,
+        status: 'skipped',
+        rawAssetName: normalized.assetName,
+        brokerOrderNo: normalized.brokerOrderNo,
+        tradeDate: formatImportPreviewTradeDate(rawRow.tradeDate),
+        resolvedAsset,
+        normalizedTransaction: resolvedAsset
+          ? this.buildNormalizedTransaction(normalized, account.currency)
+          : null,
+        errors: [],
+        warnings: [buildAlreadyImportedIssue()],
+      }
+    }
+
     return {
       row: normalized.rowNumber,
       status: 'ready',
       rawAssetName: normalized.assetName,
       brokerOrderNo: normalized.brokerOrderNo,
       tradeDate: formatImportPreviewTradeDate(rawRow.tradeDate),
-      resolvedAsset,
+      resolvedAsset: resolvedAsset!,
       normalizedTransaction: this.buildNormalizedTransaction(
         normalized,
         account.currency,
@@ -142,37 +183,6 @@ export class TransactionImportEvaluationService {
       errors: [],
       warnings: [],
     }
-  }
-
-  private async resolveImportRowError(
-    normalized: NormalizedImportTransactionRow,
-    account: ImportBrokerAccount,
-    accountId: string,
-    duplicateTracker: ImportBrokerOrderDuplicateTracker,
-  ) {
-    const fileDuplicateError = duplicateTracker.checkFileDuplicate(
-      normalized.brokerOrderNo,
-      normalized.rowNumber,
-    )
-    if (fileDuplicateError) {
-      return fileDuplicateError
-    }
-
-    const databaseDuplicateError =
-      await this.importBrokerOrderDuplicateChecker.findExistingInAccount(
-        accountId,
-        normalized.brokerOrderNo,
-        normalized.rowNumber,
-      )
-    if (databaseDuplicateError) {
-      return databaseDuplicateError
-    }
-
-    return validateImportRowCurrency(
-      normalized.currency,
-      account.currency,
-      normalized.rowNumber,
-    )
   }
 
   private async resolveImportAsset(
@@ -205,7 +215,18 @@ export class TransactionImportEvaluationService {
       taxes: formatImportPreviewDecimal(normalized.tax),
     }
   }
+}
 
+export function buildAlreadyImportedIssue(): ImportRowIssue {
+  return {
+    code: IMPORT_ERROR_CODES.DUPLICATE_BROKER_ORDER_ALREADY_IMPORTED,
+    field: 'brokerOrderNo',
+    message: ALREADY_IMPORTED_MESSAGE,
+  }
+}
+
+export function isAlreadyImportedDuplicateMessage(message: string): boolean {
+  return message === ALREADY_IMPORTED_MESSAGE
 }
 
 function formatImportPreviewTradeDate(rawTradeDate: string): string {
