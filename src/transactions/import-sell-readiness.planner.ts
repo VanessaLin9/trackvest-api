@@ -20,6 +20,12 @@ type Lot = {
   openCalendarDate: string
 }
 
+type ImportSellConsumption = {
+  rowNumber: number
+  quantity: number
+  tradeCalendarDate: string
+}
+
 type DayTrade =
   | {
       kind: 'history'
@@ -86,6 +92,7 @@ function planSingleScope(params: {
   const { accountId, assetId, history, candidates } = params
   const lots: Lot[] = []
   const entries: PlannerScopeEntry[] = []
+  const importSellConsumptions: ImportSellConsumption[] = []
   const dayTrades = buildDayTrades(history, candidates)
   const calendarDates = [...new Set(dayTrades.map((trade) => trade.tradeCalendarDate))].sort()
 
@@ -97,7 +104,20 @@ function planSingleScope(params: {
 
     for (const sell of sortSellsForDay(sellsOnDay)) {
       const quantity = toNumber(sell.quantity)
-      const priorAvailable = sumLotsOpenedBefore(lots, calendarDate)
+      let priorAvailable = sumLotsOpenedBefore(lots, calendarDate)
+
+      if (quantity > priorAvailable + QTY_EPS && sell.kind === 'history') {
+        // An earlier imported sell may have consumed lots that a later DB sell
+        // still needs during full-scope replay. Unwind those imports first.
+        unwindImportSellsForHistoryShortfall({
+          entries,
+          lots,
+          importSellConsumptions,
+          calendarDate,
+          shortfall: quantity - priorAvailable,
+        })
+        priorAvailable = sumLotsOpenedBefore(lots, calendarDate)
+      }
 
       if (quantity <= priorAvailable + QTY_EPS) {
         consumeLotsOpenedBefore(lots, calendarDate, quantity)
@@ -109,6 +129,11 @@ function planSingleScope(params: {
             type: 'sell',
             tradeCalendarDate: calendarDate,
             status: 'ready',
+          })
+          importSellConsumptions.push({
+            rowNumber: sell.rowNumber,
+            quantity,
+            tradeCalendarDate: calendarDate,
           })
         }
         continue
@@ -129,7 +154,7 @@ function planSingleScope(params: {
           }),
         })
       }
-      // Blocked / unexpected history shortfalls do not consume lots.
+      // Remaining history shortfalls are pre-existing DB inconsistency; do not consume.
     }
 
     for (const buy of sortBuysForDay(buysOnDay)) {
@@ -163,6 +188,41 @@ function planSingleScope(params: {
     assetId,
     entries,
     writeOrderRowNumbers,
+  }
+}
+
+function unwindImportSellsForHistoryShortfall(params: {
+  entries: PlannerScopeEntry[]
+  lots: Lot[]
+  importSellConsumptions: ImportSellConsumption[]
+  calendarDate: string
+  shortfall: number
+}): void {
+  let remainingShortfall = params.shortfall
+
+  for (let index = params.importSellConsumptions.length - 1; index >= 0; index -= 1) {
+    if (remainingShortfall <= QTY_EPS) {
+      return
+    }
+
+    const consumed = params.importSellConsumptions[index]
+    if (consumed.tradeCalendarDate >= params.calendarDate) {
+      continue
+    }
+
+    const entry = params.entries.find((item) => item.rowNumber === consumed.rowNumber)
+    if (!entry || entry.status !== 'ready') {
+      continue
+    }
+
+    entry.status = 'blocked'
+    entry.blockReason = SELL_READINESS_BLOCK_REASONS.SELL_INSUFFICIENT_LOTS
+    params.lots.push({
+      remainingQuantity: consumed.quantity,
+      openCalendarDate: consumed.tradeCalendarDate,
+    })
+    remainingShortfall -= consumed.quantity
+    params.importSellConsumptions.splice(index, 1)
   }
 }
 

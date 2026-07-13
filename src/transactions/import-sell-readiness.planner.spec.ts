@@ -366,4 +366,75 @@ describe('planImportSellReadiness', () => {
     )
     expect(plan.writeOrderRowNumbers).toEqual([3])
   })
+
+  it('blocks an imported sell that would leave a later DB sell unreplayable', () => {
+    const plan = planImportSellReadiness({
+      history: [
+        history({
+          id: 'db-buy',
+          type: 'buy',
+          tradeCalendarDate: '2020-01-01',
+          quantity: 10,
+        }),
+        history({
+          id: 'db-sell-later',
+          type: 'sell',
+          tradeCalendarDate: '2022-01-01',
+          quantity: 10,
+        }),
+      ],
+      candidates: [
+        candidate({
+          rowNumber: 2,
+          type: 'sell',
+          tradeCalendarDate: '2021-01-01',
+          quantity: 5,
+        }),
+      ],
+    })
+
+    expect(plan.scopes[0].entries).toEqual([
+      expect.objectContaining({
+        rowNumber: 2,
+        status: 'blocked',
+        blockReason: SELL_READINESS_BLOCK_REASONS.SELL_INSUFFICIENT_LOTS,
+      }),
+    ])
+    expect(plan.writeOrderRowNumbers).toEqual([])
+  })
+
+  it('keeps an imported sell ready when later DB sells remain fundable', () => {
+    const plan = planImportSellReadiness({
+      history: [
+        history({
+          id: 'db-buy',
+          type: 'buy',
+          tradeCalendarDate: '2020-01-01',
+          quantity: 20,
+        }),
+        history({
+          id: 'db-sell-later',
+          type: 'sell',
+          tradeCalendarDate: '2022-01-01',
+          quantity: 10,
+        }),
+      ],
+      candidates: [
+        candidate({
+          rowNumber: 2,
+          type: 'sell',
+          tradeCalendarDate: '2021-01-01',
+          quantity: 5,
+        }),
+      ],
+    })
+
+    expect(plan.scopes[0].entries).toEqual([
+      expect.objectContaining({
+        rowNumber: 2,
+        status: 'ready',
+      }),
+    ])
+    expect(plan.writeOrderRowNumbers).toEqual([2])
+  })
 })

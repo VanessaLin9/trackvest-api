@@ -519,4 +519,60 @@ describe('TransactionImportEvaluationService', () => {
     expect(result.errorCount).toBe(1)
     expect(result.canCommit).toBe(false)
   })
+
+  it('blocks an imported historical sell that would break later DB sell replay', async () => {
+    const { evaluationService, prisma } = createHarness()
+
+    prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        id: 'db-buy',
+        accountId,
+        assetId,
+        type: 'buy',
+        tradeTime: new Date('2020-01-01T00:00:00+08:00'),
+        quantity: 10,
+      },
+      {
+        id: 'db-sell-later',
+        accountId,
+        assetId,
+        type: 'sell',
+        tradeTime: new Date('2022-01-01T00:00:00+08:00'),
+        quantity: 10,
+      },
+    ])
+    prisma.asset.findUnique.mockResolvedValue({
+      id: assetId,
+      symbol: '006208',
+      name: '富邦台50',
+    })
+
+    const result = await evaluationService.evaluateImportRows({
+      rawRows: [
+        buildRawRow({
+          tradeDate: '2021/01/01',
+          netAmount: '3250',
+          quantity: '5',
+          price: '650',
+          brokerOrderNo: 'HIST-IMPORT-SELL',
+        }),
+      ],
+      account,
+      accountId,
+    })
+
+    expect(result.canCommit).toBe(false)
+    expect(result.rows[0]).toEqual(
+      expect.objectContaining({
+        status: 'error',
+        errors: [
+          expect.objectContaining({
+            code: IMPORT_ERROR_CODES.SELL_INSUFFICIENT_LOTS,
+          }),
+        ],
+      }),
+    )
+  })
 })
