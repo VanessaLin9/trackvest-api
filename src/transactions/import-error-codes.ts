@@ -9,12 +9,23 @@ export const IMPORT_ERROR_CODES = {
   UNSUPPORTED_CURRENCY: 'UNSUPPORTED_CURRENCY',
   CURRENCY_MISMATCH: 'CURRENCY_MISMATCH',
   ASSET_ALIAS_NOT_FOUND: 'ASSET_ALIAS_NOT_FOUND',
+  /** Sell has no earlier-date buy history in DB or this batch. */
+  SELL_HISTORY_REQUIRED: 'SELL_HISTORY_REQUIRED',
+  /** Sell quantity exceeds lots available under the chronological plan. */
+  SELL_INSUFFICIENT_LOTS: 'SELL_INSUFFICIENT_LOTS',
+  /** Sell would need an unordered same-day buy to be fundable. */
+  SELL_SAME_DAY_ORDER_AMBIGUOUS: 'SELL_SAME_DAY_ORDER_AMBIGUOUS',
   ACCOUNT_NOT_BROKER: 'ACCOUNT_NOT_BROKER',
   UNSUPPORTED_BROKER: 'UNSUPPORTED_BROKER',
   ACCOUNT_NOT_FOUND_OR_FORBIDDEN: 'ACCOUNT_NOT_FOUND_OR_FORBIDDEN',
   COMMIT_NOT_ALLOWED_WITH_ERRORS: 'COMMIT_NOT_ALLOWED_WITH_ERRORS',
   IMPORT_COMMIT_FAILED: 'IMPORT_COMMIT_FAILED',
 } as const
+
+/** File-internal duplicate blocks the entire commit; other row errors are row-local. */
+export const COMMIT_BLOCKING_IMPORT_ERROR_CODES = new Set<ImportErrorCode>([
+  IMPORT_ERROR_CODES.DUPLICATE_BROKER_ORDER_IN_FILE,
+])
 
 export type ImportErrorCode =
   (typeof IMPORT_ERROR_CODES)[keyof typeof IMPORT_ERROR_CODES]

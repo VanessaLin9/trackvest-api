@@ -160,6 +160,7 @@ describe('TransactionImportService', () => {
     txClient.position.deleteMany.mockResolvedValue({ count: 0 })
     txClient.positionLot.deleteMany.mockResolvedValue({ count: 0 })
     txClient.sellLotMatch.deleteMany.mockResolvedValue({ count: 0 })
+    prisma.transaction.findMany.mockResolvedValue([])
     prisma.asset.findUnique.mockResolvedValue({
       id: assetId,
       symbol: '006208',
@@ -441,6 +442,16 @@ describe('TransactionImportService', () => {
     mockImportAccount(prisma)
     prisma.assetAlias.findUnique.mockResolvedValueOnce({ assetId })
     prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        id: 'buy-1',
+        accountId,
+        assetId,
+        type: 'buy',
+        tradeTime: new Date('2026-03-20T00:00:00+08:00'),
+        quantity: 10,
+      },
+    ])
     txClient.position.findFirst.mockResolvedValue({
       id: 'position-1',
       quantity: 10,
@@ -517,6 +528,16 @@ describe('TransactionImportService', () => {
 
     mockImportAccount(prisma)
     prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        id: 'buy-1',
+        accountId,
+        assetId,
+        type: 'buy',
+        tradeTime: new Date('2026-03-20T00:00:00+08:00'),
+        quantity: 5,
+      },
+    ])
     txClient.position.findFirst.mockResolvedValue({
       id: 'position-1',
       quantity: 5,
@@ -550,7 +571,7 @@ describe('TransactionImportService', () => {
       ),
     ).rejects.toMatchObject({
       response: expect.objectContaining({
-        errorCode: 'IMPORT_COMMIT_FAILED',
+        errorCode: 'COMMIT_NOT_ALLOWED_WITH_ERRORS',
         successCount: 0,
       }),
     })
@@ -611,24 +632,54 @@ describe('TransactionImportService', () => {
     ).rejects.toThrow('Missing required import column: 委託書號')
   })
 
-  it('rejects deprecated import when any row has a validation error', async () => {
+  it('imports ready rows when a row-local currency error is present', async () => {
     const { importService, prisma, txClient, postingService } = createHarness()
 
     mockImportAccount(prisma)
     prisma.transaction.findFirst.mockResolvedValue(null)
+    txClient.transaction.create
+      .mockResolvedValueOnce(
+        buildCreatedTransaction({
+          id: 'tx-ready-1',
+          brokerOrderNo: 'BRK-001',
+          note: '首筆',
+        }),
+      )
+      .mockResolvedValueOnce(
+        buildCreatedTransaction({
+          id: 'tx-ready-3',
+          brokerOrderNo: 'BRK-002',
+          note: '第三列',
+          quantity: 5,
+          amount: 505,
+          fee: 5,
+          tax: 0,
+          tradeTime: new Date('2026-03-24T16:00:00.000Z'),
+        }),
+      )
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-1' })
 
-    await expectDeprecatedImportRejected(importService, {
-      accountId,
-      csvContent: buildImportContent([
-        ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-001', 'TWD', '首筆'],
-        ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-USD', 'USD', '幣別錯誤'],
-        ['富邦台50', '2026/03/25', '5', '-505', '100', '5', '0', '0', 'BRK-002', 'TWD', '第三列'],
-      ]),
+    await expect(
+      importService.importTransactions(
+        {
+          accountId,
+          csvContent: buildImportContent([
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-001', 'TWD', '首筆'],
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-USD', 'USD', '幣別錯誤'],
+            ['富邦台50', '2026/03/25', '5', '-505', '100', '5', '0', '0', 'BRK-002', 'TWD', '第三列'],
+          ]),
+        },
+        userId,
+      ),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        errorCode: 'IMPORT_COMMIT_FAILED',
+        successCount: 2,
+      }),
     })
 
-    expect(txClient.transaction.create).not.toHaveBeenCalled()
-    expect(postingService.postTransaction).not.toHaveBeenCalled()
-    expect(txClient.position.create).not.toHaveBeenCalled()
+    expect(txClient.transaction.create).toHaveBeenCalledTimes(2)
+    expect(postingService.postTransaction).toHaveBeenCalledTimes(2)
   })
 
   it('continues importing a mixed buy and sell file when both rows are valid', async () => {

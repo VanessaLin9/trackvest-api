@@ -1,4 +1,7 @@
-import { ImportErrorCode } from './import-error-codes'
+import {
+  COMMIT_BLOCKING_IMPORT_ERROR_CODES,
+  ImportErrorCode,
+} from './import-error-codes'
 
 export type ImportPreviewRowStatus = 'ready' | 'skipped' | 'error' | 'warning'
 
@@ -50,6 +53,9 @@ export function buildImportPreviewResult(rows: ImportPreviewRow[]): ImportPrevie
   const skippedCount = rows.filter((row) => row.status === 'skipped').length
   const errorCount = rows.filter((row) => row.status === 'error').length
   const warningCount = rows.filter((row) => row.status === 'warning').length
+  const hasCommitBlockingError = rows.some((row) =>
+    row.errors.some((issue) => COMMIT_BLOCKING_IMPORT_ERROR_CODES.has(issue.code)),
+  )
 
   return {
     totalRows: rows.length,
@@ -57,8 +63,35 @@ export function buildImportPreviewResult(rows: ImportPreviewRow[]): ImportPrevie
     skippedCount,
     errorCount,
     warningCount,
-    // Skipped rows are neutral. All-skipped uploads are a successful no-op.
-    canCommit: rows.length > 0 && errorCount === 0,
+    canCommit: computeImportCanCommit({
+      readyCount,
+      skippedCount,
+      errorCount,
+      hasCommitBlockingError,
+      totalRows: rows.length,
+    }),
     rows,
   }
+}
+
+export function computeImportCanCommit(params: {
+  readyCount: number
+  skippedCount: number
+  errorCount: number
+  hasCommitBlockingError: boolean
+  totalRows: number
+}): boolean {
+  const { readyCount, skippedCount, errorCount, hasCommitBlockingError, totalRows } =
+    params
+
+  if (totalRows === 0 || hasCommitBlockingError) {
+    return false
+  }
+
+  if (readyCount > 0) {
+    return true
+  }
+
+  // All-skipped successful no-op (Branch 2).
+  return skippedCount > 0 && errorCount === 0
 }

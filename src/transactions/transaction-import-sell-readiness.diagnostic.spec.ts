@@ -164,6 +164,7 @@ describe('Transaction import sell-readiness diagnostics (unit)', () => {
     })
     prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
     prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.transaction.findMany.mockResolvedValue([])
 
     return { importService, prisma, txClient, postingService, transactionsService }
   }
