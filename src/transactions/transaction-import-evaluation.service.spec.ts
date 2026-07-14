@@ -18,6 +18,7 @@ describe('TransactionImportEvaluationService', () => {
       },
       transaction: {
         findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       assetAlias: {
         findUnique: jest.fn(),
@@ -98,6 +99,7 @@ describe('TransactionImportEvaluationService', () => {
       warningCount: 0,
       skippedCount: 0,
       canCommit: true,
+      writeOrderRowNumbers: [2],
       rows: [
         {
           row: 2,
@@ -291,5 +293,287 @@ describe('TransactionImportEvaluationService', () => {
       field: 'currency',
       message: 'Unsupported currency: HKD',
     })
+  })
+
+  it('marks newest-first cross-date buy/sell as ready under chronological plan', async () => {
+    const { evaluationService, prisma } = createHarness()
+
+    prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.asset.findUnique.mockResolvedValue({
+      id: assetId,
+      symbol: '006208',
+      name: '富邦台50',
+    })
+
+    const result = await evaluationService.evaluateImportRows({
+      rawRows: [
+        buildRawRow({
+          rowNumber: 2,
+          tradeDate: '2022/01/04',
+          netAmount: '3250',
+          quantity: '5',
+          price: '650',
+          brokerOrderNo: 'SELL-NEW',
+        }),
+        buildRawRow({
+          rowNumber: 3,
+          tradeDate: '2020/09/28',
+          netAmount: '-4335',
+          quantity: '10',
+          price: '433.5',
+          brokerOrderNo: 'BUY-OLD',
+        }),
+      ],
+      account,
+      accountId,
+    })
+
+    expect(result.canCommit).toBe(true)
+    expect(result.readyCount).toBe(2)
+    expect(result.errorCount).toBe(0)
+    expect(result.rows.every((row) => row.status === 'ready')).toBe(true)
+  })
+
+  it('returns SELL_HISTORY_REQUIRED for an orphan sell', async () => {
+    const { evaluationService, prisma } = createHarness()
+
+    prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.asset.findUnique.mockResolvedValue({
+      id: assetId,
+      symbol: '006208',
+      name: '富邦台50',
+    })
+
+    const result = await evaluationService.evaluateImportRows({
+      rawRows: [
+        buildRawRow({
+          tradeDate: '2022/01/04',
+          netAmount: '3250',
+          quantity: '5',
+          price: '650',
+          brokerOrderNo: 'ORPHAN-SELL',
+        }),
+      ],
+      account,
+      accountId,
+    })
+
+    expect(result.canCommit).toBe(false)
+    expect(result.rows[0]).toEqual(
+      expect.objectContaining({
+        status: 'error',
+        errors: [
+          expect.objectContaining({
+            code: IMPORT_ERROR_CODES.SELL_HISTORY_REQUIRED,
+          }),
+        ],
+      }),
+    )
+  })
+
+  it('returns SELL_INSUFFICIENT_LOTS when history cannot cover the sell', async () => {
+    const { evaluationService, prisma } = createHarness()
+
+    prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        id: 'db-buy',
+        accountId,
+        assetId,
+        type: 'buy',
+        tradeTime: new Date('2021-01-01T00:00:00+08:00'),
+        quantity: 3,
+      },
+    ])
+    prisma.asset.findUnique.mockResolvedValue({
+      id: assetId,
+      symbol: '006208',
+      name: '富邦台50',
+    })
+
+    const result = await evaluationService.evaluateImportRows({
+      rawRows: [
+        buildRawRow({
+          tradeDate: '2022/01/04',
+          netAmount: '3250',
+          quantity: '5',
+          price: '650',
+          brokerOrderNo: 'OVERSELL',
+        }),
+      ],
+      account,
+      accountId,
+    })
+
+    expect(result.rows[0].errors[0].code).toBe(
+      IMPORT_ERROR_CODES.SELL_INSUFFICIENT_LOTS,
+    )
+  })
+
+  it('returns SELL_SAME_DAY_ORDER_AMBIGUOUS when sell depends only on same-day buy', async () => {
+    const { evaluationService, prisma } = createHarness()
+
+    prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.asset.findUnique.mockResolvedValue({
+      id: assetId,
+      symbol: '006208',
+      name: '富邦台50',
+    })
+
+    const result = await evaluationService.evaluateImportRows({
+      rawRows: [
+        buildRawRow({
+          rowNumber: 2,
+          tradeDate: '2022/01/04',
+          netAmount: '3250',
+          quantity: '5',
+          price: '650',
+          brokerOrderNo: 'SAME-DAY-SELL',
+        }),
+        buildRawRow({
+          rowNumber: 3,
+          tradeDate: '2022/01/04',
+          netAmount: '-4335',
+          quantity: '10',
+          price: '433.5',
+          brokerOrderNo: 'SAME-DAY-BUY',
+        }),
+      ],
+      account,
+      accountId,
+    })
+
+    expect(result.canCommit).toBe(true)
+    expect(result.readyCount).toBe(1)
+    expect(result.errorCount).toBe(1)
+    expect(result.rows[0]).toEqual(
+      expect.objectContaining({
+        status: 'error',
+        errors: [
+          expect.objectContaining({
+            code: IMPORT_ERROR_CODES.SELL_SAME_DAY_ORDER_AMBIGUOUS,
+          }),
+        ],
+      }),
+    )
+    expect(result.rows[1].status).toBe('ready')
+  })
+
+  it('allows canCommit when ready rows coexist with row-local alias errors', async () => {
+    const { evaluationService, prisma } = createHarness()
+
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.assetAlias.findUnique
+      .mockResolvedValueOnce({ assetId })
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+    prisma.asset.findUnique.mockResolvedValue({
+      id: assetId,
+      symbol: '006208',
+      name: '富邦台50',
+    })
+
+    const result = await evaluationService.evaluateImportRows({
+      rawRows: [
+        buildRawRow({ rowNumber: 2, brokerOrderNo: 'READY-BUY' }),
+        buildRawRow({
+          rowNumber: 3,
+          assetName: '未知標的',
+          brokerOrderNo: 'ALIAS-MISS',
+        }),
+      ],
+      account,
+      accountId,
+    })
+
+    expect(result.readyCount).toBe(1)
+    expect(result.errorCount).toBe(1)
+    expect(result.canCommit).toBe(true)
+  })
+
+  it('keeps file-internal duplicates as commit-blocking even with ready rows', async () => {
+    const { evaluationService, prisma } = createHarness()
+
+    prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.asset.findUnique.mockResolvedValue({
+      id: assetId,
+      symbol: '006208',
+      name: '富邦台50',
+    })
+
+    const result = await evaluationService.evaluateImportRows({
+      rawRows: [
+        buildRawRow({ rowNumber: 2, brokerOrderNo: 'BRK-DUP' }),
+        buildRawRow({ rowNumber: 3, brokerOrderNo: 'BRK-DUP' }),
+        buildRawRow({ rowNumber: 4, brokerOrderNo: 'BRK-OTHER' }),
+      ],
+      account,
+      accountId,
+    })
+
+    expect(result.readyCount).toBe(2)
+    expect(result.errorCount).toBe(1)
+    expect(result.canCommit).toBe(false)
+  })
+
+  it('blocks an imported historical sell that would break later DB sell replay', async () => {
+    const { evaluationService, prisma } = createHarness()
+
+    prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        id: 'db-buy',
+        accountId,
+        assetId,
+        type: 'buy',
+        tradeTime: new Date('2020-01-01T00:00:00+08:00'),
+        quantity: 10,
+      },
+      {
+        id: 'db-sell-later',
+        accountId,
+        assetId,
+        type: 'sell',
+        tradeTime: new Date('2022-01-01T00:00:00+08:00'),
+        quantity: 10,
+      },
+    ])
+    prisma.asset.findUnique.mockResolvedValue({
+      id: assetId,
+      symbol: '006208',
+      name: '富邦台50',
+    })
+
+    const result = await evaluationService.evaluateImportRows({
+      rawRows: [
+        buildRawRow({
+          tradeDate: '2021/01/01',
+          netAmount: '3250',
+          quantity: '5',
+          price: '650',
+          brokerOrderNo: 'HIST-IMPORT-SELL',
+        }),
+      ],
+      account,
+      accountId,
+    })
+
+    expect(result.canCommit).toBe(false)
+    expect(result.rows[0]).toEqual(
+      expect.objectContaining({
+        status: 'error',
+        errors: [
+          expect.objectContaining({
+            code: IMPORT_ERROR_CODES.SELL_INSUFFICIENT_LOTS,
+          }),
+        ],
+      }),
+    )
   })
 })

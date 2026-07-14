@@ -1,15 +1,8 @@
 /**
- * Phase 0 diagnostics: import sell-readiness gaps.
+ * Branch 3: import sell-readiness contract (e2e).
  *
- * Documents current behavior (not desired behavior):
- * - Preview does not check position/lot readiness.
- * - Commit processes rows in CSV source order, not trade-time order.
- * - Newest-first / sell-before-buy / missing history / oversell / same-date
- *   cases can all preview as ready while commit fails.
- * - Failure classes observed at commit:
- *   - Active position not found for sell transaction
- *   - sell quantity exceeds the remaining open position lots
- *   - sell quantity exceeds open lots during replay
+ * Preview and commit share one chronological plan. Ready rows write in
+ * planner order; sell readiness failures are typed preview errors.
  */
 import { ValidationPipe, type INestApplication } from '@nestjs/common'
 import { Test, type TestingModule } from '@nestjs/testing'
@@ -27,7 +20,7 @@ import {
   prepareTestDatabase,
 } from './helpers/e2e-db'
 
-describe('Transaction import sell-readiness diagnostics (e2e)', () => {
+describe('Transaction import sell-readiness (e2e)', () => {
   const database = createTestDatabaseConfig()
 
   let app: INestApplication<App>
@@ -81,7 +74,7 @@ describe('Transaction import sell-readiness diagnostics (e2e)', () => {
   async function createImportFixture() {
     const user = await prisma.user.create({
       data: {
-        email: `import-readiness-${Date.now()}@trackvest.local`,
+        email: `import-sell-ready-${Date.now()}@trackvest.local`,
         passwordHash: '!',
       },
     })
@@ -175,120 +168,6 @@ describe('Transaction import sell-readiness diagnostics (e2e)', () => {
       .send({ accountId, csvContent })
   }
 
-  it('preview marks all rows ready when sell appears before buy in CSV source order', async () => {
-    const { user, account } = await createImportFixture()
-    const csvContent = buildCsv([
-      // Newest-first pattern: sell row 2, funding buy row 3 (older date, later in file)
-      ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'SELL-FIRST', '台幣', 'sell-first'],
-      ['E2E台積電', '2020/09/28', '10', '-4335', '433.5', '1', '0', '0', 'BUY-LATER', '台幣', 'buy-later'],
-    ])
-
-    const preview = await previewImport(user.id, account.id, csvContent).expect(201)
-
-    expect(preview.body.canCommit).toBe(true)
-    expect(preview.body.readyCount).toBe(2)
-    expect(preview.body.errorCount).toBe(0)
-    expect(preview.body.rows.map((row: { row: number; status: string }) => row.status)).toEqual([
-      'ready',
-      'ready',
-    ])
-  })
-
-  it('commit fails on sell-before-buy source order even though preview was ready', async () => {
-    const { user, account } = await createImportFixture()
-    const csvContent = buildCsv([
-      ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'SELL-FIRST', '台幣', 'sell-first'],
-      ['E2E台積電', '2020/09/28', '10', '-4335', '433.5', '1', '0', '0', 'BUY-LATER', '台幣', 'buy-later'],
-    ])
-
-    const commit = await commitImport(user.id, account.id, csvContent).expect(400)
-
-    expect(commit.body.errorCode).toBe('IMPORT_COMMIT_FAILED')
-    expect(commit.body.successCount).toBe(1)
-    expect(commit.body.failureCount).toBeGreaterThanOrEqual(1)
-
-    const sellRow = commit.body.preview.rows.find((row: { row: number }) => row.row === 2)
-    expect(sellRow?.status).toBe('error')
-    expect(
-      sellRow?.errors.some((issue: { message: string }) =>
-        issue.message.includes('Active position not found for sell transaction'),
-      ),
-    ).toBe(true)
-
-    const txCount = await prisma.transaction.count({ where: { accountId: account.id } })
-    expect(txCount).toBe(1)
-    const buyTx = await prisma.transaction.findFirst({
-      where: { accountId: account.id, brokerOrderNo: 'BUY-LATER' },
-    })
-    expect(buyTx?.type).toBe('buy')
-  })
-
-  it('commit succeeds when buy precedes sell in CSV source order (chronological file)', async () => {
-    const { user, account } = await createImportFixture()
-    const csvContent = buildCsv([
-      ['E2E台積電', '2020/09/28', '10', '-4335', '433.5', '1', '0', '0', 'BUY-FIRST', '台幣', 'buy-first'],
-      ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'SELL-SECOND', '台幣', 'sell-second'],
-    ])
-
-    const preview = await previewImport(user.id, account.id, csvContent).expect(201)
-    expect(preview.body.canCommit).toBe(true)
-
-    const commit = await commitImport(user.id, account.id, csvContent).expect(201)
-    expect(commit.body.successCount).toBe(2)
-    expect(commit.body.failureCount).toBe(0)
-
-    const txCount = await prisma.transaction.count({ where: { accountId: account.id } })
-    expect(txCount).toBe(2)
-  })
-
-  it('newest-first three-row pattern: newer buy then historical sell then older buy — preview ready, sell commit fails', async () => {
-    const { user, account } = await createImportFixture()
-    const csvContent = buildCsv([
-      // Mirrors real statement shape: row 2 newer buy, row 3 historical sell, row 4 older bulk buy
-      ['E2E台積電', '2024/08/05', '1', '-846', '845', '1', '0', '0', 'BUY-NEW', '台幣', 'new-buy'],
-      ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'SELL-MID', '台幣', 'mid-sell'],
-      ['E2E台積電', '2020/09/28', '10', '-4335', '433.5', '1', '0', '0', 'BUY-OLD', '台幣', 'old-buy'],
-    ])
-
-    const preview = await previewImport(user.id, account.id, csvContent).expect(201)
-    expect(preview.body.canCommit).toBe(true)
-    expect(preview.body.readyCount).toBe(3)
-
-    const commit = await commitImport(user.id, account.id, csvContent).expect(400)
-
-    expect(commit.body.errorCode).toBe('IMPORT_COMMIT_FAILED')
-    const sellRow = commit.body.preview.rows.find((row: { row: number }) => row.row === 3)
-    expect(sellRow?.status).toBe('error')
-    expect(
-      sellRow?.errors.some(
-        (issue: { message: string }) =>
-          issue.message.includes('Active position not found for sell transaction') ||
-          issue.message.includes('sell quantity exceeds the remaining open position lots') ||
-          issue.message.includes('sell quantity exceeds open lots during replay'),
-      ),
-    ).toBe(true)
-
-    // Newer buy (row 2) may commit before sell fails — partial progress is current behavior.
-    expect(commit.body.successCount).toBeGreaterThanOrEqual(1)
-    expect(commit.body.successCount).toBeLessThan(3)
-  })
-
-  it('same three trades in chronological CSV order commits all rows', async () => {
-    const { user, account } = await createImportFixture()
-    const csvContent = buildCsv([
-      ['E2E台積電', '2020/09/28', '10', '-4335', '433.5', '1', '0', '0', 'BUY-OLD', '台幣', 'old-buy'],
-      ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'SELL-MID', '台幣', 'mid-sell'],
-      ['E2E台積電', '2024/08/05', '1', '-846', '845', '1', '0', '0', 'BUY-NEW', '台幣', 'new-buy'],
-    ])
-
-    const preview = await previewImport(user.id, account.id, csvContent).expect(201)
-    expect(preview.body.canCommit).toBe(true)
-
-    const commit = await commitImport(user.id, account.id, csvContent).expect(201)
-    expect(commit.body.successCount).toBe(3)
-    expect(commit.body.failureCount).toBe(0)
-  })
-
   async function seedBuyViaApi(params: {
     userId: string
     accountId: string
@@ -318,95 +197,94 @@ describe('Transaction import sell-readiness diagnostics (e2e)', () => {
       .expect(201)
   }
 
-  async function redactedScopeState(accountId: string, assetId: string) {
-    const [transactions, positions, lots, sellMatches] = await Promise.all([
-      prisma.transaction.findMany({
-        where: { accountId, assetId, isDeleted: false },
-        select: { type: true, quantity: true, tradeTime: true, brokerOrderNo: true },
-        orderBy: [{ tradeTime: 'asc' }, { id: 'asc' }],
-      }),
-      prisma.position.findMany({
-        where: { accountId, assetId },
-        select: { quantity: true, closedAt: true },
-      }),
-      prisma.positionLot.findMany({
-        where: { accountId, assetId },
-        select: { remainingQuantity: true, closedAt: true },
-      }),
-      prisma.sellLotMatch.count({
-        where: { sellTransaction: { accountId, assetId } },
-      }),
+  it('newest-first CSV: earlier buy + later sell — preview ready and commit succeeds', async () => {
+    const { user, account } = await createImportFixture()
+    const csvContent = buildCsv([
+      ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'SELL-FIRST', '台幣', 'sell'],
+      ['E2E台積電', '2020/09/28', '10', '-4335', '433.5', '1', '0', '0', 'BUY-LATER', '台幣', 'buy'],
     ])
 
-    return {
-      transactionCount: transactions.length,
-      transactionTypes: transactions.map((tx) => tx.type),
-      openPositionCount: positions.filter((position) => position.closedAt === null).length,
-      openLotCount: lots.filter((lot) => Number(lot.remainingQuantity) > 0).length,
-      sellMatchCount: sellMatches,
-    }
-  }
-
-  function failureMessages(commitBody: {
-    preview?: { rows?: Array<{ row: number; errors?: Array<{ message: string }> }> }
-  }) {
-    return (commitBody.preview?.rows ?? []).flatMap((row) =>
-      (row.errors ?? []).map((issue) => ({ row: row.row, message: issue.message })),
+    const preview = await previewImport(user.id, account.id, csvContent).expect(201)
+    expect(preview.body).toEqual(
+      expect.objectContaining({
+        canCommit: true,
+        readyCount: 2,
+        errorCount: 0,
+        writeOrderRowNumbers: [3, 2],
+      }),
     )
-  }
 
-  it('pre-existing newer DB buy + imported historical sell: preview ready, commit fails via replay', async () => {
+    const commit = await commitImport(user.id, account.id, csvContent).expect(201)
+    expect(commit.body).toEqual(
+      expect.objectContaining({
+        successCount: 2,
+        skippedCount: 0,
+        failureCount: 0,
+      }),
+    )
+
+    const txs = await prisma.transaction.findMany({
+      where: { accountId: account.id },
+      orderBy: [{ tradeTime: 'asc' }, { id: 'asc' }],
+      select: { brokerOrderNo: true, type: true },
+    })
+    expect(txs).toEqual([
+      { brokerOrderNo: 'BUY-LATER', type: 'buy' },
+      { brokerOrderNo: 'SELL-FIRST', type: 'sell' },
+    ])
+  })
+
+  it('DB history outside the file funds a later imported sell', async () => {
     const { user, account, asset } = await createImportFixture()
 
     await seedBuyViaApi({
       userId: user.id,
       accountId: account.id,
       assetId: asset.id,
-      quantity: 2,
-      price: 845,
-      tradeTime: '2024-08-05T00:00:00.000Z',
-      brokerOrderNo: 'DB-BUY-NEW',
+      quantity: 10,
+      price: 400,
+      tradeTime: '2020-09-28T00:00:00.000Z',
+      brokerOrderNo: 'DB-BUY-PRIOR',
     })
 
-    const before = await redactedScopeState(account.id, asset.id)
-    expect(before).toEqual({
-      transactionCount: 1,
-      transactionTypes: ['buy'],
-      openPositionCount: 1,
-      openLotCount: 1,
-      sellMatchCount: 0,
-    })
-
-    // Historical sell of 5 shares; only 2 exist in DB and they are later than the sell.
     const csvContent = buildCsv([
-      ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'IMP-SELL-OLD', '台幣', 'historical-sell'],
+      ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'IMP-SELL', '台幣', 'funded'],
     ])
 
     const preview = await previewImport(user.id, account.id, csvContent).expect(201)
     expect(preview.body.canCommit).toBe(true)
     expect(preview.body.readyCount).toBe(1)
 
-    const commit = await commitImport(user.id, account.id, csvContent).expect(400)
-    expect(commit.body.errorCode).toBe('IMPORT_COMMIT_FAILED')
-    expect(commit.body.successCount).toBe(0)
-
-    const messages = failureMessages(commit.body)
-    expect(messages).toEqual([
-      expect.objectContaining({
-        row: 2,
-        message: expect.stringMatching(
-          /sell quantity exceeds open lots during replay|sell quantity exceeds the remaining open position lots|Active position not found/,
-        ),
+    const commit = await commitImport(user.id, account.id, csvContent).expect(201)
+    expect(commit.body.successCount).toBe(1)
+    expect(
+      await prisma.transaction.count({
+        where: { accountId: account.id, brokerOrderNo: 'IMP-SELL' },
       }),
-    ])
-    // With later DB activity, historical sell should take the full-scope replay path.
-    expect(messages[0].message).toContain('sell quantity exceeds open lots during replay')
-
-    const after = await redactedScopeState(account.id, asset.id)
-    expect(after).toEqual(before)
+    ).toBe(1)
   })
 
-  it('genuine oversell in chronological order: preview ready, commit fails with insufficient lots', async () => {
+  it('orphan sell → SELL_HISTORY_REQUIRED and no writes', async () => {
+    const { user, account } = await createImportFixture()
+    const csvContent = buildCsv([
+      ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'ORPHAN-SELL', '台幣', 'no-history'],
+    ])
+
+    const preview = await previewImport(user.id, account.id, csvContent).expect(201)
+    expect(preview.body).toEqual(
+      expect.objectContaining({
+        canCommit: false,
+        readyCount: 0,
+        errorCount: 1,
+      }),
+    )
+    expect(preview.body.rows[0].errors[0].code).toBe('SELL_HISTORY_REQUIRED')
+
+    await commitImport(user.id, account.id, csvContent).expect(400)
+    expect(await prisma.transaction.count({ where: { accountId: account.id } })).toBe(0)
+  })
+
+  it('genuine oversell → SELL_INSUFFICIENT_LOTS and no writes', async () => {
     const { user, account, asset } = await createImportFixture()
 
     await seedBuyViaApi({
@@ -419,39 +297,29 @@ describe('Transaction import sell-readiness diagnostics (e2e)', () => {
       brokerOrderNo: 'DB-BUY-SMALL',
     })
 
-    const before = await redactedScopeState(account.id, asset.id)
-    expect(before.openLotCount).toBe(1)
-
     const csvContent = buildCsv([
       ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'OVERSELL', '台幣', 'oversell'],
     ])
 
     const preview = await previewImport(user.id, account.id, csvContent).expect(201)
-    expect(preview.body.canCommit).toBe(true)
+    expect(preview.body.canCommit).toBe(false)
+    expect(preview.body.rows[0].errors[0].code).toBe('SELL_INSUFFICIENT_LOTS')
 
     const commit = await commitImport(user.id, account.id, csvContent).expect(400)
-    expect(commit.body.errorCode).toBe('IMPORT_COMMIT_FAILED')
+    expect(commit.body.errorCode).toBe('COMMIT_NOT_ALLOWED_WITH_ERRORS')
     expect(commit.body.successCount).toBe(0)
-
-    const sellRow = commit.body.preview.rows.find((row: { row: number }) => row.row === 2)
-    expect(sellRow?.status).toBe('error')
-    expect(sellRow?.errors[0]?.message).toBe(
-      'sell quantity exceeds the remaining open position lots',
-    )
-
-    const after = await redactedScopeState(account.id, asset.id)
-    expect(after).toEqual(before)
+    expect(
+      await prisma.transaction.count({
+        where: { accountId: account.id, brokerOrderNo: 'OVERSELL' },
+      }),
+    ).toBe(0)
   })
 
-  it('sell with funding buy outside imported file: preview ready, commit fails with no active position', async () => {
-    const { user, account, asset } = await createImportFixture()
-
-    const before = await redactedScopeState(account.id, asset.id)
-    expect(before.transactionCount).toBe(0)
-    expect(before.openPositionCount).toBe(0)
-
+  it('same-day sell depending only on same-day buy → SELL_SAME_DAY_ORDER_AMBIGUOUS', async () => {
+    const { user, account } = await createImportFixture()
     const csvContent = buildCsv([
-      ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'ORPHAN-SELL', '台幣', 'no-history'],
+      ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'SAME-DAY-SELL', '台幣', 'sell'],
+      ['E2E台積電', '2022/01/04', '10', '-4335', '433.5', '1', '0', '0', 'SAME-DAY-BUY', '台幣', 'buy'],
     ])
 
     const preview = await previewImport(user.id, account.id, csvContent).expect(201)
@@ -459,49 +327,103 @@ describe('Transaction import sell-readiness diagnostics (e2e)', () => {
       expect.objectContaining({
         canCommit: true,
         readyCount: 1,
-        errorCount: 0,
+        errorCount: 1,
       }),
     )
+    expect(preview.body.rows[0].errors[0].code).toBe('SELL_SAME_DAY_ORDER_AMBIGUOUS')
+    expect(preview.body.rows[1].status).toBe('ready')
 
-    const commit = await commitImport(user.id, account.id, csvContent).expect(400)
-    expect(commit.body.errorCode).toBe('IMPORT_COMMIT_FAILED')
-    expect(commit.body.successCount).toBe(0)
-    expect(commit.body.preview.rows[0].errors[0].message).toBe(
-      'Active position not found for sell transaction',
-    )
-
-    const after = await redactedScopeState(account.id, asset.id)
-    expect(after).toEqual(before)
+    const commit = await commitImport(user.id, account.id, csvContent).expect(201)
+    expect(commit.body.successCount).toBe(1)
+    const txs = await prisma.transaction.findMany({
+      where: { accountId: account.id },
+      select: { brokerOrderNo: true, type: true },
+    })
+    expect(txs).toEqual([{ brokerOrderNo: 'SAME-DAY-BUY', type: 'buy' }])
   })
 
-  it('same-date sell before buy in CSV: preview ready, commit fails because source order wins over equal dates', async () => {
+  it('same-day sell covered by earlier-date holdings remains ready', async () => {
     const { user, account, asset } = await createImportFixture()
 
-    // Broker date-only fields become midnight timestamps; import does not reorder by date.
+    await seedBuyViaApi({
+      userId: user.id,
+      accountId: account.id,
+      assetId: asset.id,
+      quantity: 10,
+      price: 400,
+      tradeTime: '2021-12-01T00:00:00.000Z',
+      brokerOrderNo: 'DB-BUY-PRIOR',
+    })
+
     const csvContent = buildCsv([
       ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'SAME-DAY-SELL', '台幣', 'sell'],
-      ['E2E台積電', '2022/01/04', '10', '-4335', '433.5', '1', '0', '0', 'SAME-DAY-BUY', '台幣', 'buy'],
+      ['E2E台積電', '2022/01/04', '3', '-1300', '433', '1', '0', '0', 'SAME-DAY-BUY', '台幣', 'buy'],
     ])
 
     const preview = await previewImport(user.id, account.id, csvContent).expect(201)
     expect(preview.body.canCommit).toBe(true)
-    expect(preview.body.rows.map((row: { tradeDate: string }) => row.tradeDate)).toEqual([
-      '2022-01-04',
-      '2022-01-04',
+    expect(preview.body.readyCount).toBe(2)
+    expect(preview.body.errorCount).toBe(0)
+
+    const commit = await commitImport(user.id, account.id, csvContent).expect(201)
+    expect(commit.body.successCount).toBe(2)
+  })
+
+  it('mixed ready buy + history-required sell + alias error commits only the ready buy', async () => {
+    const { user, account } = await createImportFixture()
+    const csvContent = buildCsv([
+      ['E2E台積電', '2020/09/28', '10', '-4335', '433.5', '1', '0', '0', 'READY-BUY', '台幣', 'ready'],
+      // Sell before any available buy date → cannot use the later-file buy that is after? Buy is 2020, sell 2019 → history required.
+      ['E2E台積電', '2019/01/04', '5', '3250', '650', '1', '9', '0', 'EARLY-SELL', '台幣', 'sell-error'],
+      ['未知標的', '2022/01/05', '1', '-100', '100', '1', '0', '0', 'ALIAS-MISS', '台幣', 'alias-error'],
     ])
 
-    const commit = await commitImport(user.id, account.id, csvContent).expect(400)
-    expect(commit.body.errorCode).toBe('IMPORT_COMMIT_FAILED')
-
-    const sellRow = commit.body.preview.rows.find((row: { row: number }) => row.row === 2)
-    expect(sellRow?.errors[0]?.message).toBe(
-      'Active position not found for sell transaction',
+    const preview = await previewImport(user.id, account.id, csvContent).expect(201)
+    expect(preview.body).toEqual(
+      expect.objectContaining({
+        canCommit: true,
+        readyCount: 1,
+        errorCount: 2,
+      }),
     )
+    expect(preview.body.rows[1].errors[0].code).toBe('SELL_HISTORY_REQUIRED')
+    expect(preview.body.rows[2].errors[0].code).toBe('ASSET_ALIAS_NOT_FOUND')
 
-    // Current behavior continues after failure; later same-day buy may still write.
+    const commit = await commitImport(user.id, account.id, csvContent).expect(201)
     expect(commit.body.successCount).toBe(1)
-    const after = await redactedScopeState(account.id, asset.id)
-    expect(after.transactionTypes).toEqual(['buy'])
-    expect(after.openPositionCount).toBe(1)
+    const txs = await prisma.transaction.findMany({
+      where: { accountId: account.id },
+      select: { brokerOrderNo: true },
+    })
+    expect(txs).toEqual([{ brokerOrderNo: 'READY-BUY' }])
+  })
+
+  it('file-internal duplicate keeps canCommit false and writes nothing', async () => {
+    const { user, account } = await createImportFixture()
+    const csvContent = buildCsv([
+      ['E2E台積電', '2020/09/28', '10', '-4335', '433.5', '1', '0', '0', 'DUP', '台幣', 'first'],
+      ['E2E台積電', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'DUP', '台幣', 'second'],
+    ])
+
+    const preview = await previewImport(user.id, account.id, csvContent).expect(201)
+    expect(preview.body.canCommit).toBe(false)
+    expect(preview.body.rows[1].errors[0].code).toBe('DUPLICATE_BROKER_ORDER_IN_FILE')
+
+    await commitImport(user.id, account.id, csvContent).expect(400)
+    expect(await prisma.transaction.count({ where: { accountId: account.id } })).toBe(0)
+  })
+
+  it('preview does not write transaction / position / lot / GL state', async () => {
+    const { user, account, asset } = await createImportFixture()
+    const csvContent = buildCsv([
+      ['E2E台積電', '2020/09/28', '10', '-4335', '433.5', '1', '0', '0', 'PREVIEW-ONLY', '台幣', 'buy'],
+    ])
+
+    await previewImport(user.id, account.id, csvContent).expect(201)
+
+    expect(await prisma.transaction.count({ where: { accountId: account.id } })).toBe(0)
+    expect(await prisma.position.count({ where: { accountId: account.id, assetId: asset.id } })).toBe(0)
+    expect(await prisma.positionLot.count({ where: { accountId: account.id, assetId: asset.id } })).toBe(0)
+    expect(await prisma.glEntry.count()).toBe(0)
   })
 })

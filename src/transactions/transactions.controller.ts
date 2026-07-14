@@ -49,8 +49,7 @@ export class TransactionsController {
     deprecated: true,
     summary: 'Deprecated: use POST /transactions/import/preview then /transactions/import/commit',
     description:
-      'This endpoint now follows the safe commit policy (all rows must be ready). ' +
-      'Prefer preview + commit for new integrations.',
+      'Prefer preview + commit. This endpoint follows the same commit-time plan (ready-only chronological writes).',
   })
   @ApiCreatedResponse({ type: ImportTransactionsResponseDto })
   async importTransactions(
@@ -61,6 +60,14 @@ export class TransactionsController {
   }
 
   @Post('import/preview')
+  @ApiOperation({
+    summary: 'Preview broker CSV import',
+    description:
+      'Evaluates rows without writing. Applies chronological sell-readiness planning and returns typed row statuses. ' +
+      'canCommit is true when there is at least one ready row and no commit-blocking error (file-internal duplicate), ' +
+      'or when the upload is all-skipped. Sell codes SELL_HISTORY_REQUIRED, SELL_INSUFFICIENT_LOTS, and ' +
+      'SELL_SAME_DAY_ORDER_AMBIGUOUS are row-local and do not block other ready rows.',
+  })
   @ApiOkResponse({ type: ImportPreviewResponseDto })
   async previewImportTransactions(
     @Body() dto: ImportTransactionsDto,
@@ -70,6 +77,12 @@ export class TransactionsController {
   }
 
   @Post('import/commit')
+  @ApiOperation({
+    summary: 'Commit broker CSV import',
+    description:
+      'Re-evaluates the same plan as preview, then creates only ready rows in chronological write order. ' +
+      'Error and skipped rows are not written. Unexpected create failures still return IMPORT_COMMIT_FAILED.',
+  })
   @ApiCreatedResponse({ type: ImportCommitResponseDto })
   @ApiBadRequestResponse({ type: ImportCommitRejectedResponseDto })
   async commitImportTransactions(

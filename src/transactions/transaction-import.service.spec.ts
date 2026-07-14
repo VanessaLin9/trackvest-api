@@ -160,6 +160,7 @@ describe('TransactionImportService', () => {
     txClient.position.deleteMany.mockResolvedValue({ count: 0 })
     txClient.positionLot.deleteMany.mockResolvedValue({ count: 0 })
     txClient.sellLotMatch.deleteMany.mockResolvedValue({ count: 0 })
+    prisma.transaction.findMany.mockResolvedValue([])
     prisma.asset.findUnique.mockResolvedValue({
       id: assetId,
       symbol: '006208',
@@ -441,6 +442,16 @@ describe('TransactionImportService', () => {
     mockImportAccount(prisma)
     prisma.assetAlias.findUnique.mockResolvedValueOnce({ assetId })
     prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        id: 'buy-1',
+        accountId,
+        assetId,
+        type: 'buy',
+        tradeTime: new Date('2026-03-20T00:00:00+08:00'),
+        quantity: 10,
+      },
+    ])
     txClient.position.findFirst.mockResolvedValue({
       id: 'position-1',
       quantity: 10,
@@ -517,6 +528,16 @@ describe('TransactionImportService', () => {
 
     mockImportAccount(prisma)
     prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        id: 'buy-1',
+        accountId,
+        assetId,
+        type: 'buy',
+        tradeTime: new Date('2026-03-20T00:00:00+08:00'),
+        quantity: 5,
+      },
+    ])
     txClient.position.findFirst.mockResolvedValue({
       id: 'position-1',
       quantity: 5,
@@ -550,7 +571,7 @@ describe('TransactionImportService', () => {
       ),
     ).rejects.toMatchObject({
       response: expect.objectContaining({
-        errorCode: 'IMPORT_COMMIT_FAILED',
+        errorCode: 'COMMIT_NOT_ALLOWED_WITH_ERRORS',
         successCount: 0,
       }),
     })
@@ -611,24 +632,173 @@ describe('TransactionImportService', () => {
     ).rejects.toThrow('Missing required import column: 委託書號')
   })
 
-  it('rejects deprecated import when any row has a validation error', async () => {
+  it('imports ready rows when a row-local currency error is present', async () => {
     const { importService, prisma, txClient, postingService } = createHarness()
 
     mockImportAccount(prisma)
     prisma.transaction.findFirst.mockResolvedValue(null)
+    txClient.transaction.create
+      .mockResolvedValueOnce(
+        buildCreatedTransaction({
+          id: 'tx-ready-1',
+          brokerOrderNo: 'BRK-001',
+          note: '首筆',
+        }),
+      )
+      .mockResolvedValueOnce(
+        buildCreatedTransaction({
+          id: 'tx-ready-3',
+          brokerOrderNo: 'BRK-002',
+          note: '第三列',
+          quantity: 5,
+          amount: 505,
+          fee: 5,
+          tax: 0,
+          tradeTime: new Date('2026-03-24T16:00:00.000Z'),
+        }),
+      )
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-1' })
 
-    await expectDeprecatedImportRejected(importService, {
-      accountId,
-      csvContent: buildImportContent([
-        ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-001', 'TWD', '首筆'],
-        ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-USD', 'USD', '幣別錯誤'],
-        ['富邦台50', '2026/03/25', '5', '-505', '100', '5', '0', '0', 'BRK-002', 'TWD', '第三列'],
-      ]),
+    await expect(
+      importService.importTransactions(
+        {
+          accountId,
+          csvContent: buildImportContent([
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-001', 'TWD', '首筆'],
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-USD', 'USD', '幣別錯誤'],
+            ['富邦台50', '2026/03/25', '5', '-505', '100', '5', '0', '0', 'BRK-002', 'TWD', '第三列'],
+          ]),
+        },
+        userId,
+      ),
+    ).resolves.toEqual({
+      totalRows: 3,
+      successCount: 2,
+      failureCount: 0,
+      createdTransactionIds: ['tx-ready-1', 'tx-ready-3'],
+      errors: [],
     })
 
-    expect(txClient.transaction.create).not.toHaveBeenCalled()
-    expect(postingService.postTransaction).not.toHaveBeenCalled()
-    expect(txClient.position.create).not.toHaveBeenCalled()
+    expect(txClient.transaction.create).toHaveBeenCalledTimes(2)
+    expect(postingService.postTransaction).toHaveBeenCalledTimes(2)
+  })
+
+  it('commits newest-first sell-before-buy in chronological write order', async () => {
+    const { importService, prisma, txClient, postingService } = createHarness()
+    const buyTradeTime = new Date('2020-09-27T16:00:00.000Z')
+    const sellTradeTime = new Date('2022-01-03T16:00:00.000Z')
+
+    mockImportAccount(prisma)
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    txClient.transaction.create
+      .mockResolvedValueOnce(
+        buildCreatedTransaction({
+          id: 'tx-buy-old',
+          type: 'buy',
+          quantity: 10,
+          amount: 4335,
+          price: 433.5,
+          fee: 1,
+          tax: 0,
+          brokerOrderNo: 'BUY-LATER',
+          tradeTime: buyTradeTime,
+        }),
+      )
+      .mockResolvedValueOnce(
+        buildCreatedTransaction({
+          id: 'tx-sell-mid',
+          type: 'sell',
+          quantity: 5,
+          amount: 3250,
+          price: 650,
+          fee: 1,
+          tax: 9,
+          brokerOrderNo: 'SELL-FIRST',
+          tradeTime: sellTradeTime,
+        }),
+      )
+    txClient.position.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'position-1',
+        quantity: 10,
+        avgCost: 433.5,
+        openedAt: buyTradeTime,
+        closedAt: null,
+      })
+    txClient.positionLot.findMany.mockResolvedValueOnce([
+      {
+        id: 'lot-1',
+        accountId,
+        assetId,
+        sourceTransactionId: 'tx-buy-old',
+        originalQuantity: 10,
+        remainingQuantity: 10,
+        unitCost: 433.5,
+        openedAt: buyTradeTime,
+        closedAt: null,
+      },
+    ])
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-1' })
+
+    const result = await importService.commitImportTransactions(
+      {
+        accountId,
+        csvContent: buildImportContent([
+          ['富邦台50', '2022/01/04', '5', '3250', '650', '1', '9', '0', 'SELL-FIRST', 'TWD', ''],
+          ['富邦台50', '2020/09/28', '10', '-4335', '433.5', '1', '0', '0', 'BUY-LATER', 'TWD', ''],
+        ]),
+      },
+      userId,
+    )
+
+    expect(result).toEqual({
+      totalRows: 2,
+      successCount: 2,
+      skippedCount: 0,
+      failureCount: 0,
+      createdTransactionIds: ['tx-buy-old', 'tx-sell-mid'],
+    })
+    expect(txClient.transaction.create.mock.calls[0][0].data.brokerOrderNo).toBe('BUY-LATER')
+    expect(txClient.transaction.create.mock.calls[1][0].data.brokerOrderNo).toBe('SELL-FIRST')
+  })
+
+  it('does not create transactions for preview error rows in a mixed batch', async () => {
+    const { importService, prisma, txClient, postingService } = createHarness()
+
+    mockImportAccount(prisma)
+    prisma.transaction.findFirst.mockResolvedValue(null)
+    prisma.assetAlias.findUnique
+      .mockResolvedValueOnce({ assetId })
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+    txClient.transaction.create.mockResolvedValue(
+      buildCreatedTransaction({
+        id: 'tx-ready-only',
+        brokerOrderNo: 'READY-BUY',
+      }),
+    )
+    postingService.postTransaction.mockResolvedValue({ id: 'entry-1' })
+
+    const result = await importService.commitImportTransactions(
+      {
+        accountId,
+        csvContent: buildImportContent([
+          ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'READY-BUY', 'TWD', 'ready'],
+          ['未知標的', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'ALIAS-MISS', 'TWD', 'error'],
+        ]),
+      },
+      userId,
+    )
+
+    expect(result).toEqual({
+      totalRows: 2,
+      successCount: 1,
+      skippedCount: 0,
+      failureCount: 0,
+      createdTransactionIds: ['tx-ready-only'],
+    })
+    expect(txClient.transaction.create).toHaveBeenCalledTimes(1)
   })
 
   it('continues importing a mixed buy and sell file when both rows are valid', async () => {
@@ -1395,7 +1565,6 @@ describe('TransactionImportService', () => {
       prisma.transaction.findFirst
         .mockResolvedValueOnce({ id: 'existing-tx' })
         .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ id: 'existing-tx' })
         .mockResolvedValueOnce(null)
       txClient.transaction.create.mockResolvedValue(
         buildCreatedTransaction({ id: 'tx-commit-new', brokerOrderNo: 'BRK-NEW' }),

@@ -69,11 +69,20 @@ export class TransactionImportService {
     }
 
     const aggregate = createEmptyImportRunAggregate()
+    // Preview already classified skipped rows; commit only walks ready write order
+    // and may discover additional commit-time skips via duplicate recheck / P2002.
+    aggregate.skippedCount = preview.skippedCount
     const duplicateTracker = new ImportBrokerOrderDuplicateTracker()
+    const rawRowsByNumber = new Map(rows.map((row) => [row.rowNumber, row]))
 
-    for (const row of rows) {
+    for (const rowNumber of preview.writeOrderRowNumbers) {
+      const rawRow = rawRowsByNumber.get(rowNumber)
+      if (!rawRow) {
+        continue
+      }
+
       await this.processParsedImportRow({
-        rawRow: row,
+        rawRow,
         account,
         dto,
         userId,
