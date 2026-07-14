@@ -1,6 +1,6 @@
 /**
- * Phase 0 code-path diagnostics (unit level).
- * Traces preview vs commit validation gap without a live database.
+ * Sell-readiness unit diagnostics retained as regression coverage for
+ * chronological write-order commits (Branch 3).
  */
 import { AccountType, Currency, type Transaction } from '@prisma/client'
 import { BrokerImportFileParser } from './broker-import-file.parser'

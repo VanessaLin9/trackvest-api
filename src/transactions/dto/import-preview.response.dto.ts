@@ -2,13 +2,20 @@ import { ApiProperty } from '@nestjs/swagger'
 import { IMPORT_ERROR_CODES } from '../import-error-codes'
 
 export class ImportRowIssueDto {
-  @ApiProperty({ example: IMPORT_ERROR_CODES.ASSET_ALIAS_NOT_FOUND })
+  @ApiProperty({
+    example: IMPORT_ERROR_CODES.SELL_HISTORY_REQUIRED,
+    enum: Object.values(IMPORT_ERROR_CODES),
+    description:
+      'Typed import issue code. Sell readiness codes: SELL_HISTORY_REQUIRED, SELL_INSUFFICIENT_LOTS, SELL_SAME_DAY_ORDER_AMBIGUOUS (row-local). DUPLICATE_BROKER_ORDER_IN_FILE is commit-blocking.',
+  })
   code!: string
 
-  @ApiProperty({ example: 'assetName' })
+  @ApiProperty({ example: 'quantity' })
   field!: string
 
-  @ApiProperty({ example: 'Asset alias not found for 台積電' })
+  @ApiProperty({
+    example: 'Sell requires earlier buy history that is not available',
+  })
   message!: string
 }
 
