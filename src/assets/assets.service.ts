@@ -2,7 +2,9 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
 import { AssetClass, AssetType, Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma.service'
+import { AssetAliasConflictException } from './asset-alias-conflict.exception'
 import { CreateAndUpdateAssetDto } from './dto/asset.createAndUpdate.dto'
+import { CreateAssetAliasDto } from './dto/create-asset-alias.dto'
 import { FindAssetsDto } from './dto/find-assets.dto'
 import {
   normalizeAssetCurrencyInput,
@@ -10,6 +12,20 @@ import {
   normalizeAssetSearchInput,
   normalizeAssetSymbolInput,
 } from '../common/utils'
+
+type AssetAliasMappedAsset = {
+  id: string
+  symbol: string
+  name: string
+}
+
+type AssetAliasMapping = {
+  id: string
+  assetId: string
+  alias: string
+  broker: string
+  asset: AssetAliasMappedAsset
+}
 
 const EQUITY_ETF_SYMBOLS = new Set(['0050', '006208'])
 const BOND_ETF_SYMBOLS = new Set(['SGOV', 'BNDW'])
@@ -216,5 +232,81 @@ export class AssetsService {
   async remove(id: string) {
     await this.findOne(id)
     return this.prisma.asset.delete({ where: { id } })
+  }
+
+  async createAlias(assetId: string, dto: CreateAssetAliasDto): Promise<AssetAliasMapping> {
+    const alias = normalizeAssetNameInput(dto.alias)
+    if (!alias) {
+      throw new BadRequestException('alias must not be empty')
+    }
+
+    const broker = dto.broker
+    await this.findOne(assetId)
+
+    const existing = await this.findAliasByPair(alias, broker)
+    if (existing) {
+      return this.resolveExistingAliasMapping(existing, assetId)
+    }
+
+    try {
+      const created = await this.prisma.assetAlias.create({
+        data: { assetId, alias, broker },
+        include: {
+          asset: {
+            select: { id: true, symbol: true, name: true },
+          },
+        },
+      })
+
+      return {
+        id: created.id,
+        assetId: created.assetId,
+        alias: created.alias,
+        broker: created.broker,
+        asset: created.asset,
+      }
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError
+        && error.code === 'P2002'
+      ) {
+        const raced = await this.findAliasByPair(alias, broker)
+        if (raced) {
+          return this.resolveExistingAliasMapping(raced, assetId)
+        }
+      }
+
+      throw error
+    }
+  }
+
+  private async findAliasByPair(alias: string, broker: string) {
+    return this.prisma.assetAlias.findUnique({
+      where: {
+        alias_broker: { alias, broker },
+      },
+      include: {
+        asset: {
+          select: { id: true, symbol: true, name: true },
+        },
+      },
+    })
+  }
+
+  private resolveExistingAliasMapping(
+    existing: AssetAliasMapping,
+    assetId: string,
+  ): AssetAliasMapping {
+    if (existing.assetId === assetId) {
+      return {
+        id: existing.id,
+        assetId: existing.assetId,
+        alias: existing.alias,
+        broker: existing.broker,
+        asset: existing.asset,
+      }
+    }
+
+    throw new AssetAliasConflictException(existing.asset)
   }
 }

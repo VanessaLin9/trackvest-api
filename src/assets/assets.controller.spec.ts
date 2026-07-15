@@ -5,6 +5,7 @@ describe('AssetsController', () => {
   function createHarness() {
     const service = {
       create: jest.fn(),
+      createAlias: jest.fn(),
       findAll: jest.fn(),
       findBySymbol: jest.fn(),
       findOne: jest.fn(),
@@ -46,6 +47,33 @@ describe('AssetsController', () => {
       baseCurrency: 'USD',
     })
     expect(result).toEqual(asset)
+  })
+
+  it('creates a broker-specific alias through the service', async () => {
+    const { controller, service } = createHarness()
+    const aliasMapping = {
+      id: 'alias-1',
+      assetId: 'asset-1',
+      alias: '國泰台灣領袖50',
+      broker: 'cathay',
+      asset: {
+        id: 'asset-1',
+        symbol: '00900',
+        name: '國泰台灣領袖50',
+      },
+    }
+    service.createAlias.mockResolvedValue(aliasMapping)
+
+    const result = await controller.createAlias('asset-1', {
+      alias: '國泰台灣領袖50',
+      broker: 'cathay',
+    })
+
+    expect(service.createAlias).toHaveBeenCalledWith('asset-1', {
+      alias: '國泰台灣領袖50',
+      broker: 'cathay',
+    })
+    expect(result).toEqual(aliasMapping)
   })
 
   it('passes list query filters to the service and maps the paginated response', async () => {

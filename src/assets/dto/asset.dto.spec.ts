@@ -3,6 +3,7 @@ import { plainToInstance } from 'class-transformer'
 import { validate } from 'class-validator'
 import { AssetBaseDto } from './asset.base.dto'
 import { CreateAndUpdateAssetDto } from './asset.createAndUpdate.dto'
+import { CreateAssetAliasDto } from './create-asset-alias.dto'
 import { FindAssetsDto } from './find-assets.dto'
 
 describe('Asset DTOs', () => {
@@ -90,5 +91,35 @@ describe('Asset DTOs', () => {
     const errors = await validate(dto)
 
     expect(errors.some((error) => error.property === 'page')).toBe(true)
+  })
+
+  it('normalizes alias create input and accepts Cathay broker', async () => {
+    const dto = plainToInstance(CreateAssetAliasDto, {
+      alias: '  國泰台灣  領袖50 ',
+      broker: 'cathay',
+    })
+
+    const errors = await validate(dto)
+
+    expect(errors).toHaveLength(0)
+    expect(dto.alias).toBe('國泰台灣 領袖50')
+    expect(dto.broker).toBe('cathay')
+  })
+
+  it('rejects blank normalized aliases and non-Cathay brokers', async () => {
+    const blankAlias = plainToInstance(CreateAssetAliasDto, {
+      alias: '   ',
+      broker: 'cathay',
+    })
+    const unsupportedBroker = plainToInstance(CreateAssetAliasDto, {
+      alias: '國泰台灣領袖50',
+      broker: 'global',
+    })
+
+    const blankErrors = await validate(blankAlias)
+    const brokerErrors = await validate(unsupportedBroker)
+
+    expect(blankErrors.some((error) => error.property === 'alias')).toBe(true)
+    expect(brokerErrors.some((error) => error.property === 'broker')).toBe(true)
   })
 })
