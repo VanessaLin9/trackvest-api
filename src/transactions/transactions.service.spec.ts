@@ -74,6 +74,7 @@ describe('TransactionsService', () => {
         findUnique: jest.fn(),
       },
       transaction: {
+        create: jest.fn(),
         findUnique: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn(),
@@ -1548,6 +1549,169 @@ describe('TransactionsService', () => {
    * - hard delete sell: covered by hard deleting sell transaction specs (unit + e2e)
    * Policy decision tests live in transaction-rebuild-policy.service.spec.ts (commit 2).
    */
+  describe('create transaction boundary (CP0 characterization)', () => {
+    it('runs ownership and business validation outside one transaction, then create/position/GL on the same tx client', async () => {
+      const {
+        service,
+        prisma,
+        txClient,
+        postingService,
+        ownershipService,
+        transactionPositionOrchestrator,
+      } = createHarness()
+      const createdTransaction = buildCreatedTransaction()
+      const prepareSpy = jest.spyOn(
+        transactionPositionOrchestrator,
+        'prepareCreateSideEffects',
+      )
+      const applySpy = jest.spyOn(
+        transactionPositionOrchestrator,
+        'applyCreateSideEffects',
+      )
+
+      txClient.transaction.create.mockResolvedValue(createdTransaction)
+      txClient.position.findFirst.mockResolvedValue(null)
+      postingService.postTransaction.mockResolvedValue({ id: 'entry-cp0-1' })
+
+      const result = await service.create(
+        {
+          accountId,
+          assetId,
+          type: 'buy',
+          amount: 1015,
+          quantity: 10,
+          price: 100,
+          fee: 15,
+          tradeTime,
+          note: 'CP0 boundary',
+        },
+        userId,
+      )
+
+      expect(result).toBe(createdTransaction)
+      expect(ownershipService.validateAccountOwnership).toHaveBeenCalledTimes(1)
+      expect(ownershipService.validateAccountOwnership).toHaveBeenCalledWith(
+        accountId,
+        userId,
+      )
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1)
+
+      expect(prepareSpy).toHaveBeenCalledWith(
+        txClient,
+        expect.objectContaining({
+          accountId,
+          assetId,
+          type: 'buy',
+          quantity: 10,
+        }),
+      )
+      expect(txClient.transaction.create).toHaveBeenCalledTimes(1)
+      expect(prisma.transaction.create).not.toHaveBeenCalled()
+      expect(applySpy).toHaveBeenCalledWith(
+        txClient,
+        createdTransaction,
+        expect.anything(),
+      )
+      expect(txClient.position.create).toHaveBeenCalled()
+      expect(postingService.postTransaction).toHaveBeenCalledWith({
+        userId,
+        transaction: createdTransaction,
+        db: txClient,
+      })
+      expect(postingService.postTransaction.mock.calls[0][0].db).toBe(txClient)
+    })
+
+    it('does not open a prisma transaction when account ownership validation fails', async () => {
+      const { service, prisma, txClient, postingService, ownershipService } =
+        createHarness()
+
+      ownershipService.validateAccountOwnership.mockRejectedValue(
+        new Error('You do not have access to this account'),
+      )
+
+      await expect(
+        service.create(
+          {
+            accountId,
+            assetId,
+            type: 'buy',
+            amount: 1015,
+            quantity: 10,
+            price: 100,
+            fee: 15,
+            tradeTime,
+          },
+          userId,
+        ),
+      ).rejects.toThrow('You do not have access to this account')
+
+      expect(prisma.$transaction).not.toHaveBeenCalled()
+      expect(txClient.transaction.create).not.toHaveBeenCalled()
+      expect(postingService.postTransaction).not.toHaveBeenCalled()
+    })
+
+    it('does not open a prisma transaction when business validation fails', async () => {
+      const { service, prisma, txClient, postingService, ownershipService } =
+        createHarness()
+
+      await expect(
+        service.create(
+          {
+            accountId,
+            assetId,
+            type: 'buy',
+            amount: 0,
+            quantity: 10,
+            price: 100,
+            fee: 15,
+            tradeTime,
+          },
+          userId,
+        ),
+      ).rejects.toThrow(/amount/i)
+
+      expect(ownershipService.validateAccountOwnership).toHaveBeenCalledTimes(1)
+      expect(prisma.$transaction).not.toHaveBeenCalled()
+      expect(txClient.transaction.create).not.toHaveBeenCalled()
+      expect(postingService.postTransaction).not.toHaveBeenCalled()
+    })
+
+    it('rejects the create transaction when GL posting fails', async () => {
+      const { service, prisma, txClient, postingService } = createHarness()
+      const createdTransaction = buildCreatedTransaction({ id: 'tx-cp0-post-fail' })
+
+      txClient.transaction.create.mockResolvedValue(createdTransaction)
+      txClient.position.findFirst.mockResolvedValue(null)
+      postingService.postTransaction.mockRejectedValue(
+        new Error('GL posting failed'),
+      )
+
+      await expect(
+        service.create(
+          {
+            accountId,
+            assetId,
+            type: 'buy',
+            amount: 1015,
+            quantity: 10,
+            price: 100,
+            fee: 15,
+            tradeTime,
+          },
+          userId,
+        ),
+      ).rejects.toThrow('GL posting failed')
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1)
+      expect(txClient.transaction.create).toHaveBeenCalledTimes(1)
+      expect(postingService.postTransaction).toHaveBeenCalledWith({
+        userId,
+        transaction: createdTransaction,
+        db: txClient,
+      })
+    })
+  })
+
   /*
    * P2 side-effect characterization inventory (create/update/remove/hardDelete):
    * - create buy: position create/update covered; incremental PositionLot create covered below.

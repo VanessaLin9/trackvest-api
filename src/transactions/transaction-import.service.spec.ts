@@ -231,7 +231,7 @@ describe('TransactionImportService', () => {
    * - currency mismatch / unsupported: covered
    * - asset alias missing: covered by "returns a row error when the asset alias is not found"
    * - asset alias global fallback: covered
-   * - partial success: covered by "continues importing later rows"
+   * - partial failure after earlier success: covered by "reports partial commit state when create fails after earlier rows succeeded"
    * Tests live in transaction-import.service.spec.ts.
    */
   it('imports a valid broker buy row from comma-delimited CSV', async () => {
@@ -1592,11 +1592,12 @@ describe('TransactionImportService', () => {
     })
 
     it('reports partial commit state when create fails after earlier rows succeeded', async () => {
-      const { importService, prisma, txClient, transactionsService } = createHarness()
-      const createSpy = jest
-        .spyOn(transactionsService, 'create')
-        .mockResolvedValueOnce(buildCreatedTransaction({ id: 'tx-commit-partial-1' }))
-        .mockRejectedValueOnce(new BadRequestException('Amount must be a positive number'))
+      const { importService, prisma, txClient, postingService } = createHarness()
+      const firstCreated = buildCreatedTransaction({
+        id: 'tx-commit-partial-1',
+        brokerOrderNo: 'BRK-COMMIT-A',
+        note: '第一列',
+      })
 
       mockImportAccount(prisma)
       prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
@@ -1606,8 +1607,10 @@ describe('TransactionImportService', () => {
         symbol: '006208',
         name: '富邦台50',
       })
-      txClient.transaction.create
-        .mockResolvedValueOnce(buildCreatedTransaction({ id: 'tx-commit-partial-1' }))
+      txClient.transaction.create.mockResolvedValue(firstCreated)
+      txClient.position.findFirst.mockResolvedValue(null)
+      postingService.postTransaction
+        .mockResolvedValueOnce({ id: 'entry-partial-1' })
         .mockRejectedValueOnce(new BadRequestException('Amount must be a positive number'))
 
       await expect(
@@ -1631,7 +1634,10 @@ describe('TransactionImportService', () => {
         },
       })
 
-      expect(createSpy).toHaveBeenCalledTimes(2)
+      // Current non-atomic boundary: each ready row opens its own create transaction.
+      expect(prisma.$transaction).toHaveBeenCalledTimes(2)
+      expect(txClient.transaction.create).toHaveBeenCalledTimes(2)
+      expect(postingService.postTransaction).toHaveBeenCalledTimes(2)
     })
   })
 })
