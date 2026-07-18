@@ -57,6 +57,9 @@ describe('TransactionImportService', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
+      assetAlias: {
+        findUnique: jest.fn(),
+      },
       position: {
         findFirst: jest.fn(),
         create: jest.fn(),
@@ -155,11 +158,11 @@ describe('TransactionImportService', () => {
       transactionImportEvaluationService,
     )
 
-    txClient.transaction.findFirst.mockResolvedValue(null)
     txClient.transaction.findMany.mockResolvedValue([])
     txClient.position.deleteMany.mockResolvedValue({ count: 0 })
     txClient.positionLot.deleteMany.mockResolvedValue({ count: 0 })
     txClient.sellLotMatch.deleteMany.mockResolvedValue({ count: 0 })
+    prisma.transaction.findFirst.mockResolvedValue(null)
     prisma.transaction.findMany.mockResolvedValue([])
     prisma.asset.findUnique.mockResolvedValue({
       id: assetId,
@@ -167,6 +170,13 @@ describe('TransactionImportService', () => {
       name: '富邦台50',
     })
     prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+    // Keep forwarding after defaults so commit-time tx reads share root mock queues.
+    txClient.transaction.findFirst.mockImplementation((args) =>
+      prisma.transaction.findFirst(args),
+    )
+    txClient.assetAlias.findUnique.mockImplementation((args) =>
+      prisma.assetAlias.findUnique(args),
+    )
 
     return {
       importService,
@@ -231,7 +241,7 @@ describe('TransactionImportService', () => {
    * - currency mismatch / unsupported: covered
    * - asset alias missing: covered by "returns a row error when the asset alias is not found"
    * - asset alias global fallback: covered
-   * - partial failure after earlier success: covered by "reports partial commit state when create fails after earlier rows succeeded"
+   * - atomic rollback after later-row failure: covered by "rolls back the batch when create fails after earlier rows would have succeeded"
    * Tests live in transaction-import.service.spec.ts.
    */
   it('imports a valid broker buy row from comma-delimited CSV', async () => {
@@ -1161,7 +1171,7 @@ describe('TransactionImportService', () => {
     expect(postingService.postTransaction).not.toHaveBeenCalled()
   })
 
-  it('treats P2002 during deprecated import commit as successful no-op', async () => {
+  it('treats P2002 during deprecated import commit as an atomic commit failure', async () => {
     const { importService, prisma, txClient, postingService } = createHarness()
     const duplicateError = new Prisma.PrismaClientKnownRequestError(
       'Unique constraint failed',
@@ -1191,14 +1201,16 @@ describe('TransactionImportService', () => {
         },
         userId,
       ),
-    ).resolves.toEqual({
-      totalRows: 1,
-      successCount: 0,
-      failureCount: 0,
-      createdTransactionIds: [],
-      errors: [],
+    ).rejects.toMatchObject({
+      response: {
+        successCount: 0,
+        failureCount: 1,
+        errorCode: 'IMPORT_COMMIT_FAILED',
+        createdTransactionIds: [],
+      },
     })
 
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1)
     expect(postingService.postTransaction).not.toHaveBeenCalled()
     expect(txClient.position.create).not.toHaveBeenCalled()
   })
@@ -1408,6 +1420,10 @@ describe('TransactionImportService', () => {
     it('creates transactions when all rows are ready', async () => {
       const { importService, prisma, txClient, transactionsService } = createHarness()
       const createSpy = jest.spyOn(transactionsService, 'create')
+      const createInTransactionSpy = jest.spyOn(
+        transactionsService,
+        'createInTransaction',
+      )
       const importedTransaction = buildCreatedTransaction({
         id: 'tx-commit-1',
         brokerOrderNo: 'BRK-COMMIT-002',
@@ -1422,6 +1438,7 @@ describe('TransactionImportService', () => {
         name: '富邦台50',
       })
       txClient.transaction.create.mockResolvedValue(importedTransaction)
+      txClient.position.findFirst.mockResolvedValue(null)
 
       const result = await importService.commitImportTransactions(
         {
@@ -1433,7 +1450,13 @@ describe('TransactionImportService', () => {
         userId,
       )
 
-      expect(createSpy).toHaveBeenCalledTimes(1)
+      expect(createSpy).not.toHaveBeenCalled()
+      expect(createInTransactionSpy).toHaveBeenCalledTimes(1)
+      expect(createInTransactionSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ brokerOrderNo: 'BRK-COMMIT-002' }),
+        txClient,
+      )
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1)
       expect(result).toEqual({
         totalRows: 1,
         successCount: 1,
@@ -1445,7 +1468,10 @@ describe('TransactionImportService', () => {
 
     it('skips commit-time duplicates without double-inserting', async () => {
       const { importService, prisma, transactionsService } = createHarness()
-      const createSpy = jest.spyOn(transactionsService, 'create')
+      const createInTransactionSpy = jest.spyOn(
+        transactionsService,
+        'createInTransaction',
+      )
 
       mockImportAccount(prisma)
       prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
@@ -1475,12 +1501,16 @@ describe('TransactionImportService', () => {
         failureCount: 0,
         createdTransactionIds: [],
       })
-      expect(createSpy).not.toHaveBeenCalled()
+      expect(createInTransactionSpy).not.toHaveBeenCalled()
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1)
     })
 
     it('treats an all-skipped commit as a successful no-op', async () => {
       const { importService, prisma, transactionsService } = createHarness()
-      const createSpy = jest.spyOn(transactionsService, 'create')
+      const createInTransactionSpy = jest.spyOn(
+        transactionsService,
+        'createInTransaction',
+      )
 
       mockImportAccount(prisma)
       prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
@@ -1508,12 +1538,15 @@ describe('TransactionImportService', () => {
         failureCount: 0,
         createdTransactionIds: [],
       })
-      expect(createSpy).not.toHaveBeenCalled()
+      expect(createInTransactionSpy).not.toHaveBeenCalled()
     })
 
-    it('treats P2002 unique conflicts as skipped during commit', async () => {
+    it('aborts the atomic commit when a P2002 unique conflict occurs', async () => {
       const { importService, prisma, txClient, transactionsService } = createHarness()
-      const createSpy = jest.spyOn(transactionsService, 'create')
+      const createInTransactionSpy = jest.spyOn(
+        transactionsService,
+        'createInTransaction',
+      )
       const duplicateError = new Prisma.PrismaClientKnownRequestError(
         'Unique constraint failed',
         {
@@ -1532,28 +1565,37 @@ describe('TransactionImportService', () => {
       prisma.transaction.findFirst.mockResolvedValue(null)
       txClient.transaction.create.mockRejectedValue(duplicateError)
 
-      const result = await importService.commitImportTransactions(
-        {
-          accountId,
-          csvContent: buildImportContent([
-            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-P2002-COMMIT', 'TWD', '競態重複'],
-          ]),
+      await expect(
+        importService.commitImportTransactions(
+          {
+            accountId,
+            csvContent: buildImportContent([
+              ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-P2002-COMMIT', 'TWD', '競態重複'],
+            ]),
+          },
+          userId,
+        ),
+      ).rejects.toMatchObject({
+        response: {
+          successCount: 0,
+          skippedCount: 0,
+          failureCount: 1,
+          errorCode: 'IMPORT_COMMIT_FAILED',
+          createdTransactionIds: [],
         },
-        userId,
-      )
-
-      expect(result).toEqual({
-        totalRows: 1,
-        successCount: 0,
-        skippedCount: 1,
-        failureCount: 0,
-        createdTransactionIds: [],
       })
-      expect(createSpy).toHaveBeenCalledTimes(1)
+
+      expect(createInTransactionSpy).toHaveBeenCalledTimes(1)
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1)
     })
 
     it('imports ready rows while skipping already-imported rows in the same batch', async () => {
-      const { importService, prisma, txClient, postingService } = createHarness()
+      const { importService, prisma, txClient, postingService, transactionsService } =
+        createHarness()
+      const createInTransactionSpy = jest.spyOn(
+        transactionsService,
+        'createInTransaction',
+      )
 
       mockImportAccount(prisma)
       prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
@@ -1569,6 +1611,7 @@ describe('TransactionImportService', () => {
       txClient.transaction.create.mockResolvedValue(
         buildCreatedTransaction({ id: 'tx-commit-new', brokerOrderNo: 'BRK-NEW' }),
       )
+      txClient.position.findFirst.mockResolvedValue(null)
       postingService.postTransaction.mockResolvedValue({ id: 'entry-1' })
 
       const result = await importService.commitImportTransactions(
@@ -1589,10 +1632,75 @@ describe('TransactionImportService', () => {
         failureCount: 0,
         createdTransactionIds: ['tx-commit-new'],
       })
+      expect(createInTransactionSpy).toHaveBeenCalledTimes(1)
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1)
     })
 
-    it('reports partial commit state when create fails after earlier rows succeeded', async () => {
-      const { importService, prisma, txClient, postingService } = createHarness()
+    it('writes multiple ready rows with the same tx in write-order', async () => {
+      const { importService, prisma, txClient, postingService, transactionsService } =
+        createHarness()
+      const createInTransactionSpy = jest.spyOn(
+        transactionsService,
+        'createInTransaction',
+      )
+
+      mockImportAccount(prisma)
+      prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+      prisma.transaction.findFirst.mockResolvedValue(null)
+      prisma.asset.findUnique.mockResolvedValue({
+        id: assetId,
+        symbol: '006208',
+        name: '富邦台50',
+      })
+      txClient.transaction.create
+        .mockResolvedValueOnce(
+          buildCreatedTransaction({
+            id: 'tx-order-1',
+            brokerOrderNo: 'BRK-ORDER-A',
+            tradeTime: new Date('2026-03-24T00:00:00.000Z'),
+          }),
+        )
+        .mockResolvedValueOnce(
+          buildCreatedTransaction({
+            id: 'tx-order-2',
+            brokerOrderNo: 'BRK-ORDER-B',
+            tradeTime: new Date('2026-03-25T00:00:00.000Z'),
+          }),
+        )
+      txClient.position.findFirst.mockResolvedValue(null)
+      postingService.postTransaction.mockResolvedValue({ id: 'entry-1' })
+
+      const result = await importService.commitImportTransactions(
+        {
+          accountId,
+          csvContent: buildImportContent([
+            ['富邦台50', '2026/03/25', '10', '-1,015', '100', '10', '3', '2', 'BRK-ORDER-B', 'TWD', '後寫'],
+            ['富邦台50', '2026/03/24', '10', '-1,015', '100', '10', '3', '2', 'BRK-ORDER-A', 'TWD', '先寫'],
+          ]),
+        },
+        userId,
+      )
+
+      expect(result.createdTransactionIds).toEqual(['tx-order-1', 'tx-order-2'])
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1)
+      expect(createInTransactionSpy).toHaveBeenCalledTimes(2)
+      expect(createInTransactionSpy.mock.calls[0][1]).toBe(txClient)
+      expect(createInTransactionSpy.mock.calls[1][1]).toBe(txClient)
+      expect(createInTransactionSpy.mock.calls[0][0]).toEqual(
+        expect.objectContaining({ brokerOrderNo: 'BRK-ORDER-A' }),
+      )
+      expect(createInTransactionSpy.mock.calls[1][0]).toEqual(
+        expect.objectContaining({ brokerOrderNo: 'BRK-ORDER-B' }),
+      )
+    })
+
+    it('rolls back the batch when create fails after earlier rows would have succeeded', async () => {
+      const { importService, prisma, txClient, postingService, transactionsService } =
+        createHarness()
+      const createInTransactionSpy = jest.spyOn(
+        transactionsService,
+        'createInTransaction',
+      )
       const firstCreated = buildCreatedTransaction({
         id: 'tx-commit-partial-1',
         brokerOrderNo: 'BRK-COMMIT-A',
@@ -1626,16 +1734,18 @@ describe('TransactionImportService', () => {
         ),
       ).rejects.toMatchObject({
         response: {
-          successCount: 1,
+          successCount: 0,
           skippedCount: 0,
           failureCount: 1,
           errorCode: 'IMPORT_COMMIT_FAILED',
-          createdTransactionIds: ['tx-commit-partial-1'],
+          createdTransactionIds: [],
         },
       })
 
-      // Current non-atomic boundary: each ready row opens its own create transaction.
-      expect(prisma.$transaction).toHaveBeenCalledTimes(2)
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1)
+      expect(createInTransactionSpy).toHaveBeenCalledTimes(2)
+      expect(createInTransactionSpy.mock.calls[0][1]).toBe(txClient)
+      expect(createInTransactionSpy.mock.calls[1][1]).toBe(txClient)
       expect(txClient.transaction.create).toHaveBeenCalledTimes(2)
       expect(postingService.postTransaction).toHaveBeenCalledTimes(2)
     })

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { OwnershipService } from '../common/services/ownership.service'
 import { PrismaService } from '../prisma.service'
@@ -68,30 +68,55 @@ export class TransactionImportService {
       throw ImportCommitRejectedException.forPreviewErrors(preview)
     }
 
-    const aggregate = createEmptyImportRunAggregate()
-    // Preview already classified skipped rows; commit only walks ready write order
-    // and may discover additional commit-time skips via duplicate recheck / P2002.
-    aggregate.skippedCount = preview.skippedCount
     const duplicateTracker = new ImportBrokerOrderDuplicateTracker()
     const rawRowsByNumber = new Map(rows.map((row) => [row.rowNumber, row]))
+    let createdTransactionIds: string[] = []
+    let skippedCount = preview.skippedCount
+    let failedRowNumber: number | null = null
 
-    for (const rowNumber of preview.writeOrderRowNumbers) {
-      const rawRow = rawRowsByNumber.get(rowNumber)
-      if (!rawRow) {
-        continue
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const batchCreatedIds: string[] = []
+        let batchSkipped = 0
+
+        for (const rowNumber of preview.writeOrderRowNumbers) {
+          failedRowNumber = rowNumber
+          const rawRow = rawRowsByNumber.get(rowNumber)
+          if (!rawRow) {
+            throw new BadRequestException(
+              `Import write order references missing row ${rowNumber}`,
+            )
+          }
+
+          const outcome = await this.writeReadyImportRow({
+            rawRow,
+            account,
+            dto,
+            db: tx,
+            duplicateTracker,
+          })
+
+          if (outcome.status === 'skipped') {
+            batchSkipped += 1
+          } else {
+            batchCreatedIds.push(outcome.id)
+          }
+        }
+
+        createdTransactionIds = batchCreatedIds
+        skippedCount = preview.skippedCount + batchSkipped
+      })
+    } catch (error: unknown) {
+      if (error instanceof ImportCommitRejectedException) {
+        throw error
       }
 
-      await this.processParsedImportRow({
-        rawRow,
-        account,
-        dto,
-        userId,
-        duplicateTracker,
-        aggregate,
-      })
-    }
+      const rowNumber = failedRowNumber ?? 0
+      const mappedError = mapImportCreateError(error, rowNumber)
+      const aggregate = createEmptyImportRunAggregate()
+      aggregate.skippedCount = preview.skippedCount
+      aggregate.errors.push(mappedError)
 
-    if (aggregate.errors.length > 0) {
       throw ImportCommitRejectedException.forPartialCommitFailure({
         preview: this.buildCommitFailurePreview(preview, aggregate),
         aggregate,
@@ -100,10 +125,10 @@ export class TransactionImportService {
 
     return {
       totalRows: rows.length,
-      successCount: aggregate.createdTransactionIds.length,
-      skippedCount: aggregate.skippedCount,
+      successCount: createdTransactionIds.length,
+      skippedCount,
       failureCount: 0,
-      createdTransactionIds: aggregate.createdTransactionIds,
+      createdTransactionIds,
     }
   }
 
@@ -175,20 +200,18 @@ export class TransactionImportService {
     })
   }
 
-  private async processParsedImportRow(params: {
+  private async writeReadyImportRow(params: {
     rawRow: Parameters<TransactionImportRowValidator['validateAndMap']>[0]
     account: ImportBrokerAccount
     dto: ImportTransactionsDto
-    userId: string
+    db: Prisma.TransactionClient
     duplicateTracker: ImportBrokerOrderDuplicateTracker
-    aggregate: ImportRunAggregate
-  }): Promise<void> {
-    const { rawRow, account, dto, userId, duplicateTracker, aggregate } = params
+  }): Promise<{ status: 'created'; id: string } | { status: 'skipped' }> {
+    const { rawRow, account, dto, db, duplicateTracker } = params
 
     const validation = this.transactionImportRowValidator.validateAndMap(rawRow)
     if (validation.ok === false) {
-      aggregate.errors.push(validation.error)
-      return
+      throw new BadRequestException(validation.error.message)
     }
 
     const normalized = validation.row
@@ -197,8 +220,7 @@ export class TransactionImportService {
       normalized.rowNumber,
     )
     if (fileDuplicateError) {
-      aggregate.errors.push(fileDuplicateError)
-      return
+      throw new BadRequestException(fileDuplicateError.message)
     }
 
     const alreadyImported =
@@ -206,10 +228,10 @@ export class TransactionImportService {
         dto.accountId,
         normalized.brokerOrderNo,
         normalized.rowNumber,
+        db,
       )
     if (alreadyImported) {
-      aggregate.skippedCount += 1
-      return
+      return { status: 'skipped' }
     }
 
     const currencyError = validateImportRowCurrency(
@@ -218,35 +240,23 @@ export class TransactionImportService {
       normalized.rowNumber,
     )
     if (currencyError) {
-      aggregate.errors.push(currencyError)
-      return
+      throw new BadRequestException(currencyError.message)
     }
 
     const assetId = await this.importAssetAliasResolver.resolve(
       normalized.assetName,
       account.broker!,
+      db,
     )
     if (!assetId) {
-      aggregate.errors.push({
-        row: normalized.rowNumber,
-        field: '股名',
-        message: `Asset alias not found for ${normalized.assetName}`,
-      })
-      return
+      throw new BadRequestException(
+        `Asset alias not found for ${normalized.assetName}`,
+      )
     }
 
     const importDto = this.buildCreateTransactionDto(dto.accountId, assetId, normalized)
-
-    try {
-      const created = await this.transactionsService.create(importDto, userId)
-      aggregate.createdTransactionIds.push(created.id)
-    } catch (error: unknown) {
-      if (isAlreadyImportedUniqueConflict(error)) {
-        aggregate.skippedCount += 1
-        return
-      }
-      aggregate.errors.push(mapImportCreateError(error, normalized.rowNumber))
-    }
+    const created = await this.transactionsService.createInTransaction(importDto, db)
+    return { status: 'created', id: created.id }
   }
 
   private buildCreateTransactionDto(
@@ -268,10 +278,4 @@ export class TransactionImportService {
       note: normalized.note,
     }
   }
-}
-
-function isAlreadyImportedUniqueConflict(error: unknown): boolean {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
-  )
 }

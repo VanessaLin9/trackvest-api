@@ -71,6 +71,9 @@ describe('Transaction import sell-readiness diagnostics (unit)', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
+      assetAlias: {
+        findUnique: jest.fn(),
+      },
       position: {
         findFirst: jest.fn(),
         create: jest.fn(),
@@ -145,7 +148,6 @@ describe('Transaction import sell-readiness diagnostics (unit)', () => {
       ),
     )
 
-    txClient.transaction.findFirst.mockResolvedValue(null)
     txClient.transaction.findMany.mockResolvedValue([])
     txClient.position.deleteMany.mockResolvedValue({ count: 0 })
     txClient.positionLot.deleteMany.mockResolvedValue({ count: 0 })
@@ -164,6 +166,12 @@ describe('Transaction import sell-readiness diagnostics (unit)', () => {
     prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
     prisma.transaction.findFirst.mockResolvedValue(null)
     prisma.transaction.findMany.mockResolvedValue([])
+    txClient.transaction.findFirst.mockImplementation((args) =>
+      prisma.transaction.findFirst(args),
+    )
+    txClient.assetAlias.findUnique.mockImplementation((args) =>
+      prisma.assetAlias.findUnique(args),
+    )
 
     return { importService, prisma, txClient, postingService, transactionsService }
   }
