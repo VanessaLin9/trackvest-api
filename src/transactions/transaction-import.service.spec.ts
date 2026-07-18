@@ -2023,5 +2023,108 @@ describe('TransactionImportService', () => {
       )
       expect(body.preview.rows.every((row) => row.row >= 1)).toBe(true)
     })
+
+    it('treats post-callback transaction finalize failure as batch-level', async () => {
+      const { importService, prisma, txClient } = createHarness()
+
+      mockImportAccount(prisma)
+      prisma.assetAlias.findUnique.mockResolvedValue({ assetId })
+      prisma.asset.findUnique.mockResolvedValue({
+        id: assetId,
+        symbol: '006208',
+        name: '富邦台50',
+      })
+      // Preview ready, commit-time skip on the only write-order row.
+      prisma.transaction.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'existing-during-commit' })
+      prisma.$transaction.mockImplementation(
+        async (callback: (tx: Prisma.TransactionClient) => Promise<unknown>) => {
+          await callback(txClient as unknown as Prisma.TransactionClient)
+          throw new Error('failed to commit interactive transaction')
+        },
+      )
+
+      const rejection = await importService
+        .commitImportTransactions(
+          {
+            accountId,
+            csvContent: buildImportContent([
+              [
+                '富邦台50',
+                '2026/03/24',
+                '10',
+                '-1,015',
+                '100',
+                '10',
+                '3',
+                '2',
+                'BRK-FINALIZE-FAIL',
+                'TWD',
+                'skip then finalize fail',
+              ],
+            ]),
+          },
+          userId,
+        )
+        .then(
+          () => {
+            throw new Error('expected commit to reject')
+          },
+          (error: ImportCommitRejectedException) => error,
+        )
+
+      const body = rejection.getResponse() as {
+        successCount: number
+        skippedCount: number
+        failureCount: number
+        errorCode: string
+        createdTransactionIds: string[]
+        preview: {
+          errorCount: number
+          readyCount: number
+          skippedCount: number
+          rows: Array<{
+            status: string
+            brokerOrderNo: string
+            errors: unknown[]
+            warnings: Array<{ code: string }>
+          }>
+        }
+      }
+
+      expect(body).toEqual(
+        expect.objectContaining({
+          successCount: 0,
+          skippedCount: 1,
+          failureCount: 1,
+          errorCode: 'IMPORT_COMMIT_FAILED',
+          createdTransactionIds: [],
+        }),
+      )
+      expect(body.preview.skippedCount).toBe(body.skippedCount)
+      expect(body.preview.errorCount).toBe(
+        body.preview.rows.filter((row) => row.status === 'error').length,
+      )
+      expect(body.preview).toEqual(
+        expect.objectContaining({
+          errorCount: 0,
+          readyCount: 0,
+          skippedCount: 1,
+          rows: [
+            expect.objectContaining({
+              brokerOrderNo: 'BRK-FINALIZE-FAIL',
+              status: 'skipped',
+              errors: [],
+              warnings: [
+                expect.objectContaining({
+                  code: 'DUPLICATE_BROKER_ORDER_ALREADY_IMPORTED',
+                }),
+              ],
+            }),
+          ],
+        }),
+      )
+    })
   })
 })

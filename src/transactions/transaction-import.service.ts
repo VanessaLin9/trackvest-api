@@ -108,6 +108,8 @@ export class TransactionImportService {
           }
         }
 
+        // Row work finished; a later commit/finalize failure is batch-level.
+        failedRowNumber = null
         createdTransactionIds = batchCreatedIds
         skippedCount = preview.skippedCount + commitTimeSkipped
       })
