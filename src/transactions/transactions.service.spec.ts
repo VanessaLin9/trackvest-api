@@ -1752,6 +1752,197 @@ describe('TransactionsService', () => {
     })
   })
 
+  describe('createInTransaction core (CP1)', () => {
+    it('public create still opens exactly one prisma transaction and delegates to the core', async () => {
+      const { service, prisma, txClient, postingService } = createHarness()
+      const createdTransaction = buildCreatedTransaction({ id: 'tx-cp1-public' })
+      const coreSpy = jest.spyOn(service, 'createInTransaction')
+
+      txClient.transaction.create.mockResolvedValue(createdTransaction)
+      txClient.position.findFirst.mockResolvedValue(null)
+      postingService.postTransaction.mockResolvedValue({ id: 'entry-cp1-public' })
+
+      const result = await service.create(
+        {
+          accountId,
+          assetId,
+          type: 'buy',
+          amount: 1015,
+          quantity: 10,
+          price: 100,
+          fee: 15,
+          tradeTime,
+        },
+        userId,
+      )
+
+      expect(result).toBe(createdTransaction)
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1)
+      expect(coreSpy).toHaveBeenCalledTimes(1)
+      expect(coreSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId,
+          assetId,
+          type: 'buy',
+        }),
+        userId,
+        txClient,
+      )
+    })
+
+    it('createInTransaction does not open its own prisma transaction', async () => {
+      const {
+        service,
+        prisma,
+        txClient,
+        postingService,
+        transactionPositionOrchestrator,
+      } = createHarness()
+      const createdTransaction = buildCreatedTransaction({ id: 'tx-cp1-core' })
+      const prepareSpy = jest.spyOn(
+        transactionPositionOrchestrator,
+        'prepareCreateSideEffects',
+      )
+      const applySpy = jest.spyOn(
+        transactionPositionOrchestrator,
+        'applyCreateSideEffects',
+      )
+
+      txClient.transaction.create.mockResolvedValue(createdTransaction)
+      txClient.position.findFirst.mockResolvedValue(null)
+      postingService.postTransaction.mockResolvedValue({ id: 'entry-cp1-core' })
+
+      const result = await service.createInTransaction(
+        {
+          accountId,
+          assetId,
+          type: 'buy',
+          amount: 1015,
+          quantity: 10,
+          price: 100,
+          fee: 15,
+          tradeTime,
+        },
+        userId,
+        txClient as never,
+      )
+
+      expect(result).toBe(createdTransaction)
+      expect(prisma.$transaction).not.toHaveBeenCalled()
+      expect(prepareSpy).toHaveBeenCalledWith(txClient, expect.any(Object))
+      expect(applySpy).toHaveBeenCalledWith(
+        txClient,
+        createdTransaction,
+        expect.anything(),
+      )
+      expect(txClient.transaction.create).toHaveBeenCalledTimes(1)
+      expect(prisma.transaction.create).not.toHaveBeenCalled()
+      expect(postingService.postTransaction).toHaveBeenCalledWith({
+        userId,
+        transaction: createdTransaction,
+        db: txClient,
+      })
+      expect(postingService.postTransaction.mock.calls[0][0].db).toBe(txClient)
+    })
+
+    it('createInTransaction skips primary GL post when side effects request it', async () => {
+      const { service, prisma, txClient, postingService, positionReplayService } =
+        createHarness()
+      const createdTransaction = buildCreatedTransaction({
+        id: 'sell-cp1-skip-primary',
+        type: 'sell',
+        amount: 360,
+        quantity: 4,
+        price: 90,
+        fee: 0,
+        tax: 0,
+        tradeTime: new Date('2026-03-21T09:30:00.000Z'),
+      })
+      const earlierBuy = buildCreatedTransaction({
+        id: 'buy-cp1-1',
+        amount: 1000,
+        quantity: 10,
+        price: 100,
+        fee: 0,
+        tax: 0,
+        tradeTime: new Date('2026-03-20T09:30:00.000Z'),
+      })
+      const laterBuy = buildCreatedTransaction({
+        id: 'buy-cp1-2',
+        amount: 1200,
+        quantity: 10,
+        price: 120,
+        fee: 0,
+        tax: 0,
+        tradeTime: new Date('2026-03-22T09:30:00.000Z'),
+      })
+
+      txClient.transaction.findFirst.mockResolvedValue({ id: laterBuy.id })
+      txClient.transaction.create.mockResolvedValue(createdTransaction)
+      txClient.transaction.findMany.mockResolvedValue([
+        earlierBuy,
+        createdTransaction,
+        laterBuy,
+      ])
+      positionReplayService.rebuildScope.mockResolvedValue(['sell-cp1-skip-primary'])
+      postingService.postTransaction.mockResolvedValue({ id: 'entry-cp1-rebuild' })
+
+      await service.createInTransaction(
+        {
+          accountId,
+          assetId,
+          type: 'sell',
+          amount: 360,
+          quantity: 4,
+          price: 90,
+          fee: 0,
+          tax: 0,
+          tradeTime: '2026-03-21T09:30:00.000Z',
+        },
+        userId,
+        txClient as never,
+      )
+
+      expect(prisma.$transaction).not.toHaveBeenCalled()
+      // Rebuild reposts the sell; primary create-path GL post is skipped.
+      expect(postingService.postTransaction).toHaveBeenCalledTimes(1)
+      expect(postingService.postTransaction).toHaveBeenCalledWith({
+        userId,
+        transaction: createdTransaction,
+        db: txClient,
+      })
+    })
+
+    it('createInTransaction rejects when a create-side collaborator fails', async () => {
+      const { service, prisma, txClient, postingService } = createHarness()
+      const createdTransaction = buildCreatedTransaction({ id: 'tx-cp1-fail' })
+
+      txClient.transaction.create.mockResolvedValue(createdTransaction)
+      txClient.position.findFirst.mockResolvedValue(null)
+      postingService.postTransaction.mockRejectedValue(new Error('GL posting failed'))
+
+      await expect(
+        service.createInTransaction(
+          {
+            accountId,
+            assetId,
+            type: 'buy',
+            amount: 1015,
+            quantity: 10,
+            price: 100,
+            fee: 15,
+            tradeTime,
+          },
+          userId,
+          txClient as never,
+        ),
+      ).rejects.toThrow('GL posting failed')
+
+      expect(prisma.$transaction).not.toHaveBeenCalled()
+      expect(txClient.transaction.create).toHaveBeenCalledTimes(1)
+    })
+  })
+
   /*
    * P2 side-effect characterization inventory (create/update/remove/hardDelete):
    * - create buy: position create/update covered; incremental PositionLot create covered below.

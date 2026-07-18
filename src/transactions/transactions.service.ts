@@ -25,52 +25,66 @@ export class TransactionsService {
     await this.ownershipService.validateAccountOwnership(dto.accountId, userId)
     this.transactionBusinessRulesValidator.validate(dto)
 
-    return this.prisma.$transaction(async (db) => {
-      const tradeTime = dto.tradeTime ? new Date(dto.tradeTime) : new Date()
-      const createSideEffectPlan =
-        await this.transactionPositionOrchestrator.prepareCreateSideEffects(db, {
-          accountId: dto.accountId,
-          assetId: dto.assetId ?? null,
-          type: dto.type,
-          quantity: dto.quantity,
-          tradeTime,
-        })
+    return this.prisma.$transaction(async (db) =>
+      this.createInTransaction(dto, userId, db),
+    )
+  }
 
-      const created = await db.transaction.create({
-        data: {
-          accountId: dto.accountId,
-          assetId: dto.assetId,
-          type: dto.type,
-          amount: dto.amount,
-          quantity: dto.quantity,
-          price: dto.price,
-          fee: dto.fee ?? 0,
-          tax: dto.tax ?? 0,
-          brokerOrderNo: dto.brokerOrderNo,
-          tradeTime,
-          note: dto.note,
-        },
-        include: {
-          account: { select: { id: true, name: true, currency: true, userId: true } },
-          asset: { select: { id: true, symbol: true, name: true, baseCurrency: true } },
-        },
+  /**
+   * Transaction-aware create core for a caller-owned Prisma transaction.
+   * Does not open nested `$transaction` and never falls back to root Prisma.
+   * Public {@link create} owns ownership/business validation and opens the tx;
+   * import commit (CP2) will reuse this core inside one outer batch transaction.
+   */
+  async createInTransaction(
+    dto: CreateTransactionDto,
+    _userId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<Transaction> {
+    const tradeTime = dto.tradeTime ? new Date(dto.tradeTime) : new Date()
+    const createSideEffectPlan =
+      await this.transactionPositionOrchestrator.prepareCreateSideEffects(db, {
+        accountId: dto.accountId,
+        assetId: dto.assetId ?? null,
+        type: dto.type,
+        quantity: dto.quantity,
+        tradeTime,
       })
 
-      const sideEffects = await this.transactionPositionOrchestrator.applyCreateSideEffects(
-        db,
-        created,
-        createSideEffectPlan,
-      )
-
-      if (!sideEffects.skipPrimaryGlPost) {
-        await this.postingService.postTransaction({
-          userId: created.account.userId,
-          transaction: created,
-          db,
-        })
-      }
-      return created
+    const created = await db.transaction.create({
+      data: {
+        accountId: dto.accountId,
+        assetId: dto.assetId,
+        type: dto.type,
+        amount: dto.amount,
+        quantity: dto.quantity,
+        price: dto.price,
+        fee: dto.fee ?? 0,
+        tax: dto.tax ?? 0,
+        brokerOrderNo: dto.brokerOrderNo,
+        tradeTime,
+        note: dto.note,
+      },
+      include: {
+        account: { select: { id: true, name: true, currency: true, userId: true } },
+        asset: { select: { id: true, symbol: true, name: true, baseCurrency: true } },
+      },
     })
+
+    const sideEffects = await this.transactionPositionOrchestrator.applyCreateSideEffects(
+      db,
+      created,
+      createSideEffectPlan,
+    )
+
+    if (!sideEffects.skipPrimaryGlPost) {
+      await this.postingService.postTransaction({
+        userId: created.account.userId,
+        transaction: created,
+        db,
+      })
+    }
+    return created
   }
   async findAll(q: FindTransactionsDto, user: UserContext) {
     const { userId, isAdmin } = await this.ownershipService.resolveUser(user)
