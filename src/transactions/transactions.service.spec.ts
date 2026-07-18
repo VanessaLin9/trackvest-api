@@ -133,6 +133,7 @@ describe('TransactionsService', () => {
       positionReplayService,
       rebuildPolicy,
       transactionPositionOrchestrator,
+      transactionBusinessRulesValidator,
     }
   }
 
@@ -1558,6 +1559,7 @@ describe('TransactionsService', () => {
         postingService,
         ownershipService,
         transactionPositionOrchestrator,
+        transactionBusinessRulesValidator,
       } = createHarness()
       const createdTransaction = buildCreatedTransaction()
       const prepareSpy = jest.spyOn(
@@ -1567,6 +1569,10 @@ describe('TransactionsService', () => {
       const applySpy = jest.spyOn(
         transactionPositionOrchestrator,
         'applyCreateSideEffects',
+      )
+      const businessValidateSpy = jest.spyOn(
+        transactionBusinessRulesValidator,
+        'validate',
       )
 
       txClient.transaction.create.mockResolvedValue(createdTransaction)
@@ -1594,7 +1600,15 @@ describe('TransactionsService', () => {
         accountId,
         userId,
       )
+      expect(businessValidateSpy).toHaveBeenCalledTimes(1)
       expect(prisma.$transaction).toHaveBeenCalledTimes(1)
+
+      const ownershipOrder =
+        ownershipService.validateAccountOwnership.mock.invocationCallOrder[0]
+      const businessOrder = businessValidateSpy.mock.invocationCallOrder[0]
+      const transactionOrder = prisma.$transaction.mock.invocationCallOrder[0]
+      expect(ownershipOrder).toBeLessThan(businessOrder)
+      expect(businessOrder).toBeLessThan(transactionOrder)
 
       expect(prepareSpy).toHaveBeenCalledWith(
         txClient,
@@ -1622,8 +1636,18 @@ describe('TransactionsService', () => {
     })
 
     it('does not open a prisma transaction when account ownership validation fails', async () => {
-      const { service, prisma, txClient, postingService, ownershipService } =
-        createHarness()
+      const {
+        service,
+        prisma,
+        txClient,
+        postingService,
+        ownershipService,
+        transactionBusinessRulesValidator,
+      } = createHarness()
+      const businessValidateSpy = jest.spyOn(
+        transactionBusinessRulesValidator,
+        'validate',
+      )
 
       ownershipService.validateAccountOwnership.mockRejectedValue(
         new Error('You do not have access to this account'),
@@ -1645,14 +1669,26 @@ describe('TransactionsService', () => {
         ),
       ).rejects.toThrow('You do not have access to this account')
 
+      expect(ownershipService.validateAccountOwnership).toHaveBeenCalledTimes(1)
+      expect(businessValidateSpy).not.toHaveBeenCalled()
       expect(prisma.$transaction).not.toHaveBeenCalled()
       expect(txClient.transaction.create).not.toHaveBeenCalled()
       expect(postingService.postTransaction).not.toHaveBeenCalled()
     })
 
     it('does not open a prisma transaction when business validation fails', async () => {
-      const { service, prisma, txClient, postingService, ownershipService } =
-        createHarness()
+      const {
+        service,
+        prisma,
+        txClient,
+        postingService,
+        ownershipService,
+        transactionBusinessRulesValidator,
+      } = createHarness()
+      const businessValidateSpy = jest.spyOn(
+        transactionBusinessRulesValidator,
+        'validate',
+      )
 
       await expect(
         service.create(
@@ -1671,6 +1707,10 @@ describe('TransactionsService', () => {
       ).rejects.toThrow(/amount/i)
 
       expect(ownershipService.validateAccountOwnership).toHaveBeenCalledTimes(1)
+      expect(businessValidateSpy).toHaveBeenCalledTimes(1)
+      expect(
+        ownershipService.validateAccountOwnership.mock.invocationCallOrder[0],
+      ).toBeLessThan(businessValidateSpy.mock.invocationCallOrder[0])
       expect(prisma.$transaction).not.toHaveBeenCalled()
       expect(txClient.transaction.create).not.toHaveBeenCalled()
       expect(postingService.postTransaction).not.toHaveBeenCalled()
