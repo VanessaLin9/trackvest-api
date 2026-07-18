@@ -135,10 +135,8 @@ describe('TransactionImportService', () => {
     const brokerImportFileParser = new BrokerImportFileParser()
     const transactionImportRowValidator = new TransactionImportRowValidator()
     const importBrokerAccountGuard = new ImportBrokerAccountGuard()
-    const importAssetAliasResolver = new ImportAssetAliasResolver(prisma as never)
-    const importBrokerOrderDuplicateChecker = new ImportBrokerOrderDuplicateChecker(
-      prisma as never,
-    )
+    const importAssetAliasResolver = new ImportAssetAliasResolver()
+    const importBrokerOrderDuplicateChecker = new ImportBrokerOrderDuplicateChecker()
     const transactionImportEvaluationService = new TransactionImportEvaluationService(
       prisma as never,
       transactionImportRowValidator,
@@ -1464,6 +1462,88 @@ describe('TransactionImportService', () => {
         failureCount: 0,
         createdTransactionIds: ['tx-commit-1'],
       })
+    })
+
+    it('uses txClient for commit-time duplicate and alias lookups', async () => {
+      const { importService, prisma, txClient, transactionsService } = createHarness()
+      const createInTransactionSpy = jest.spyOn(
+        transactionsService,
+        'createInTransaction',
+      )
+      const importedTransaction = buildCreatedTransaction({
+        id: 'tx-commit-tx-reads',
+        brokerOrderNo: 'BRK-COMMIT-TX-READS',
+      })
+
+      mockImportAccount(prisma)
+      prisma.asset.findUnique.mockResolvedValue({
+        id: assetId,
+        symbol: '006208',
+        name: '富邦台50',
+      })
+      txClient.transaction.create.mockResolvedValue(importedTransaction)
+      txClient.position.findFirst.mockResolvedValue(null)
+
+      let insideTransaction = false
+      prisma.$transaction.mockImplementation(async (callback) => {
+        insideTransaction = true
+        try {
+          return await callback(txClient as unknown as Prisma.TransactionClient)
+        } finally {
+          insideTransaction = false
+        }
+      })
+      prisma.transaction.findFirst.mockImplementation(() => {
+        if (insideTransaction) {
+          throw new Error('commit-time duplicate lookup fell back to root Prisma')
+        }
+        return Promise.resolve(null)
+      })
+      prisma.assetAlias.findUnique.mockImplementation(() => {
+        if (insideTransaction) {
+          throw new Error('commit-time alias lookup fell back to root Prisma')
+        }
+        return Promise.resolve({ assetId })
+      })
+      txClient.transaction.findFirst.mockResolvedValue(null)
+      txClient.assetAlias.findUnique.mockResolvedValue({ assetId })
+
+      const result = await importService.commitImportTransactions(
+        {
+          accountId,
+          csvContent: buildImportContent([
+            [
+              '富邦台50',
+              '2026/03/24',
+              '10',
+              '-1,015',
+              '100',
+              '10',
+              '3',
+              '2',
+              'BRK-COMMIT-TX-READS',
+              'TWD',
+              'tx reads',
+            ],
+          ]),
+        },
+        userId,
+      )
+
+      expect(createInTransactionSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ brokerOrderNo: 'BRK-COMMIT-TX-READS' }),
+        txClient,
+      )
+      expect(txClient.transaction.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            accountId,
+            brokerOrderNo: 'BRK-COMMIT-TX-READS',
+          },
+        }),
+      )
+      expect(txClient.assetAlias.findUnique).toHaveBeenCalled()
+      expect(result.createdTransactionIds).toEqual(['tx-commit-tx-reads'])
     })
 
     it('skips commit-time duplicates without double-inserting', async () => {

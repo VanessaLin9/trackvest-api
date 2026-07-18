@@ -117,7 +117,7 @@ export class TransactionImportService {
       aggregate.skippedCount = preview.skippedCount
       aggregate.errors.push(mappedError)
 
-      throw ImportCommitRejectedException.forPartialCommitFailure({
+      throw ImportCommitRejectedException.forAtomicCommitFailure({
         preview: this.buildCommitFailurePreview(preview, aggregate),
         aggregate,
       })

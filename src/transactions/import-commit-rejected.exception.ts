@@ -30,7 +30,7 @@ export class ImportCommitRejectedException extends BadRequestException {
    * Atomic import commit failure contract: the outer transaction rolled back, so
    * no created IDs may be reported as committed.
    */
-  static forPartialCommitFailure(params: {
+  static forAtomicCommitFailure(params: {
     preview: ImportPreviewResult
     aggregate: ImportRunAggregate
   }): ImportCommitRejectedException {

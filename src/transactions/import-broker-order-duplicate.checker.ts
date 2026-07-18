@@ -7,8 +7,6 @@ type ImportDbClient = Prisma.TransactionClient | PrismaService
 
 @Injectable()
 export class ImportBrokerOrderDuplicateChecker {
-  constructor(private prisma: PrismaService) {}
-
   async findExistingInAccount(
     accountId: string,
     brokerOrderNo: string,

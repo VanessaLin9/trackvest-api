@@ -7,8 +7,6 @@ type ImportDbClient = Prisma.TransactionClient | PrismaService
 
 @Injectable()
 export class ImportAssetAliasResolver {
-  constructor(private prisma: PrismaService) {}
-
   async resolve(
     alias: string,
     broker: string,

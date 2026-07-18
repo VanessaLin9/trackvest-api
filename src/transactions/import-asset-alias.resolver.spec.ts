@@ -8,7 +8,7 @@ describe('ImportAssetAliasResolver', () => {
       },
     }
 
-    const resolver = new ImportAssetAliasResolver(prisma as never)
+    const resolver = new ImportAssetAliasResolver()
 
     return { resolver, prisma }
   }

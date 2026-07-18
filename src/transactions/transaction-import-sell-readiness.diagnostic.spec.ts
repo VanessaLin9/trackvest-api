@@ -138,13 +138,13 @@ describe('Transaction import sell-readiness diagnostics (unit)', () => {
       new BrokerImportFileParser(),
       new TransactionImportRowValidator(),
       new ImportBrokerAccountGuard(),
-      new ImportAssetAliasResolver(prisma as never),
-      new ImportBrokerOrderDuplicateChecker(prisma as never),
+      new ImportAssetAliasResolver(),
+      new ImportBrokerOrderDuplicateChecker(),
       new TransactionImportEvaluationService(
         prisma as never,
         new TransactionImportRowValidator(),
-        new ImportAssetAliasResolver(prisma as never),
-        new ImportBrokerOrderDuplicateChecker(prisma as never),
+        new ImportAssetAliasResolver(),
+        new ImportBrokerOrderDuplicateChecker(),
       ),
     )
 
