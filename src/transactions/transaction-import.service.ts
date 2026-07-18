@@ -20,7 +20,10 @@ import {
   ImportRunAggregate,
 } from './transaction-import-orchestration.types'
 import { TransactionsService } from './transactions.service'
-import { TransactionImportEvaluationService } from './transaction-import-evaluation.service'
+import {
+  buildAlreadyImportedIssue,
+  TransactionImportEvaluationService,
+} from './transaction-import-evaluation.service'
 import { ImportPreviewResponseDto } from './dto/import-preview.response.dto'
 import { ImportCommitResponseDto } from './dto/import-commit.response.dto'
 import { ImportCommitRejectedException } from './import-commit-rejected.exception'
@@ -72,12 +75,13 @@ export class TransactionImportService {
     const rawRowsByNumber = new Map(rows.map((row) => [row.rowNumber, row]))
     let createdTransactionIds: string[] = []
     let skippedCount = preview.skippedCount
+    let commitTimeSkipped = 0
+    const commitTimeSkippedRows = new Set<number>()
     let failedRowNumber: number | null = null
 
     try {
       await this.prisma.$transaction(async (tx) => {
         const batchCreatedIds: string[] = []
-        let batchSkipped = 0
 
         for (const rowNumber of preview.writeOrderRowNumbers) {
           failedRowNumber = rowNumber
@@ -97,28 +101,33 @@ export class TransactionImportService {
           })
 
           if (outcome.status === 'skipped') {
-            batchSkipped += 1
+            commitTimeSkipped += 1
+            commitTimeSkippedRows.add(rowNumber)
           } else {
             batchCreatedIds.push(outcome.id)
           }
         }
 
         createdTransactionIds = batchCreatedIds
-        skippedCount = preview.skippedCount + batchSkipped
+        skippedCount = preview.skippedCount + commitTimeSkipped
       })
     } catch (error: unknown) {
       if (error instanceof ImportCommitRejectedException) {
         throw error
       }
 
-      const rowNumber = failedRowNumber ?? 0
-      const mappedError = mapImportCreateError(error, rowNumber)
       const aggregate = createEmptyImportRunAggregate()
-      aggregate.skippedCount = preview.skippedCount
-      aggregate.errors.push(mappedError)
+      aggregate.skippedCount = preview.skippedCount + commitTimeSkipped
+      if (failedRowNumber !== null) {
+        aggregate.errors.push(mapImportCreateError(error, failedRowNumber))
+      }
 
       throw ImportCommitRejectedException.forAtomicCommitFailure({
-        preview: this.buildCommitFailurePreview(preview, aggregate),
+        preview: this.buildCommitFailurePreview(
+          preview,
+          aggregate,
+          commitTimeSkippedRows,
+        ),
         aggregate,
       })
     }
@@ -145,23 +154,11 @@ export class TransactionImportService {
   private buildCommitFailurePreview(
     preview: ImportPreviewResult,
     aggregate: ImportRunAggregate,
+    commitTimeSkippedRows: ReadonlySet<number> = new Set(),
   ): ImportPreviewResult {
-    const erroredRows = new Set(aggregate.errors.map((error) => error.row))
-
-    return {
-      ...preview,
-      canCommit: false,
-      readyCount: preview.rows.filter(
-        (row) => row.status === 'ready' && !erroredRows.has(row.row),
-      ).length,
-      skippedCount: aggregate.skippedCount,
-      errorCount: preview.errorCount + aggregate.errors.length,
-      rows: preview.rows.map((row) => {
-        const commitError = aggregate.errors.find((error) => error.row === row.row)
-        if (!commitError) {
-          return row
-        }
-
+    const rows = preview.rows.map((row) => {
+      const commitError = aggregate.errors.find((error) => error.row === row.row)
+      if (commitError) {
         return {
           ...row,
           status: 'error' as const,
@@ -174,7 +171,32 @@ export class TransactionImportService {
             },
           ],
         }
-      }),
+      }
+
+      if (commitTimeSkippedRows.has(row.row) && row.status === 'ready') {
+        return {
+          ...row,
+          status: 'skipped' as const,
+          warnings: [...row.warnings, buildAlreadyImportedIssue()],
+        }
+      }
+
+      return row
+    })
+
+    const readyCount = rows.filter((row) => row.status === 'ready').length
+    const skippedCount = rows.filter((row) => row.status === 'skipped').length
+    const errorCount = rows.filter((row) => row.status === 'error').length
+    const warningCount = rows.filter((row) => row.status === 'warning').length
+
+    return {
+      ...preview,
+      canCommit: false,
+      readyCount,
+      skippedCount,
+      errorCount,
+      warningCount,
+      rows,
     }
   }
 

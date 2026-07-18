@@ -39,7 +39,7 @@ export class ImportCommitRejectedException extends BadRequestException {
     return new ImportCommitRejectedException({
       totalRows: preview.totalRows,
       successCount: 0,
-      skippedCount: aggregate.skippedCount,
+      skippedCount: preview.skippedCount,
       failureCount: Math.max(aggregate.errors.length, 1),
       errorCode: IMPORT_ERROR_CODES.IMPORT_COMMIT_FAILED,
       createdTransactionIds: [],
