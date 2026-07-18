@@ -26,7 +26,11 @@ export class ImportCommitRejectedException extends BadRequestException {
     })
   }
 
-  static forPartialCommitFailure(params: {
+  /**
+   * Atomic import commit failure contract: the outer transaction rolled back, so
+   * no created IDs may be reported as committed.
+   */
+  static forAtomicCommitFailure(params: {
     preview: ImportPreviewResult
     aggregate: ImportRunAggregate
   }): ImportCommitRejectedException {
@@ -34,11 +38,11 @@ export class ImportCommitRejectedException extends BadRequestException {
 
     return new ImportCommitRejectedException({
       totalRows: preview.totalRows,
-      successCount: aggregate.createdTransactionIds.length,
-      skippedCount: aggregate.skippedCount,
-      failureCount: aggregate.errors.length,
+      successCount: 0,
+      skippedCount: preview.skippedCount,
+      failureCount: Math.max(aggregate.errors.length, 1),
       errorCode: IMPORT_ERROR_CODES.IMPORT_COMMIT_FAILED,
-      createdTransactionIds: aggregate.createdTransactionIds,
+      createdTransactionIds: [],
       preview,
     })
   }

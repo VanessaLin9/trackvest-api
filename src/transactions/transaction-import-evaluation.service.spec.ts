@@ -28,8 +28,8 @@ describe('TransactionImportEvaluationService', () => {
     const evaluationService = new TransactionImportEvaluationService(
       prisma as never,
       new TransactionImportRowValidator(),
-      new ImportAssetAliasResolver(prisma as never),
-      new ImportBrokerOrderDuplicateChecker(prisma as never),
+      new ImportAssetAliasResolver(),
+      new ImportBrokerOrderDuplicateChecker(),
     )
 
     return { evaluationService, prisma }

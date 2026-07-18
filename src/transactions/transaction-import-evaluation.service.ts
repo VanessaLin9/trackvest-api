@@ -113,6 +113,7 @@ export class TransactionImportEvaluationService {
         accountId,
         normalized.brokerOrderNo,
         normalized.rowNumber,
+        this.prisma,
       )
 
     const currencyError = validateImportRowCurrency(
@@ -294,7 +295,11 @@ export class TransactionImportEvaluationService {
     alias: string,
     broker: string,
   ): Promise<ImportResolvedAsset | null> {
-    const assetId = await this.importAssetAliasResolver.resolve(alias, broker)
+    const assetId = await this.importAssetAliasResolver.resolve(
+      alias,
+      broker,
+      this.prisma,
+    )
     if (!assetId) {
       return null
     }

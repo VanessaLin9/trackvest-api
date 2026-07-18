@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { OwnershipService } from '../common/services/ownership.service'
 import { PrismaService } from '../prisma.service'
@@ -20,7 +20,10 @@ import {
   ImportRunAggregate,
 } from './transaction-import-orchestration.types'
 import { TransactionsService } from './transactions.service'
-import { TransactionImportEvaluationService } from './transaction-import-evaluation.service'
+import {
+  buildAlreadyImportedIssue,
+  TransactionImportEvaluationService,
+} from './transaction-import-evaluation.service'
 import { ImportPreviewResponseDto } from './dto/import-preview.response.dto'
 import { ImportCommitResponseDto } from './dto/import-commit.response.dto'
 import { ImportCommitRejectedException } from './import-commit-rejected.exception'
@@ -68,42 +71,75 @@ export class TransactionImportService {
       throw ImportCommitRejectedException.forPreviewErrors(preview)
     }
 
-    const aggregate = createEmptyImportRunAggregate()
-    // Preview already classified skipped rows; commit only walks ready write order
-    // and may discover additional commit-time skips via duplicate recheck / P2002.
-    aggregate.skippedCount = preview.skippedCount
     const duplicateTracker = new ImportBrokerOrderDuplicateTracker()
     const rawRowsByNumber = new Map(rows.map((row) => [row.rowNumber, row]))
+    let createdTransactionIds: string[] = []
+    let skippedCount = preview.skippedCount
+    let commitTimeSkipped = 0
+    const commitTimeSkippedRows = new Set<number>()
+    let failedRowNumber: number | null = null
 
-    for (const rowNumber of preview.writeOrderRowNumbers) {
-      const rawRow = rawRowsByNumber.get(rowNumber)
-      if (!rawRow) {
-        continue
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const batchCreatedIds: string[] = []
+
+        for (const rowNumber of preview.writeOrderRowNumbers) {
+          failedRowNumber = rowNumber
+          const rawRow = rawRowsByNumber.get(rowNumber)
+          if (!rawRow) {
+            throw new BadRequestException(
+              `Import write order references missing row ${rowNumber}`,
+            )
+          }
+
+          const outcome = await this.writeReadyImportRow({
+            rawRow,
+            account,
+            dto,
+            db: tx,
+            duplicateTracker,
+          })
+
+          if (outcome.status === 'skipped') {
+            commitTimeSkipped += 1
+            commitTimeSkippedRows.add(rowNumber)
+          } else {
+            batchCreatedIds.push(outcome.id)
+          }
+        }
+
+        // Row work finished; a later commit/finalize failure is batch-level.
+        failedRowNumber = null
+        createdTransactionIds = batchCreatedIds
+        skippedCount = preview.skippedCount + commitTimeSkipped
+      })
+    } catch (error: unknown) {
+      if (error instanceof ImportCommitRejectedException) {
+        throw error
       }
 
-      await this.processParsedImportRow({
-        rawRow,
-        account,
-        dto,
-        userId,
-        duplicateTracker,
-        aggregate,
-      })
-    }
+      const aggregate = createEmptyImportRunAggregate()
+      aggregate.skippedCount = preview.skippedCount + commitTimeSkipped
+      if (failedRowNumber !== null) {
+        aggregate.errors.push(mapImportCreateError(error, failedRowNumber))
+      }
 
-    if (aggregate.errors.length > 0) {
-      throw ImportCommitRejectedException.forPartialCommitFailure({
-        preview: this.buildCommitFailurePreview(preview, aggregate),
+      throw ImportCommitRejectedException.forAtomicCommitFailure({
+        preview: this.buildCommitFailurePreview(
+          preview,
+          aggregate,
+          commitTimeSkippedRows,
+        ),
         aggregate,
       })
     }
 
     return {
       totalRows: rows.length,
-      successCount: aggregate.createdTransactionIds.length,
-      skippedCount: aggregate.skippedCount,
+      successCount: createdTransactionIds.length,
+      skippedCount,
       failureCount: 0,
-      createdTransactionIds: aggregate.createdTransactionIds,
+      createdTransactionIds,
     }
   }
 
@@ -120,23 +156,11 @@ export class TransactionImportService {
   private buildCommitFailurePreview(
     preview: ImportPreviewResult,
     aggregate: ImportRunAggregate,
+    commitTimeSkippedRows: ReadonlySet<number> = new Set(),
   ): ImportPreviewResult {
-    const erroredRows = new Set(aggregate.errors.map((error) => error.row))
-
-    return {
-      ...preview,
-      canCommit: false,
-      readyCount: preview.rows.filter(
-        (row) => row.status === 'ready' && !erroredRows.has(row.row),
-      ).length,
-      skippedCount: aggregate.skippedCount,
-      errorCount: preview.errorCount + aggregate.errors.length,
-      rows: preview.rows.map((row) => {
-        const commitError = aggregate.errors.find((error) => error.row === row.row)
-        if (!commitError) {
-          return row
-        }
-
+    const rows = preview.rows.map((row) => {
+      const commitError = aggregate.errors.find((error) => error.row === row.row)
+      if (commitError) {
         return {
           ...row,
           status: 'error' as const,
@@ -149,7 +173,32 @@ export class TransactionImportService {
             },
           ],
         }
-      }),
+      }
+
+      if (commitTimeSkippedRows.has(row.row) && row.status === 'ready') {
+        return {
+          ...row,
+          status: 'skipped' as const,
+          warnings: [...row.warnings, buildAlreadyImportedIssue()],
+        }
+      }
+
+      return row
+    })
+
+    const readyCount = rows.filter((row) => row.status === 'ready').length
+    const skippedCount = rows.filter((row) => row.status === 'skipped').length
+    const errorCount = rows.filter((row) => row.status === 'error').length
+    const warningCount = rows.filter((row) => row.status === 'warning').length
+
+    return {
+      ...preview,
+      canCommit: false,
+      readyCount,
+      skippedCount,
+      errorCount,
+      warningCount,
+      rows,
     }
   }
 
@@ -175,20 +224,18 @@ export class TransactionImportService {
     })
   }
 
-  private async processParsedImportRow(params: {
+  private async writeReadyImportRow(params: {
     rawRow: Parameters<TransactionImportRowValidator['validateAndMap']>[0]
     account: ImportBrokerAccount
     dto: ImportTransactionsDto
-    userId: string
+    db: Prisma.TransactionClient
     duplicateTracker: ImportBrokerOrderDuplicateTracker
-    aggregate: ImportRunAggregate
-  }): Promise<void> {
-    const { rawRow, account, dto, userId, duplicateTracker, aggregate } = params
+  }): Promise<{ status: 'created'; id: string } | { status: 'skipped' }> {
+    const { rawRow, account, dto, db, duplicateTracker } = params
 
     const validation = this.transactionImportRowValidator.validateAndMap(rawRow)
     if (validation.ok === false) {
-      aggregate.errors.push(validation.error)
-      return
+      throw new BadRequestException(validation.error.message)
     }
 
     const normalized = validation.row
@@ -197,8 +244,7 @@ export class TransactionImportService {
       normalized.rowNumber,
     )
     if (fileDuplicateError) {
-      aggregate.errors.push(fileDuplicateError)
-      return
+      throw new BadRequestException(fileDuplicateError.message)
     }
 
     const alreadyImported =
@@ -206,10 +252,10 @@ export class TransactionImportService {
         dto.accountId,
         normalized.brokerOrderNo,
         normalized.rowNumber,
+        db,
       )
     if (alreadyImported) {
-      aggregate.skippedCount += 1
-      return
+      return { status: 'skipped' }
     }
 
     const currencyError = validateImportRowCurrency(
@@ -218,35 +264,23 @@ export class TransactionImportService {
       normalized.rowNumber,
     )
     if (currencyError) {
-      aggregate.errors.push(currencyError)
-      return
+      throw new BadRequestException(currencyError.message)
     }
 
     const assetId = await this.importAssetAliasResolver.resolve(
       normalized.assetName,
       account.broker!,
+      db,
     )
     if (!assetId) {
-      aggregate.errors.push({
-        row: normalized.rowNumber,
-        field: '股名',
-        message: `Asset alias not found for ${normalized.assetName}`,
-      })
-      return
+      throw new BadRequestException(
+        `Asset alias not found for ${normalized.assetName}`,
+      )
     }
 
     const importDto = this.buildCreateTransactionDto(dto.accountId, assetId, normalized)
-
-    try {
-      const created = await this.transactionsService.create(importDto, userId)
-      aggregate.createdTransactionIds.push(created.id)
-    } catch (error: unknown) {
-      if (isAlreadyImportedUniqueConflict(error)) {
-        aggregate.skippedCount += 1
-        return
-      }
-      aggregate.errors.push(mapImportCreateError(error, normalized.rowNumber))
-    }
+    const created = await this.transactionsService.createInTransaction(importDto, db)
+    return { status: 'created', id: created.id }
   }
 
   private buildCreateTransactionDto(
@@ -268,10 +302,4 @@ export class TransactionImportService {
       note: normalized.note,
     }
   }
-}
-
-function isAlreadyImportedUniqueConflict(error: unknown): boolean {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
-  )
 }
