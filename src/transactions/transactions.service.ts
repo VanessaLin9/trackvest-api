@@ -26,19 +26,18 @@ export class TransactionsService {
     this.transactionBusinessRulesValidator.validate(dto)
 
     return this.prisma.$transaction(async (db) =>
-      this.createInTransaction(dto, userId, db),
+      this.createInTransaction(dto, db),
     )
   }
 
   /**
    * Transaction-aware create core for a caller-owned Prisma transaction.
-   * Does not open nested `$transaction` and never falls back to root Prisma.
-   * Public {@link create} owns ownership/business validation and opens the tx;
-   * import commit (CP2) will reuse this core inside one outer batch transaction.
+   * The caller owns ownership/business validation and transaction opening.
+   * This core requires an explicit {@link Prisma.TransactionClient}, opens no
+   * nested `$transaction`, and never falls back to root Prisma.
    */
   async createInTransaction(
     dto: CreateTransactionDto,
-    _userId: string,
     db: Prisma.TransactionClient,
   ): Promise<Transaction> {
     const tradeTime = dto.tradeTime ? new Date(dto.tradeTime) : new Date()

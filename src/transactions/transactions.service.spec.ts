@@ -1785,7 +1785,6 @@ describe('TransactionsService', () => {
           assetId,
           type: 'buy',
         }),
-        userId,
         txClient,
       )
     })
@@ -1823,7 +1822,6 @@ describe('TransactionsService', () => {
           fee: 15,
           tradeTime,
         },
-        userId,
         txClient as never,
       )
 
@@ -1899,7 +1897,6 @@ describe('TransactionsService', () => {
           tax: 0,
           tradeTime: '2026-03-21T09:30:00.000Z',
         },
-        userId,
         txClient as never,
       )
 
@@ -1933,7 +1930,6 @@ describe('TransactionsService', () => {
             fee: 15,
             tradeTime,
           },
-          userId,
           txClient as never,
         ),
       ).rejects.toThrow('GL posting failed')
