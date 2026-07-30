@@ -50,6 +50,7 @@ export type ImportPreviewResult = {
   rows: ImportPreviewRow[]
 }
 
+/** 彙總 preview 計數、`canCommit`、過濾後的 writeOrder（PR #33 / #36）。 */
 export function buildImportPreviewResult(
   rows: ImportPreviewRow[],
   writeOrderRowNumbers: number[] = [],
@@ -85,6 +86,12 @@ export function buildImportPreviewResult(
   }
 }
 
+/**
+ * canCommit 規則（PR #33 / #36）：
+ * - 空檔或有 COMMIT_BLOCKING → false
+ * - 有任一 ready → true（row-local error 不整批擋）
+ * - 全 skipped 且無 error → true（重匯成功 no-op）
+ */
 export function computeImportCanCommit(params: {
   readyCount: number
   skippedCount: number
@@ -103,6 +110,6 @@ export function computeImportCanCommit(params: {
     return true
   }
 
-  // All-skipped successful no-op (Branch 2).
+  // 全 skipped 成功 no-op（PR #36 Branch 2）。
   return skippedCount > 0 && errorCount === 0
 }

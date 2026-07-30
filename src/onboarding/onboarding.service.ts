@@ -6,6 +6,10 @@ import { DefaultChartProvisioningService } from '../gl/default-chart/default-cha
 import { PrismaService } from '../prisma.service'
 import { OnboardingSignupDto } from './dto/onboarding-signup.dto'
 
+/**
+ * 註冊編排（PR #32）：同一 transaction 內建立 user → 預設系統科目 → starter account。
+ * 任一步失敗全滾回；email 撞唯一鍵 → Conflict。
+ */
 @Injectable()
 export class OnboardingService {
   constructor(

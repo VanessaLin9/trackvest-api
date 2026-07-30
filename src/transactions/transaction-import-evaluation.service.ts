@@ -27,6 +27,7 @@ import {
 } from './transaction-import-evaluation.types'
 import { ImportBrokerAccount } from './transaction-import-orchestration.types'
 
+/** Preview／commit 共用文案；已存在委託書號 → `skipped`（PR #36）。 */
 const ALREADY_IMPORTED_MESSAGE =
   'Duplicate broker order number for selected account'
 
@@ -39,6 +40,10 @@ const SELL_READINESS_MESSAGES: Record<SellReadinessBlockReason, string> = {
     'Same-day buy/sell order is ambiguous without reliable execution time',
 }
 
+/**
+ * Import 列評估（不寫入）：normalize、檔內／帳內重複、alias、sell-readiness。
+ * Preview／commit 共用；safe-commit 契約見 PR #33，skipped 見 PR #36，sell 規劃見 PR #37。
+ */
 @Injectable()
 export class TransactionImportEvaluationService {
   constructor(
@@ -153,6 +158,7 @@ export class TransactionImportEvaluationService {
       }
     }
 
+    // 帳內已匯入：標 skipped + warning，不擋其他 ready 列；all-skipped 仍可 commit（PR #36）。
     if (alreadyImported) {
       return {
         row: normalized.rowNumber,
@@ -185,6 +191,10 @@ export class TransactionImportEvaluationService {
     }
   }
 
+  /**
+   * Sell-readiness：依 planner 產出 writeOrder，並把 blocked sell 標成 row-local error（PR #37）。
+   * Sell 錯誤不整批擋 commit（非 `COMMIT_BLOCKING`）；契約細節見 `planImportSellReadiness`。
+   */
   private async applySellReadinessPlan(
     rows: ImportPreviewRow[],
     accountId: string,

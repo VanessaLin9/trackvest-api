@@ -13,6 +13,7 @@ export interface AuthSession {
   refreshTokenExpiresAt: Date
 }
 
+/** Cookie JWT session：login／refresh／logout（PR #15）。 */
 @Injectable()
 export class AuthService {
   constructor(
@@ -26,7 +27,7 @@ export class AuthService {
       where: { email: dto.email },
       select: { id: true, email: true, role: true, passwordHash: true },
     })
-    // Always run bcrypt.compare so we don't leak user-existence via timing.
+    // 無論 user 是否存在都跑 bcrypt，避免用 timing 探測帳號存在（PR #15）。
     const fallbackHash = '$2b$10$CwTycUXWue0Thq9StjUM0uJ8pfwzvK9yZ.pLLd6DEFvmZqGzzCqOG'
     const ok = await bcrypt.compare(dto.password, user?.passwordHash ?? fallbackHash)
     if (!user || !ok) {

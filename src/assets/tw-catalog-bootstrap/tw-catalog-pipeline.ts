@@ -20,6 +20,10 @@ function countWouldCreateAliases(records: { globalAliases: string[] }[]): number
   return aliases.size
 }
 
+/**
+ * TW 資產 catalog bootstrap 管線（PR #34）：fetch → classify → normalize → upsert／dry-run plan。
+ * 無 `db` 時只回 summary；`dryRun` 時 plan 不寫入。
+ */
 export async function runTwCatalogBootstrapPipeline(
   input: TwCatalogPipelineInput,
 ): Promise<TwCatalogBootstrapSummary> {

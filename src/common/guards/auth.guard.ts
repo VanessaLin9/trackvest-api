@@ -15,17 +15,9 @@ import { ROLES_KEY } from '../decorators/roles.decorator'
 import { AuthenticatedUser } from '../types/auth-user'
 
 /**
- * Global request-level authentication guard.
- *
- * Verifies a JWT access token carried in the `access_token` httpOnly
- * cookie and attaches `{ id, role }` to `req.user`. Routes marked with
- * `@Public()` bypass this, and `@Roles()` further restricts to specific
- * roles.
- *
- * The guard only decodes the token — no DB round-trip — so requests cost
- * one signature verification plus whatever downstream Prisma calls the
- * handler makes. Fresh role changes take effect at most `accessTtlSec`
- * later, which is an explicit trade-off.
+ * 全域 request auth guard（PR #15）：驗證 `access_token` cookie JWT，
+ * 掛 `{ id, role }` 到 `req.user`。`@Public()` 略過；`@Roles()` 再限角色。
+ * 只解 token、不查 DB；角色變更最遲 `accessTtlSec` 後生效（刻意取捨）。
  */
 @Injectable()
 export class AuthGuard implements CanActivate {

@@ -1,5 +1,5 @@
 /**
- * Taiwan stock asset catalog bootstrap (dry-run or write).
+ * Taiwan stock asset catalog bootstrap（PR #34；dry-run 或寫入）。
  *
  * Usage:
  *   pnpm assets:bootstrap:tw -- --dry-run

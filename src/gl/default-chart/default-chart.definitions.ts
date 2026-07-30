@@ -13,6 +13,10 @@ export type DefaultSystemGlAccountDefinition = {
   currency: Currency
 }
 
+/**
+ * 預設系統科目定義（PR #32）：investment／equity／dividend／realized PnL／fee。
+ * PostingService 依 `GlAccountPurpose` 找科目；與使用者自訂科目分開。
+ */
 export const TWD_DEFAULT_SYSTEM_GL_ACCOUNT_DEFINITIONS: readonly DefaultSystemGlAccountDefinition[] =
   [
     {

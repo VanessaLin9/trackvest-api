@@ -187,6 +187,7 @@ export class PostingService {
         return this.createEntry(userId, date, tx.note ?? undefined, 'auto:transaction:buy', lines, tx.id, prisma)
       }
       case 'sell': {
+        // Sell GL 成本／損益必須來自 FIFO SellLotMatch，不可只用 avgCost（PR #6）。
         const investGlId = await this.glService.getInvestmentBucketGlAccountId(userId, ccy, prisma)
         const feeGlId = await this.glService.getFeeExpenseGlAccountId(userId, prisma)
         const matches = await prisma.sellLotMatch.findMany({

@@ -29,6 +29,12 @@ type ScopedTransactionCandidate = Pick<
   'accountId' | 'assetId' | 'type' | 'tradeTime'
 >
 
+/**
+ * 決定 create/update/delete 是否要整 scope 重放（PR #22）。
+ * - buy 若後面已有 sell → full replay（補回歷史買進會改 FIFO；PR #20）
+ * - sell 若同日或之後還有 buy/sell → full replay，不可只做增量扣 lot
+ * 政策與執行分離：實際 rebuild 在 `TransactionPositionOrchestratorService`。
+ */
 @Injectable()
 export class TransactionRebuildPolicyService {
   getTransactionScope(
@@ -147,6 +153,11 @@ export class TransactionRebuildPolicyService {
     return transaction.type === 'sell' && Boolean(transaction.assetId)
   }
 
+  /**
+   * Create 路徑是否需要 full-scope replay（PR #20 / #22）。
+   * sell：之後還有同 scope 活動 → 不可增量 FIFO。
+   * buy：之後已有 sell → 必須重放，否則既有 SellLotMatch 成本會錯。
+   */
   private async needsFullScopeReplayOnCreate(
     prisma: Prisma.TransactionClient,
     candidate: ScopedTransactionCandidate,

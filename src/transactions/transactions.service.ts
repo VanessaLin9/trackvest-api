@@ -31,10 +31,10 @@ export class TransactionsService {
   }
 
   /**
-   * Transaction-aware create core for a caller-owned Prisma transaction.
-   * The caller owns ownership/business validation and transaction opening.
-   * This core requires an explicit {@link Prisma.TransactionClient}, opens no
-   * nested `$transaction`, and never falls back to root Prisma.
+   * 呼叫端已開好的 Prisma transaction 內建立交易（PR #39）。
+   * 呼叫端負責 ownership／業務驗證與開 transaction；此核心只接受
+   * {@link Prisma.TransactionClient}，不開 nested `$transaction`，也不回退 root Prisma。
+   * Import commit 整批原子寫入依賴此邊界。
    */
   async createInTransaction(
     dto: CreateTransactionDto,
@@ -185,6 +185,7 @@ export class TransactionsService {
 
     this.transactionBusinessRulesValidator.validate(nextTransaction)
 
+    // sell↔非 sell 會破壞 FIFO match／rebuild 假設，不支援原地改型別（PR #6 / #21）。
     if (
       existing.type !== nextTransaction.type &&
       (existing.type === 'sell' || nextTransaction.type === 'sell')

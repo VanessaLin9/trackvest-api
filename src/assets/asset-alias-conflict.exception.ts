@@ -9,6 +9,7 @@ export type AssetAliasConflictBody = {
   existingAsset: AssetAliasMappedAssetDto
 }
 
+/** alias+broker 已映射到其他 asset 時回 409（PR #38）。 */
 export class AssetAliasConflictException extends ConflictException {
   constructor(existingAsset: AssetAliasMappedAssetDto) {
     const body: AssetAliasConflictBody = {

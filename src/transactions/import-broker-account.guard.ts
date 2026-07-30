@@ -3,6 +3,7 @@ import { AccountType } from '@prisma/client'
 import { SUPPORTED_BROKER } from '../accounts/account-broker.constants'
 import { ImportBrokerAccount } from './transaction-import-orchestration.types'
 
+/** Import 僅允許已支援券商的 broker 帳戶（PR #31 拆出）。 */
 @Injectable()
 export class ImportBrokerAccountGuard {
   assertEligible(account: ImportBrokerAccount): void {

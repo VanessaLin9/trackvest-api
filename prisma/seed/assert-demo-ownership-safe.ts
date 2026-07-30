@@ -19,7 +19,10 @@ function refuse(message: string): never {
   throw new SeedGuardError(message)
 }
 
-/** Refuse upsert when fixed demo ids are owned by a non-demo user or identity. */
+/**
+ * Production demo seed 前檢查固定 demo id 圖（PR #27）。
+ * 若 id 已被非 demo 身分占用 → 拒絕，避免覆寫真人資料。
+ */
 export async function assertDemoOwnershipGraphSafeForUpsert(db: SeedDbClient) {
   const userById = await db.user.findUnique({ where: { id: DEMO_USER_ID } })
   if (userById) {

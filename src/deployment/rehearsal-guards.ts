@@ -12,7 +12,7 @@ export class RehearsalGuardError extends Error {
   }
 }
 
-/** Rehearsal tooling may only target local Postgres — never remote hosts. */
+/** Rehearsal 只能打本機 Postgres，禁止遠端 host（PR #27）。 */
 export function assertLocalhostDatabaseUrl(databaseUrl: string): void {
   const hostname = parseDatabaseUrlHostname(databaseUrl)
 
@@ -31,7 +31,7 @@ export function assertLocalhostDatabaseUrl(databaseUrl: string): void {
   }
 }
 
-/** Dropping and recreating trackvest_rehearsal requires explicit opt-in. */
+/** Drop／重建 `trackvest_rehearsal` 需明確 opt-in（PR #27）。 */
 export function assertRehearsalDbRecreateAllowed(): void {
   if (!isEnvFlagTrue('ALLOW_REHEARSAL_DB_RECREATE')) {
     throw new RehearsalGuardError(

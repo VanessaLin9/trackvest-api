@@ -7,6 +7,10 @@ import { registerPortfolioTools } from './tools/register-portfolio-tools'
 import { registerTransactionTools } from './tools/register-transaction-tools'
 import { PortfolioQueryService } from './services/portfolio-query.service'
 
+/**
+ * Read-only MCP tool surface（PR #8）：accounts／transactions／portfolio 查詢。
+ * 不掛寫入工具；owner 由 `resolveOwnerUserId`（env／預設）決定。
+ */
 @Injectable()
 export class TrackvestMcpServer {
   constructor(

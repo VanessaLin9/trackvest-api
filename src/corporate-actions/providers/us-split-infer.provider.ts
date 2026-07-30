@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common'
 import { CorpActionMarket, SplitEvent, SplitEventProvider } from '../corp-action.types'
 
 /**
- * US split discovery from Close vs Adj_Close is deferred to a follow-up PR.
- * Chronological replay lands in CP1; wire inference here when adding US support.
+ * US 拆股推斷（Close vs Adj_Close）尚未實作；v1 回空陣列（PR #19）。
+ * Chronological replay 已就緒；補 US 支援時在此接上 inference。
  */
 @Injectable()
 export class UsSplitInferProvider implements SplitEventProvider {

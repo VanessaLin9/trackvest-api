@@ -17,6 +17,10 @@ import {
   US_SPLIT_EVENT_PROVIDER,
 } from './corp-action.types'
 
+/**
+ * 拆股 sync：upsert CorporateAction → 對 affected (account, asset) replay → 重貼 sell GL（PR #19）。
+ * TW 資料來自 FinMind；US provider 目前為 stub（見 `UsSplitInferProvider`）。
+ */
 @Injectable()
 export class CorpActionService {
   constructor(
@@ -29,6 +33,10 @@ export class CorpActionService {
     private readonly usSplitProvider: SplitEventProvider,
   ) {}
 
+  /**
+   * 拉取拆股事件並重算受影響持倉。
+   * `replayPending`：有 upsert 但沒有任何帳號持倉可 replay（事件已存，等之後有部位再跑）。
+   */
   async syncSplits(input: {
     market?: CorpActionMarket | 'all'
     startDate?: string
@@ -84,6 +92,9 @@ export class CorpActionService {
     }
   }
 
+  /**
+   * 對每個 affected scope：rebuild lots → 記 application → 依新 SellLotMatch 重貼 sell GL（PR #19）。
+   */
   private async replayAffectedScopes(
     upsertedActionsByAsset: Map<string, string[]>,
   ): Promise<number> {

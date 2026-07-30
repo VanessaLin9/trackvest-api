@@ -30,6 +30,11 @@ import { ImportCommitRejectedException } from './import-commit-rejected.exceptio
 import { ImportPreviewResult } from './transaction-import-evaluation.types'
 import { IMPORT_ERROR_CODES } from './import-error-codes'
 
+/**
+ * Broker CSV import 編排入口（自 TransactionsService 拆出；PR #23）。
+ * Preview／commit 契約見 PR #33；整批寫入原子邊界見 PR #39（`createInTransaction`）。
+ * 列評估（含 skipped／sell-readiness）在 `TransactionImportEvaluationService`。
+ */
 @Injectable()
 export class TransactionImportService {
   constructor(
@@ -44,6 +49,7 @@ export class TransactionImportService {
     private transactionImportEvaluationService: TransactionImportEvaluationService,
   ) {}
 
+  /** 只評估不寫入；與 commit 共用同一套 evaluate／writeOrder（PR #33）。 */
   async previewImportTransactions(
     dto: ImportTransactionsDto,
     userId: string,
@@ -56,6 +62,11 @@ export class TransactionImportService {
     })
   }
 
+  /**
+   * 先重跑 preview；`canCommit` 為 false 則拒絕。
+   * 僅依 `writeOrderRowNumbers` 寫 ready 列，整批包在單一 Prisma `$transaction`（PR #33 / #39）。
+   * 中途失敗 → 全滾回，且 `createdTransactionIds` 必須為空（見 `forAtomicCommitFailure`）。
+   */
   async commitImportTransactions(
     dto: ImportTransactionsDto,
     userId: string,
@@ -80,6 +91,7 @@ export class TransactionImportService {
     let failedRowNumber: number | null = null
 
     try {
+      // 原子邊界：batch 內任一列失敗則全部 rollback（PR #39）。
       await this.prisma.$transaction(async (tx) => {
         const batchCreatedIds: string[] = []
 
@@ -254,6 +266,7 @@ export class TransactionImportService {
         normalized.rowNumber,
         db,
       )
+    // DB 已有同帳號委託書號：commit 時 skip，不當 error 打斷整批（PR #36）。
     if (alreadyImported) {
       return { status: 'skipped' }
     }

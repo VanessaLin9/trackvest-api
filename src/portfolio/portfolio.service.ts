@@ -14,6 +14,10 @@ import { PortfolioHoldingsSnapshotService } from './portfolio-holdings-snapshot.
 import { PortfolioRebalanceService } from './portfolio-rebalance.service'
 import { PortfolioTrendService } from './portfolio-trend.service'
 
+/**
+ * Portfolio HTTP facade（PR #10；實作於 PR #26 拆到 snapshot／trend／rebalance）。
+ * displayCurrency 查詢參數契約見 PR #11；assetClass 進 holdings／rebalance 見 PR #12／#13。
+ */
 @Injectable()
 export class PortfolioService {
   constructor(

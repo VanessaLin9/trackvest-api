@@ -3,6 +3,10 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { McpModule } from './mcp/mcp.module'
 import { TrackvestMcpServer } from './mcp/mcp.server'
 
+/**
+ * MCP 獨立 entrypoint（與 HTTP API 分離；PR #8）。
+ * stdio transport；日誌走 stderr，避免污染 MCP 協議流。
+ */
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(McpModule, {
     logger: ['error', 'warn'],

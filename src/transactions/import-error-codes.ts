@@ -1,28 +1,34 @@
+/** Import preview／commit 錯誤碼（safe-commit 契約見 PR #33）。 */
 export const IMPORT_ERROR_CODES = {
   INVALID_ROW: 'INVALID_ROW',
   MISSING_REQUIRED_FIELD: 'MISSING_REQUIRED_FIELD',
+  /** 檔內重複委託書號：整批擋 commit（唯一 COMMIT_BLOCKING）。PR #33 */
   DUPLICATE_BROKER_ORDER_IN_FILE: 'DUPLICATE_BROKER_ORDER_IN_FILE',
   /** @deprecated Prefer DUPLICATE_BROKER_ORDER_ALREADY_IMPORTED for skipped DB duplicates. */
   DUPLICATE_BROKER_ORDER_IN_ACCOUNT: 'DUPLICATE_BROKER_ORDER_IN_ACCOUNT',
-  /** Existing account + brokerOrderNo — preview/commit status is `skipped`, not error. */
+  /** 帳內已有同委託書號 → status=`skipped`，非 error；all-skipped 仍可 commit。PR #36 */
   DUPLICATE_BROKER_ORDER_ALREADY_IMPORTED: 'DUPLICATE_BROKER_ORDER_ALREADY_IMPORTED',
   UNSUPPORTED_CURRENCY: 'UNSUPPORTED_CURRENCY',
   CURRENCY_MISMATCH: 'CURRENCY_MISMATCH',
   ASSET_ALIAS_NOT_FOUND: 'ASSET_ALIAS_NOT_FOUND',
-  /** Sell has no earlier-date buy history in DB or this batch. */
+  /** Sell 無更早日買進歷史（DB 或本批）。PR #37 */
   SELL_HISTORY_REQUIRED: 'SELL_HISTORY_REQUIRED',
-  /** Sell quantity exceeds lots available under the chronological plan. */
+  /** Sell 數量超過時序規劃下可得 lots。PR #37 */
   SELL_INSUFFICIENT_LOTS: 'SELL_INSUFFICIENT_LOTS',
-  /** Sell would need an unordered same-day buy to be fundable. */
+  /** 需靠無序同日買進來資助賣出 → 歧義，擋該列。PR #37 */
   SELL_SAME_DAY_ORDER_AMBIGUOUS: 'SELL_SAME_DAY_ORDER_AMBIGUOUS',
   ACCOUNT_NOT_BROKER: 'ACCOUNT_NOT_BROKER',
   UNSUPPORTED_BROKER: 'UNSUPPORTED_BROKER',
   ACCOUNT_NOT_FOUND_OR_FORBIDDEN: 'ACCOUNT_NOT_FOUND_OR_FORBIDDEN',
+  /** Preview 不可 commit 時的拒絕碼。PR #33 */
   COMMIT_NOT_ALLOWED_WITH_ERRORS: 'COMMIT_NOT_ALLOWED_WITH_ERRORS',
+  /** 原子 commit 中途失敗（全滾回）。PR #39 */
   IMPORT_COMMIT_FAILED: 'IMPORT_COMMIT_FAILED',
 } as const
 
-/** File-internal duplicate blocks the entire commit; other row errors are row-local. */
+/**
+ * 僅檔內重複會整批擋 commit；sell／alias 等 row-local error 不在此集合（PR #33 / #37）。
+ */
 export const COMMIT_BLOCKING_IMPORT_ERROR_CODES = new Set<ImportErrorCode>([
   IMPORT_ERROR_CODES.DUPLICATE_BROKER_ORDER_IN_FILE,
 ])

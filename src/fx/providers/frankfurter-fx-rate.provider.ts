@@ -12,6 +12,7 @@ type FrankfurterRateItem = {
 export class FrankfurterFxRateProvider implements FxRateProvider {
   readonly providerKey = 'frankfurter'
 
+  /** Frankfurter 公開 FX API（PR #10）；portfolio displayCurrency 估值用。 */
   private readonly apiBaseUrl =
     process.env.FRANKFURTER_API_BASE_URL ?? 'https://api.frankfurter.dev/v2'
 

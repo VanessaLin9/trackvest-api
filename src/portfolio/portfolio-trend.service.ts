@@ -49,6 +49,10 @@ type TrendEvent =
       price: HistoricalPriceRecord
     }
 
+/**
+ * 歷史淨值／單檔趨勢（PR #10；拆出 PR #26）。
+ * 以交易 + Price 時序重建每日持倉市值，再套 displayCurrency FX（PR #11）。
+ */
 @Injectable()
 export class PortfolioTrendService {
   constructor(

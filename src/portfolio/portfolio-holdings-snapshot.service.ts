@@ -39,6 +39,10 @@ export type ValuationFxContext = {
   rates: Map<string, number>
 }
 
+/**
+ * 持倉快照：open positions + 最新 Price + FX 換成 display currency（PR #10／#11／#26）。
+ * Summary／holdings／rebalance／trend 都從這裡取同一套估值基底。
+ */
 @Injectable()
 export class PortfolioHoldingsSnapshotService {
   constructor(

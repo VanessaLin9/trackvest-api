@@ -14,6 +14,10 @@ type NormalizedNumericFields = {
   tax: number
 }
 
+/**
+ * 交易類型業務規則（buy/sell/dividend/deposit 等；PR #28）。
+ * 與 CSV 列 parser／row validator 分離：此層管 domain create/update，不解析 broker 檔。
+ */
 @Injectable()
 export class TransactionBusinessRulesValidator {
   validate(dto: TransactionValidationDto): void {

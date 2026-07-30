@@ -24,6 +24,10 @@ type ActiveReplayTransaction = {
 
 @Injectable()
 export class PositionReplayService {
+  /**
+   * 依時序重算單一 (account, asset) 的 PositionLot／SellLotMatch（PR #6 模型；編排見 PR #21）。
+   * Transaction mutation 與 corporate-action sync 共用此入口。
+   */
   async rebuildScope(
     prisma: Prisma.TransactionClient,
     scope: PositionReplayScope,

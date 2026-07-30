@@ -23,6 +23,7 @@ import { UsersModule } from './users/users.module'
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Schedule 根模組只在此註冊一次（PR #24）；feature cron 掛在各自 module。
     ScheduleModule.forRoot(),
     PrismaModule,
     CommonModule,

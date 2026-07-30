@@ -1,6 +1,7 @@
 import type { SeedDbClient } from '../../../prisma/seed/seed-db-client'
 import type { TwAssetBootstrapRecord } from './tw-catalog-bootstrap.types'
 
+/** 全域 alias 的 broker 鍵為空字串（與 import alias resolve 一致；PR #34）。 */
 export const TW_GLOBAL_ALIAS_BROKER = ''
 
 export type TwCatalogAliasConflictExample = {
@@ -218,6 +219,10 @@ export async function applyTwCatalogUpserts(
 
 export const TW_CATALOG_UPSERT_TRANSACTION_TIMEOUT_MS = 300_000
 
+/**
+ * 既有 symbol／alias 則 skip；alias 指向其他 asset 記 conflict，不覆蓋（PR #34）。
+ * 長 timeout 因 catalog 量大。
+ */
 export async function runTwCatalogUpsertTransaction(
   db: SeedDbClient,
   records: TwAssetBootstrapRecord[],

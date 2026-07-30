@@ -8,6 +8,7 @@ export type FinMindResponse = {
   data?: FinMindRow[]
 }
 
+/** FinMind v4 HTTP 共用（缺 token／非 200 → BadGateway；PR #17／#18）。 */
 export async function fetchFinMindDataset(input: {
   dataset: string
   dataId: string

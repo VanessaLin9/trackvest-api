@@ -57,6 +57,11 @@ export type ReplayLedgerResult = {
 
 type ReplayLot = ReplayLotState
 
+/**
+ * 純函式持倉時序引擎（PR #19）：buy／sell／split 排成 timeline。
+ * 同日事件：split priority=0 先於交易（ex-date 當日先調股數再買賣）。
+ * TW 股數拆完後整數化（見 `roundTwShareQuantity`）。
+ */
 type TimelineEvent =
   | {
       kind: 'split'
@@ -256,6 +261,7 @@ function applySplitToOpenLots(
       continue
     }
 
+    // qty × ratio、unitCost ÷ ratio；TW 再整數化股數（PR #19）。
     let remainingQuantity = lot.remainingQuantity * ratio
     let originalQuantity = lot.originalQuantity * ratio
     if (market === 'tw') {

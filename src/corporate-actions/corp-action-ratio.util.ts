@@ -1,9 +1,8 @@
 import { SplitDirection } from './corp-action.types'
 
 /**
- * FinMind before/after prices are reference quotes, not exact split ratios.
- * TW markets trade whole shares only, so snap to the nearest integer ratio
- * when the price-implied value is close (e.g. 0050 1:4 split).
+ * FinMind before/after 是參考報價，不是精確拆股比（PR #19）。
+ * 台股只交易整股，接近整數比時 snap（例如 0050 1:4）。
  */
 export function snapTwSplitRatio(
   beforePrice: number,

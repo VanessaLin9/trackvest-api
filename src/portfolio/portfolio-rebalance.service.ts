@@ -6,11 +6,16 @@ import { HoldingOverviewItem, HoldingsSnapshot } from './portfolio-holdings-snap
 
 type RebalanceTrackedAssetClass = 'equity' | 'bond'
 
+/** 預設 80/20 equity/bond；只追蹤這兩類，其餘 assetClass 不進 gap 計算（PR #13）。 */
 const DEFAULT_REBALANCE_TARGETS: Record<RebalanceTrackedAssetClass, number> = {
   equity: 0.8,
   bond: 0.2,
 }
 
+/**
+ * 再平衡建議（PR #13；自 portfolio.service 拆出見 PR #26）。
+ * 輸入為 holdings snapshot；輸出 current／target／gap／recommendedBuy。
+ */
 @Injectable()
 export class PortfolioRebalanceService {
   buildResponse(
