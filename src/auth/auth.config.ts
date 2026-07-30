@@ -7,10 +7,8 @@ const INSECURE_PRODUCTION_JWT_SECRETS = new Set([
 ])
 
 /**
- * Centralized auth/cookie settings. Keeping this thin wrapper makes it
- * easier to swap implementations or defaults without touching every
- * consumer, and gives us one place to fail-fast if a required secret is
- * missing in production.
+ * Auth／cookie 設定集中處（PR #15）。
+ * Production 禁止使用已知 insecure 預設 secret（PR #16）。
  */
 @Injectable()
 export class AuthConfig {
@@ -26,6 +24,7 @@ export class AuthConfig {
     if (!secret) {
       throw new Error('JWT_SECRET is required')
     }
+    // 擋掉把 .env.example 預設值直接上 prod（PR #16）。
     if (process.env.NODE_ENV === 'production' && INSECURE_PRODUCTION_JWT_SECRETS.has(secret)) {
       throw new Error('JWT_SECRET must be changed from its dev default in production')
     }

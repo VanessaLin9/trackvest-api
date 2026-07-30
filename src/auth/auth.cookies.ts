@@ -7,9 +7,8 @@ import {
 } from './auth.config'
 
 /**
- * Helpers that centralize cookie flag decisions so login / refresh /
- * logout all set (or clear) cookies the same way. The refresh cookie is
- * scoped to `/auth` so it only ships to refresh/logout endpoints.
+ * Cookie flag 集中設定（PR #15）：login／refresh／logout 行為一致。
+ * Refresh cookie path=`/auth`，縮小外洩面。
  */
 export function buildAccessCookieOptions(config: AuthConfig): CookieOptions {
   return {

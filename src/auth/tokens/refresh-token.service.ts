@@ -12,17 +12,10 @@ export interface IssuedRefreshToken {
 }
 
 /**
- * Opaque rotating refresh tokens.
- *
- * Design:
- * - The raw token leaves the server exactly once, written into an httpOnly
- *   cookie. The DB stores only its sha256.
- * - Each use of `rotate()` revokes the current row and creates a new one,
- *   chained via `replacedById`.
- * - If a client presents an already-revoked token, we walk the chain to
- *   the current leaf and revoke the entire family (replay / theft
- *   detection). Legitimate clients never hit this path because they move
- *   forward on rotation.
+ * Opaque rotating refresh token（PR #15）。
+ * - Raw token 只出站一次（httpOnly cookie）；DB 只存 sha256。
+ * - `rotate()` 撤銷舊列並以 `replacedById` 串新列。
+ * - 若收到已撤銷 token → 整條 family revoke（偵測 replay／竊取）。
  */
 @Injectable()
 export class RefreshTokenService {

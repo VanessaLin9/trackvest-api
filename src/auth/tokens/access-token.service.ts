@@ -9,10 +9,8 @@ export interface AccessTokenPayload {
 }
 
 /**
- * Issues and verifies short-lived JWT access tokens. Payload is intentionally
- * tiny: `{ sub, role }` is enough for AuthGuard and role checks; anything
- * else should be looked up on demand to avoid baking stale data into a
- * token that won't expire for ~15 minutes.
+ * 短壽命 JWT access token（PR #15）。Payload 只放 `{ sub, role }`，
+ * 其餘資料現查，避免把過期狀態烤進 ~15 分鐘 token。
  */
 @Injectable()
 export class AccessTokenService {

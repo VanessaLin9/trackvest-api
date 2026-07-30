@@ -25,10 +25,8 @@ model User {
   refreshTokens RefreshToken[]
 }
 
-/// Opaque rotating refresh token. Raw token is never stored; only its
-/// sha256 is kept in `tokenHash`. Rotating a token sets `revokedAt` and
-/// points `replacedById` at the new row so replay detection can walk the
-/// chain and revoke an entire family if a revoked token is reused.
+/// Opaque rotating refresh token（PR #15）。Raw 永不入庫，只存 sha256；
+/// rotate 設 `revokedAt` 並以 `replacedById` 串新列，replay 可整族撤銷。
 model RefreshToken {
   id           String   @id @default(uuid())
   userId       String

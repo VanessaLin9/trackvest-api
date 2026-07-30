@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma.service'
 import { OwnershipService } from '../../common/services/ownership.service'
 import { toNumber } from '../../common/utils/number.util'
 
+/** MCP 用的持倉／FIFO 查詢（PR #8）；與 HTTP portfolio 模組分開，避免耦合寫入路徑。 */
 @Injectable()
 export class PortfolioQueryService {
   constructor(
