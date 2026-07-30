@@ -23,10 +23,9 @@ function importsScheduleModuleForRoot(imports: unknown[]): boolean {
 
 describe('Schedule module ownership (P5)', () => {
   /*
-   * P5 schedule module ownership inventory:
-   * - No dedicated scheduler/module tests existed before this task.
-   * - e2e specs compile AppModule but do not assert scheduler registration.
-   * - These tests lock scheduler DI registration and the root ScheduleModule pattern.
+   * PR #24：鎖住 ScheduleModule.forRoot 只在 AppModule，以及
+   * MarketPriceScheduler／CorpActionScheduler 的 DI 註冊。
+   * ENABLE_SCHEDULED_JOBS 只影響 handler 是否執行，不影響註冊（見 scheduled-jobs.config）。
    */
 
   it.each([

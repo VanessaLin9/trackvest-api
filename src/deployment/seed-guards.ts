@@ -33,7 +33,7 @@ function assertDevSeedLocalDatabaseUrl(): void {
   }
 }
 
-/** Dev seed must not run under production runtime or against non-local databases. */
+/** Dev seed 不可在 production runtime 或非本機 DB 執行（會 wipe；PR #27）。 */
 export function assertDevSeedAllowed(): void {
   if (process.env.NODE_ENV === 'production') {
     throw new SeedGuardError(
@@ -46,7 +46,7 @@ export function assertDevSeedAllowed(): void {
   assertDevSeedLocalDatabaseUrl()
 }
 
-/** Production demo seed requires explicit opt-in. Call before any Prisma write. */
+/** Production demo seed 需明確 opt-in（PR #27）。任何 Prisma 寫入前呼叫。 */
 export function assertProductionDemoSeedAllowed(): void {
   if (!isEnvFlagTrue('ALLOW_PRODUCTION_DEMO_SEED')) {
     throw new SeedGuardError(
