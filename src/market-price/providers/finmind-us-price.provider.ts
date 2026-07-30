@@ -9,6 +9,7 @@ import {
 } from './finmind-api.util'
 import type { FinMindRow } from './finmind-api.util'
 
+/** FinMind `USStockPrice`；與 TW 共用 `fetchFinMindDataset`（PR #18）。 */
 @Injectable()
 export class FinmindUsPriceProvider implements StockPriceProvider {
   readonly providerKey = 'finmind'

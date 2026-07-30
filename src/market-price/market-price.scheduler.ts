@@ -9,7 +9,7 @@ export class MarketPriceScheduler {
 
   constructor(private readonly marketPriceService: MarketPriceService) {}
 
-  /** Mon–Fri after Taiwan cash market close (~17:30 data refresh). */
+  /** 平日台股收盤後 daily sync（PR #17）；受 deployment schedule gate 控制。 */
   @Cron('45 17 * * 1-5', { timeZone: 'Asia/Taipei' })
   async syncTwDailyCron() {
     if (!isScheduledJobsEnabled()) {
@@ -29,7 +29,7 @@ export class MarketPriceScheduler {
     }
   }
 
-  /** Mon–Fri after US cash market close (NYSE 16:00 ET). */
+  /** 平日美股收盤後 daily sync（PR #18）。 */
   @Cron('15 17 * * 1-5', { timeZone: 'America/New_York' })
   async syncUsDailyCron() {
     if (!isScheduledJobsEnabled()) {

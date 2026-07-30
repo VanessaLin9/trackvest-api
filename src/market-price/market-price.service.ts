@@ -75,6 +75,10 @@ type MarketRuntime = {
   logLabel: string
 }
 
+/**
+ * 日線行情 sync（TW：PR #17；US 與共用 runtime：PR #18）。
+ * 只抓 ever-held 資產（有 buy/sell 歷史），daily／backfill 兩模式。
+ */
 @Injectable()
 export class MarketPriceService {
   private readonly logger = new Logger(MarketPriceService.name)
@@ -87,6 +91,10 @@ export class MarketPriceService {
     private readonly usPriceProvider: StockPriceProvider,
   ) {}
 
+  /**
+   * 統一入口：`market` + `mode`（daily｜backfill）。
+   * TW／US 共用 ever-held 篩選與 upsert 路徑（PR #18 抽出）。
+   */
   async syncMarketPrices(input: SyncMarketPricesInput = {}): Promise<SyncMarketPricesResult> {
     const runtime = this.resolveMarketRuntime(input.market ?? 'tw')
     const mode = input.mode ?? 'daily'
@@ -297,7 +305,7 @@ export class MarketPriceService {
     return rows.length
   }
 
-  /** Assets with buy/sell history for the given quote currency (ever held). */
+  /** 只同步曾有 buy/sell 的資產，避免掃全 catalog（PR #17 / #18）。 */
   async resolveEverHeldAssets(
     baseCurrency: 'TWD' | 'USD',
     assetIds?: string[],

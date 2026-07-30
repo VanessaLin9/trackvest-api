@@ -8,6 +8,7 @@ import {
 } from './finmind-api.util'
 import type { FinMindRow } from './finmind-api.util'
 
+/** FinMind `TaiwanStockPrice`（PR #17）。 */
 @Injectable()
 export class FinmindTaiwanPriceProvider implements StockPriceProvider {
   readonly providerKey = 'finmind'

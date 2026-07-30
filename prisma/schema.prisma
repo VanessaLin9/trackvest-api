@@ -157,7 +157,7 @@ enum TxType {
 }
 
 /// Daily market quote per asset (one row per asset per trade date).
-/// `price` mirrors `close` for portfolio valuation; TW fields map FinMind TaiwanStockPrice.
+/// `price` mirrors `close` for portfolio valuation; TW fields map FinMind TaiwanStockPrice（PR #17）；US 見 PR #18。
 model Price {
   id             String   @id @default(uuid())
   assetId        String
@@ -258,7 +258,7 @@ model SellLotMatch {
   @@index([buyLotId])
 }
 
-/// Recorded stock split / reverse-split events (market-specific sources).
+/// Recorded stock split / reverse-split events（PR #19；market-specific sources）。
 model CorporateAction {
   id           String   @id @default(uuid())
   assetId      String
@@ -277,7 +277,7 @@ model CorporateAction {
   @@index([assetId, exDate])
 }
 
-/// Per-account marker recording that a corporate action replay ran for the account.
+/// Per-account 標記：此帳號已對該 corp action 跑過 replay（PR #19）。
 model CorporateActionApplication {
   id                String          @id @default(uuid())
   corporateActionId String

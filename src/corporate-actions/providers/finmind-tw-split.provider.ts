@@ -14,6 +14,7 @@ import {
   SplitEventProvider,
 } from '../corp-action.types'
 
+/** FinMind `TaiwanStockSplitPrice` → SplitEvent；比率經 `snapTwSplitRatio`（PR #19）。 */
 @Injectable()
 export class FinmindTwSplitProvider implements SplitEventProvider {
   readonly market: CorpActionMarket = 'tw'

@@ -9,7 +9,7 @@ export class CorpActionScheduler {
 
   constructor(private readonly corpActionService: CorpActionService) {}
 
-  /** Daily TW split sync after market data refresh. */
+  /** 平日台股收盤後同步 TW 拆股（PR #19）；受 `isScheduledJobsEnabled` 閘控。 */
   @Cron('0 18 * * 1-5', { timeZone: 'Asia/Taipei' })
   async syncTwSplitsCron() {
     if (!isScheduledJobsEnabled()) {
