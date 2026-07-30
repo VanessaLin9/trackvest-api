@@ -4,6 +4,7 @@
 const CONTROL_CHAR_REGEX = /[\u0000-\u001F\u007F]/g
 const MULTI_WHITESPACE_REGEX = /\s+/g
 
+/** Asset 輸入正規化／驗證（PR #9 catalog UI）；symbol 大寫、去掉控制字元。 */
 export const ASSET_SYMBOL_REGEX = /^[A-Z0-9][A-Z0-9._:/-]{0,19}$/
 export const ASSET_NAME_REGEX = /^[\p{L}\p{N}&().,'+:/\-\s]{1,100}$/u
 export const ASSET_SEARCH_REGEX = /^[\p{L}\p{N}&().,'+_:/\-\s]{1,100}$/u

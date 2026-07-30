@@ -4,11 +4,8 @@ import { PrismaService } from '../../prisma.service'
 import { AuthenticatedUser, UserContext } from '../types/auth-user'
 
 /**
- * Centralised ownership / admin-bypass validation.
- *
- * Callers may pass either a plain user id (string) or an `AuthenticatedUser`.
- * Passing the full object avoids an extra `isAdmin` database round-trip
- * (the role is already known from `AuthGuard`).
+ * 集中 ownership／admin bypass 驗證（PR #14 前後成型；AuthGuard 之後可傳完整 user）。
+ * 傳 `AuthenticatedUser` 可省一次 isAdmin DB round-trip。
  */
 @Injectable()
 export class OwnershipService {

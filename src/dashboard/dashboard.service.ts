@@ -6,6 +6,10 @@ import { DashboardActivityDto, DashboardRecentActivityItemDto } from './dto/dash
 import { GetDashboardActivityDto } from './dto/get-dashboard-activity.dto'
 import { DashboardSummaryDto } from './dto/dashboard-summary.dto'
 
+/**
+ * Dashboard 摘要／近期活動（PR #1 summary、PR #2 activity）。
+ * 讀 GL／transaction 聚合；與 portfolio market-value overview 分開。
+ */
 @Injectable()
 export class DashboardService {
   constructor(
