@@ -223,6 +223,7 @@ model Position {
   @@index([accountId, assetId])
 }
 
+/// Buy 開出的 FIFO lot（PR #6）。Sell 依 openedAt 升序消耗 remainingQuantity，並寫 SellLotMatch。
 model PositionLot {
   id                  String    @id @default(uuid())
   accountId           String
@@ -243,6 +244,7 @@ model PositionLot {
   @@index([sourceTransactionId])
 }
 
+/// Sell 對 buy lot 的 FIFO 消耗紀錄（PR #6）；GL posting 用 quantity×unitCost 算成本基礎。
 model SellLotMatch {
   id                String      @id @default(uuid())
   sellTransactionId String

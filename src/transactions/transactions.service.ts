@@ -185,6 +185,7 @@ export class TransactionsService {
 
     this.transactionBusinessRulesValidator.validate(nextTransaction)
 
+    // sell↔非 sell 會破壞 FIFO match／rebuild 假設，不支援原地改型別（PR #6 / #21）。
     if (
       existing.type !== nextTransaction.type &&
       (existing.type === 'sell' || nextTransaction.type === 'sell')

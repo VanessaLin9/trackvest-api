@@ -47,6 +47,11 @@ type CreateSideEffectPlan = {
   sellPlan: SellLotConsumptionPlan | null
 }
 
+/**
+ * Position／FIFO lot 副作用編排（自 TransactionsService 拆出；PR #21）。
+ * Create：增量 sync+lot 或 full replay；Sell：增量 `SellLotMatch` 或 rebuild。
+ * 是否 replay 由 `TransactionRebuildPolicyService` 決定（PR #22）；GL sell 成本依 match（PR #6）。
+ */
 @Injectable()
 export class TransactionPositionOrchestratorService {
   constructor(
@@ -87,6 +92,12 @@ export class TransactionPositionOrchestratorService {
     }
   }
 
+  /**
+   * Create 後套用 position／lot 副作用（PR #21）。
+   * buy 若 needsFullScopeReplay → 整 scope rebuild（補歷史買進；PR #20），
+   * 否則增量更新 Position + 開新 PositionLot（PR #5 / #6）。
+   * sell 有增量 plan → 扣 lot 寫 SellLotMatch；否則 rebuild。
+   */
   async applyCreateSideEffects(
     prisma: Prisma.TransactionClient,
     created: Transaction,
@@ -96,6 +107,7 @@ export class TransactionPositionOrchestratorService {
 
     if (created.type === 'buy') {
       if (decision.needsFullScopeReplay && decision.scope) {
+        // 後面已有 sell：不可只開 lot，必須重放 FIFO／GL（PR #20）。
         await this.rebuildAndRepostSellScopes(prisma, [decision.scope])
       } else {
         await this.syncPositionOnCreate(prisma, created)
@@ -209,6 +221,7 @@ export class TransactionPositionOrchestratorService {
     })
   }
 
+  /** 買進開 PositionLot，供後續 sell FIFO 消耗（PR #6）。 */
   private async createBuyLotOnCreate(
     prisma: Prisma.TransactionClient,
     transaction: Transaction,
@@ -237,6 +250,10 @@ export class TransactionPositionOrchestratorService {
     })
   }
 
+  /**
+   * 增量 sell FIFO：依 `openedAt` 升序消耗 open lots，產出 SellLotMatch（PR #6）。
+   * 僅在 policy 允許 incremental 時使用；否則走 full-scope replay。
+   */
   private async buildSellLotConsumptionPlan(
     prisma: Prisma.TransactionClient,
     transactionLike: {
@@ -259,6 +276,7 @@ export class TransactionPositionOrchestratorService {
       throw new NotFoundException('Active position not found for sell transaction')
     }
 
+    // FIFO：最早開倉的 lot 先被吃（PR #6）。
     const openLots = await prisma.positionLot.findMany({
       where: {
         accountId: transactionLike.accountId,
@@ -309,6 +327,7 @@ export class TransactionPositionOrchestratorService {
     }
   }
 
+  /** 寫入 SellLotMatch 並更新 lot／position（PR #6）；GL 成本依這些 match 計算。 */
   private async applySellLotConsumptionPlan(
     prisma: Prisma.TransactionClient,
     transaction: Transaction,
@@ -368,6 +387,11 @@ export class TransactionPositionOrchestratorService {
     )
   }
 
+  /**
+   * Full-scope rebuild + 重貼受影響 sell 的 GL（PR #20 / #21）。
+   * 實際 chronologically 重算 lots 委派 `PositionReplayService.rebuildScope`
+   *（corp-action 路徑也共用同一引擎）。
+   */
   private async rebuildAndRepostSellScopes(
     prisma: Prisma.TransactionClient,
     scopes: PositionScope[],
