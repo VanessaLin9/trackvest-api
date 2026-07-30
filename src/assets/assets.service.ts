@@ -36,6 +36,7 @@ type NormalizedAssetPayload = Omit<CreateAndUpdateAssetDto, 'assetClass'> & {
   assetClass: AssetClass
 }
 
+/** Asset catalog CRUD；`assetClass` 推斷／相容檢查見 PR #12（rebalance 依賴）。 */
 @Injectable()
 export class AssetsService {
   constructor(private prisma: PrismaService) {}
@@ -57,6 +58,10 @@ export class AssetsService {
     }
   }
 
+  /**
+   * 解析／推斷 assetClass（PR #12）：明確指定 → fallback → 符號／關鍵字推斷。
+   * ETF 若無法推斷則要求呼叫端提供，避免靜默標錯類影響 rebalance。
+   */
   private resolveAssetClass(
     dto: CreateAndUpdateAssetDto,
     fallbackAssetClass?: AssetClass,

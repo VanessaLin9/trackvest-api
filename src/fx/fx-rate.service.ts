@@ -18,6 +18,10 @@ type SyncReferenceRatesInput = {
   to?: Date
 }
 
+/**
+ * 參考匯率：DB 快取 + Frankfurter provider（PR #10／#11）。
+ * Portfolio displayCurrency 估值時由此取 rate；同幣別回 identity=1。
+ */
 @Injectable()
 export class FxRateService {
   constructor(
