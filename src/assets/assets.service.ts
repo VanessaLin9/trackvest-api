@@ -234,6 +234,10 @@ export class AssetsService {
     return this.prisma.asset.delete({ where: { id } })
   }
 
+  /**
+   * 建立券商／全域 asset alias（PR #38），供 CSV import 解析商品名。
+   * 同 alias+broker 已指向同一 asset → idempotent 回傳；指向其他 asset → Conflict。
+   */
   async createAlias(assetId: string, dto: CreateAssetAliasDto): Promise<AssetAliasMapping> {
     const alias = normalizeAssetNameInput(dto.alias)
     if (!alias) {

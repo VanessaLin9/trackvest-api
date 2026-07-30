@@ -7,6 +7,7 @@ import {
   NormalizedImportTransactionRow,
 } from './transaction-import-row.types'
 
+/** 單列欄位驗證與 normalize → CreateTransaction 形狀（PR #30）。 */
 @Injectable()
 export class TransactionImportRowValidator {
   validateAndMap(raw: RawBrokerImportRow): ImportRowValidationResult {

@@ -27,6 +27,7 @@ export type BrokerImportParseResult = {
 
 type HeaderIndexes = Record<BrokerImportField, number | undefined>
 
+/** Cathay CSV/TSV 解析與表頭對應（自 import service 拆出；PR #29）。 */
 @Injectable()
 export class BrokerImportFileParser {
   parse(csvContent: string): BrokerImportParseResult {

@@ -5,6 +5,10 @@ import { PrismaService } from '../prisma.service'
 
 type ImportDbClient = Prisma.TransactionClient | PrismaService
 
+/**
+ * Import 只做 alias → assetId 解析，不在匯入路徑自動建 alias（PR #31）。
+ * 缺少 mapping → `ASSET_ALIAS_NOT_FOUND`；建立 alias 走 Assets API（PR #38）。
+ */
 @Injectable()
 export class ImportAssetAliasResolver {
   async resolve(

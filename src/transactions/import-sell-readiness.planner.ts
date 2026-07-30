@@ -43,9 +43,10 @@ type DayTrade =
     }
 
 /**
- * Side-effect-free chronological sell-readiness planner.
- * Groups by (accountId, assetId), evaluates sells against earlier-date holdings
- * only, and never lets same-calendar-day buys fund same-day sells.
+ * 無副作用的 sell-readiness 時序規劃（PR #37）。
+ * 依 (accountId, assetId) 分 scope；賣出只吃「更早日曆日」的庫存，
+ * 同日買進不得資助同日賣出（避免無可靠成交時間時的順序歧義）。
+ * 產出 `writeOrderRowNumbers` 供 commit 依序寫入；blocked sell 為 row-local error。
  */
 export function planImportSellReadiness(
   input: PlanImportSellReadinessInput,
@@ -107,8 +108,7 @@ function planSingleScope(params: {
       let priorAvailable = sumLotsOpenedBefore(lots, calendarDate)
 
       if (quantity > priorAvailable + QTY_EPS && sell.kind === 'history') {
-        // An earlier imported sell may have consumed lots that a later DB sell
-        // still needs during full-scope replay. Unwind those imports first.
+        // 更早匯入的 sell 可能已吃掉 DB sell 還需要的 lots；先 unwind 那些 import sell（PR #37）。
         unwindImportSellsForHistoryShortfall({
           entries,
           lots,

@@ -1,5 +1,9 @@
 import { ImportRowError } from './transaction-import-orchestration.types'
 
+/**
+ * 單次匯入檔內委託書號追蹤（PR #31）。
+ * 檔內重複 → `DUPLICATE_BROKER_ORDER_IN_FILE`，是唯一 COMMIT_BLOCKING（PR #33）。
+ */
 export class ImportBrokerOrderDuplicateTracker {
   private readonly seenBrokerOrderNumbers = new Set<string>()
 

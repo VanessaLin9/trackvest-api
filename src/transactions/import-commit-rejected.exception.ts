@@ -13,7 +13,12 @@ export type ImportCommitRejectedBody = {
   preview: ImportPreviewResult
 }
 
+/**
+ * Import commit 拒絕回應契約（PR #33）。
+ * Preview 擋住寫入用 `forPreviewErrors`；原子寫入失敗用 `forAtomicCommitFailure`（PR #39）。
+ */
 export class ImportCommitRejectedException extends BadRequestException {
+  /** Preview 有不可 commit 狀態時拒絕；尚未寫入任何列。PR #33 */
   static forPreviewErrors(preview: ImportPreviewResult): ImportCommitRejectedException {
     return new ImportCommitRejectedException({
       totalRows: preview.totalRows,
@@ -27,8 +32,8 @@ export class ImportCommitRejectedException extends BadRequestException {
   }
 
   /**
-   * Atomic import commit failure contract: the outer transaction rolled back, so
-   * no created IDs may be reported as committed.
+   * 原子 commit 失敗契約：外層 `$transaction` 已 rollback，
+   * 回應的 `createdTransactionIds` 必須為空，不可回報半批成功。PR #39
    */
   static forAtomicCommitFailure(params: {
     preview: ImportPreviewResult
