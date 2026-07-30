@@ -65,6 +65,10 @@ function dedupeRecordsBySymbol(records: TwAssetBootstrapRecord[]): {
   }
 }
 
+/**
+ * 拉取三來源、parse／classify／normalize，並依 symbol 去重（PR #34）。
+ * 衝突時保留先出現來源，記入 `symbolConflicts`。
+ */
 export async function collectTwCatalogRecords(
   fetchOptions?: TwCatalogFetchOptions,
 ): Promise<TwCatalogCollectedRecords> {

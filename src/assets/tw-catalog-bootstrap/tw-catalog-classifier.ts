@@ -60,6 +60,9 @@ function classifyListedEtfFundType(fundType: string | undefined): TwCatalogClass
   }
 }
 
+/**
+ * v1 catalog 收錄規則（PR #34）：上市／上櫃股票 + 可辨識股票型／債券型 ETF；排除 ETN。
+ */
 export function classifyTwCatalogRecord(record: TwCatalogRawRecord): TwCatalogClassification {
   if (!isValidSymbol(record)) {
     return {
