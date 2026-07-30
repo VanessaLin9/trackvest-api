@@ -12,6 +12,7 @@ import { OnboardingSignupDto } from './dto/onboarding-signup.dto'
 import { OnboardingSignupResponseDto } from './dto/onboarding-signup.response.dto'
 import { OnboardingService } from './onboarding.service'
 
+/** Public signup API（PR #32）；無需登入。 */
 @ApiTags('onboarding')
 @Controller('onboarding')
 @ApiBadRequestResponse({ type: ErrorResponse })

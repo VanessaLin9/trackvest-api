@@ -101,6 +101,10 @@ export class AccountsService {
     })
   }
 
+  /**
+   * 呼叫端已開 transaction 時建立帳戶（onboarding signup 用；PR #32）。
+   * 一併 ensure 連結的現金 GL；不開 nested `$transaction`。
+   */
   async createInTransaction(dto: CreateAndUpdateAccountDto, db: DbClient) {
     const account = await db.account.create({ data: this.buildAccountData(dto) })
     await this.ensureLinkedGlAccount(account, db)

@@ -8,6 +8,10 @@ import {
 
 type DbClient = Prisma.TransactionClient | PrismaService
 
+/**
+ * 為新 user 建立 posting 所需的預設系統 GL 科目（PR #32）。
+ * 同 user+currency 若已有任一 purpose → Conflict，避免重複 provision。
+ */
 @Injectable()
 export class DefaultChartProvisioningService {
   constructor(private readonly prisma: PrismaService) {}
