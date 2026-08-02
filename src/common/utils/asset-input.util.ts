@@ -7,6 +7,8 @@ const MULTI_WHITESPACE_REGEX = /\s+/g
 /** Asset 輸入正規化／驗證（PR #9 catalog UI）；symbol 大寫、去掉控制字元。 */
 export const ASSET_SYMBOL_REGEX = /^[A-Z0-9][A-Z0-9._:/-]{0,19}$/
 export const ASSET_NAME_REGEX = /^[\p{L}\p{N}&().,'+:/\-\s]{1,100}$/u
+/** Broker alias 可比 Asset name 多允許 `*`（例如國泰 CSV `國巨*`）；勿回寫到 ASSET_NAME_REGEX（PR #41）。 */
+export const ASSET_ALIAS_REGEX = /^[\p{L}\p{N}&().,'+:/*\-\s]{1,100}$/u
 export const ASSET_SEARCH_REGEX = /^[\p{L}\p{N}&().,'+_:/\-\s]{1,100}$/u
 
 function normalizeLooseText(value: string): string {

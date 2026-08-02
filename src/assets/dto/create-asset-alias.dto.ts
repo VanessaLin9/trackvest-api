@@ -3,7 +3,7 @@ import { Expose, Transform } from 'class-transformer'
 import { IsIn, IsString, Length, Matches } from 'class-validator'
 import { SUPPORTED_BROKER } from '../../accounts/account-broker.constants'
 import {
-  ASSET_NAME_REGEX,
+  ASSET_ALIAS_REGEX,
   normalizeAssetNameInput,
 } from '../../common/utils'
 
@@ -17,7 +17,8 @@ export class CreateAssetAliasDto {
     typeof value === 'string' ? normalizeAssetNameInput(value) : value)
   @IsString()
   @Length(1, 100)
-  @Matches(ASSET_NAME_REGEX, {
+  // 券商 raw alias 必須用 ASSET_ALIAS_REGEX，不可共用 ASSET_NAME_REGEX（PR #41）
+  @Matches(ASSET_ALIAS_REGEX, {
     message: 'alias contains unsupported characters',
   })
   alias!: string
