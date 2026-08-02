@@ -17,6 +17,7 @@ export class CreateAssetAliasDto {
     typeof value === 'string' ? normalizeAssetNameInput(value) : value)
   @IsString()
   @Length(1, 100)
+  // 券商 raw alias 必須用 ASSET_ALIAS_REGEX，不可共用 ASSET_NAME_REGEX（PR #41）
   @Matches(ASSET_ALIAS_REGEX, {
     message: 'alias contains unsupported characters',
   })
