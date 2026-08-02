@@ -422,6 +422,44 @@ describe('AssetsService', () => {
       expect(result).toEqual(mapping)
     })
 
+    it('persists a normalized Cathay alias that includes a trailing star', async () => {
+      const { service, prisma } = createHarness()
+      const starredAsset = {
+        id: 'asset-2327',
+        symbol: '2327',
+        name: '國巨',
+      }
+      const starredMapping = {
+        id: 'alias-star',
+        assetId: 'asset-2327',
+        alias: '國巨*',
+        broker: 'cathay',
+        asset: starredAsset,
+      }
+      prisma.asset.findUnique.mockResolvedValue(starredAsset)
+      prisma.assetAlias.findUnique.mockResolvedValue(null)
+      prisma.assetAlias.create.mockResolvedValue(starredMapping)
+
+      const result = await service.createAlias('asset-2327', {
+        alias: '  國巨*  ',
+        broker: 'cathay',
+      })
+
+      expect(prisma.assetAlias.create).toHaveBeenCalledWith({
+        data: {
+          assetId: 'asset-2327',
+          alias: '國巨*',
+          broker: 'cathay',
+        },
+        include: {
+          asset: {
+            select: { id: true, symbol: true, name: true },
+          },
+        },
+      })
+      expect(result).toEqual(starredMapping)
+    })
+
     it('returns an idempotent success when the same pair maps to the same Asset', async () => {
       const { service, prisma } = createHarness()
       prisma.asset.findUnique.mockResolvedValue(targetAsset)

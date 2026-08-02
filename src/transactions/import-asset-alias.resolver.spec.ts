@@ -52,6 +52,25 @@ describe('ImportAssetAliasResolver', () => {
     expect(assetId).toBe('asset-cathay')
   })
 
+  it('resolves a broker-specific alias that includes a trailing star', async () => {
+    const { resolver, prisma } = createHarness()
+    prisma.assetAlias.findUnique.mockResolvedValueOnce({ assetId: 'asset-2327' })
+
+    const assetId = await resolver.resolve('  國巨*  ', 'cathay', prisma as never)
+
+    expect(prisma.assetAlias.findUnique).toHaveBeenCalledTimes(1)
+    expect(prisma.assetAlias.findUnique).toHaveBeenCalledWith({
+      where: {
+        alias_broker: {
+          alias: '國巨*',
+          broker: 'cathay',
+        },
+      },
+      select: { assetId: true },
+    })
+    expect(assetId).toBe('asset-2327')
+  })
+
   it('returns null for a blank normalized alias without querying', async () => {
     const { resolver, prisma } = createHarness()
 

@@ -106,6 +106,42 @@ describe('Asset DTOs', () => {
     expect(dto.broker).toBe('cathay')
   })
 
+  it('accepts Cathay broker aliases that include a trailing star', async () => {
+    const dto = plainToInstance(CreateAssetAliasDto, {
+      alias: '國巨*',
+      broker: 'cathay',
+    })
+
+    const errors = await validate(dto)
+
+    expect(errors).toHaveLength(0)
+    expect(dto.alias).toBe('國巨*')
+  })
+
+  it('preserves star characters while normalizing alias whitespace', async () => {
+    const dto = plainToInstance(CreateAssetAliasDto, {
+      alias: '  國巨*  ',
+      broker: 'cathay',
+    })
+
+    const errors = await validate(dto)
+
+    expect(errors).toHaveLength(0)
+    expect(dto.alias).toBe('國巨*')
+  })
+
+  it('normalizes control characters out of alias input without stripping stars', async () => {
+    const dto = plainToInstance(CreateAssetAliasDto, {
+      alias: '國巨*\u0001',
+      broker: 'cathay',
+    })
+
+    const errors = await validate(dto)
+
+    expect(errors).toHaveLength(0)
+    expect(dto.alias).toBe('國巨*')
+  })
+
   it('rejects blank normalized aliases and non-Cathay brokers', async () => {
     const blankAlias = plainToInstance(CreateAssetAliasDto, {
       alias: '   ',
@@ -121,5 +157,31 @@ describe('Asset DTOs', () => {
 
     expect(blankErrors.some((error) => error.property === 'alias')).toBe(true)
     expect(brokerErrors.some((error) => error.property === 'broker')).toBe(true)
+  })
+
+  it('rejects aliases with unsupported punctuation while keeping asset names stricter', async () => {
+    const unsupportedAlias = plainToInstance(CreateAssetAliasDto, {
+      alias: '國巨<>',
+      broker: 'cathay',
+    })
+    const starredAssetName = plainToInstance(AssetBaseDto, {
+      symbol: '2327',
+      name: '國巨*',
+      type: 'equity',
+      assetClass: 'equity',
+      baseCurrency: 'TWD',
+    })
+
+    const aliasErrors = await validate(unsupportedAlias)
+    const assetNameErrors = await validate(starredAssetName)
+
+    expect(aliasErrors.some((error) => error.property === 'alias')).toBe(true)
+    expect(
+      aliasErrors
+        .find((error) => error.property === 'alias')
+        ?.constraints
+        ?.matches,
+    ).toBe('alias contains unsupported characters')
+    expect(assetNameErrors.some((error) => error.property === 'name')).toBe(true)
   })
 })
