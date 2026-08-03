@@ -18,6 +18,9 @@ jobs:
     name: Unit tests, lint, and build
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      TZ: Asia/Taipei
+      JWT_SECRET: trackvest-ci-only-secret-not-for-runtime-use
 
     steps:
       - name: Check out repository
