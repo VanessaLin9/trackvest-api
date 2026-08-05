@@ -280,12 +280,19 @@ describe('seed entry points', () => {
 
   it('runs bootstrap catalog preflight and upserts inside one transaction', async () => {
     const prisma = createMockPrisma()
+    const twCatalogSpy = jest
+      .spyOn(
+        await import('../../prisma/seed/tw-catalog-bootstrap-runner'),
+        'runTwCatalogBootstrapSeed',
+      )
+      .mockResolvedValue({} as never)
 
     await runProductionBootstrap(prisma)
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1)
     expect(prisma.asset.upsert).toHaveBeenCalled()
     expect(prisma.assetAlias.upsert).toHaveBeenCalled()
+    expect(twCatalogSpy).toHaveBeenCalledWith(prisma)
   })
 
   it('does not write demo graph rows when upsert fails inside the transaction', async () => {
