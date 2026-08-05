@@ -211,4 +211,221 @@ describe('MarketPriceService', () => {
     expect(result.perAsset.find((entry) => entry.assetId === 'asset-a' && !entry.skipped)).toBeTruthy()
     expect(result.perAsset.find((entry) => entry.assetId === 'asset-b' && entry.skipped)).toBeTruthy()
   })
+
+  describe('refreshPrices', () => {
+    function mockEverHeld(
+      prisma: ReturnType<typeof createHarness>['prisma'],
+      assets: Array<{ id: string; symbol: string }>,
+    ) {
+      prisma.transaction.groupBy.mockResolvedValue(assets.map((asset) => ({ assetId: asset.id })))
+      prisma.asset.findMany.mockResolvedValue(assets)
+    }
+
+    it('uses market-timezone 14-day windows and includes prior Friday on Sunday', async () => {
+      const { service, prisma, taiwanPriceProvider, usPriceProvider } = createHarness()
+      mockEverHeld(prisma, [])
+      taiwanPriceProvider.getDailyPrices.mockResolvedValue([])
+      usPriceProvider.getDailyPrices.mockResolvedValue([])
+
+      // Sunday 2026-08-02 12:00 UTC → Taipei and NY are both still 2026-08-02.
+      const sunday = new Date('2026-08-02T12:00:00.000Z')
+      const result = await service.refreshPrices(sunday)
+
+      expect(result.status).toBe('success')
+      expect(result.markets).toEqual([
+        {
+          market: 'tw',
+          status: 'success',
+          startDate: '2026-07-20',
+          endDate: '2026-08-02',
+          assetsProcessed: 0,
+          rowsUpserted: 0,
+        },
+        {
+          market: 'us',
+          status: 'success',
+          startDate: '2026-07-20',
+          endDate: '2026-08-02',
+          assetsProcessed: 0,
+          rowsUpserted: 0,
+        },
+      ])
+      // Inclusive window covers Friday 2026-07-31 before that Sunday.
+      const twMarket = result.markets[0]
+      expect(twMarket.status).toBe('success')
+      if (twMarket.status === 'success') {
+        expect(twMarket.startDate <= '2026-07-31').toBe(true)
+        expect(twMarket.endDate >= '2026-07-31').toBe(true)
+      }
+    })
+
+    it('derives TW and US endDates independently when timezones disagree', async () => {
+      const { service, prisma, taiwanPriceProvider, usPriceProvider } = createHarness()
+      mockEverHeld(prisma, [])
+      taiwanPriceProvider.getDailyPrices.mockResolvedValue([])
+      usPriceProvider.getDailyPrices.mockResolvedValue([])
+
+      // 2026-08-03 02:00 UTC → Taipei 08-03, America/New_York still 08-02 (EDT).
+      const result = await service.refreshPrices(new Date('2026-08-03T02:00:00.000Z'))
+
+      expect(result.markets[0]).toMatchObject({
+        market: 'tw',
+        startDate: '2026-07-21',
+        endDate: '2026-08-03',
+      })
+      expect(result.markets[1]).toMatchObject({
+        market: 'us',
+        startDate: '2026-07-20',
+        endDate: '2026-08-02',
+      })
+    })
+
+    it('returns success when both markets refresh', async () => {
+      const { service, prisma, taiwanPriceProvider, usPriceProvider } = createHarness()
+      mockEverHeld(prisma, [{ id: 'asset-2330', symbol: '2330' }])
+      taiwanPriceProvider.getDailyPrices.mockResolvedValue([sampleTwRow])
+      usPriceProvider.getDailyPrices.mockResolvedValue([sampleUsRow])
+
+      const result = await service.refreshPrices(new Date('2026-08-02T12:00:00.000Z'))
+
+      expect(result.status).toBe('success')
+      expect(result.markets.map((entry) => entry.status)).toEqual(['success', 'success'])
+      expect(result.markets[0]).toMatchObject({
+        market: 'tw',
+        assetsProcessed: 1,
+        rowsUpserted: 1,
+      })
+      expect(result.markets[1]).toMatchObject({
+        market: 'us',
+        assetsProcessed: 1,
+        rowsUpserted: 1,
+      })
+    })
+
+    it('returns partial_success when TW succeeds and US fails', async () => {
+      const { service, prisma, taiwanPriceProvider, usPriceProvider } = createHarness()
+      mockEverHeld(prisma, [{ id: 'asset-2330', symbol: '2330' }])
+      taiwanPriceProvider.getDailyPrices.mockResolvedValue([sampleTwRow])
+      usPriceProvider.getDailyPrices.mockRejectedValue(new Error('finmind down'))
+
+      const result = await service.refreshPrices(new Date('2026-08-02T12:00:00.000Z'))
+
+      expect(result.status).toBe('partial_success')
+      expect(result.markets[0]).toMatchObject({
+        market: 'tw',
+        status: 'success',
+        rowsUpserted: 1,
+      })
+      expect(result.markets[1]).toEqual({
+        market: 'us',
+        status: 'failed',
+        errorCode: 'PRICE_REFRESH_FAILED',
+        message: 'US price refresh failed',
+      })
+    })
+
+    it('returns partial_success when US succeeds and TW fails', async () => {
+      const { service, prisma, taiwanPriceProvider, usPriceProvider } = createHarness()
+      mockEverHeld(prisma, [{ id: 'asset-aapl', symbol: 'AAPL' }])
+      taiwanPriceProvider.getDailyPrices.mockRejectedValue(new Error('finmind down'))
+      usPriceProvider.getDailyPrices.mockResolvedValue([sampleUsRow])
+
+      const result = await service.refreshPrices(new Date('2026-08-02T12:00:00.000Z'))
+
+      expect(result.status).toBe('partial_success')
+      expect(result.markets[0]).toEqual({
+        market: 'tw',
+        status: 'failed',
+        errorCode: 'PRICE_REFRESH_FAILED',
+        message: 'TW price refresh failed',
+      })
+      expect(result.markets[1]).toMatchObject({
+        market: 'us',
+        status: 'success',
+        rowsUpserted: 1,
+      })
+    })
+
+    it('returns failed with sanitized errors when both markets fail', async () => {
+      const { service, prisma, taiwanPriceProvider, usPriceProvider } = createHarness()
+      mockEverHeld(prisma, [{ id: 'asset-2330', symbol: '2330' }])
+      taiwanPriceProvider.getDailyPrices.mockRejectedValue(new Error('token leaked: SECRET'))
+      usPriceProvider.getDailyPrices.mockRejectedValue(new Error('https://provider.example/secret'))
+
+      const result = await service.refreshPrices(new Date('2026-08-02T12:00:00.000Z'))
+
+      expect(result.status).toBe('failed')
+      expect(result.markets).toEqual([
+        {
+          market: 'tw',
+          status: 'failed',
+          errorCode: 'PRICE_REFRESH_FAILED',
+          message: 'TW price refresh failed',
+        },
+        {
+          market: 'us',
+          status: 'failed',
+          errorCode: 'PRICE_REFRESH_FAILED',
+          message: 'US price refresh failed',
+        },
+      ])
+      expect(JSON.stringify(result)).not.toContain('SECRET')
+      expect(JSON.stringify(result)).not.toContain('provider.example')
+    })
+
+    it('treats no holdings as success with zero counts without calling providers', async () => {
+      const { service, prisma, taiwanPriceProvider, usPriceProvider } = createHarness()
+      mockEverHeld(prisma, [])
+      taiwanPriceProvider.getDailyPrices.mockResolvedValue([])
+      usPriceProvider.getDailyPrices.mockResolvedValue([])
+
+      const result = await service.refreshPrices(new Date('2026-08-02T12:00:00.000Z'))
+
+      expect(result.status).toBe('success')
+      expect(result.markets).toEqual([
+        {
+          market: 'tw',
+          status: 'success',
+          startDate: '2026-07-20',
+          endDate: '2026-08-02',
+          assetsProcessed: 0,
+          rowsUpserted: 0,
+        },
+        {
+          market: 'us',
+          status: 'success',
+          startDate: '2026-07-20',
+          endDate: '2026-08-02',
+          assetsProcessed: 0,
+          rowsUpserted: 0,
+        },
+      ])
+      expect(taiwanPriceProvider.getDailyPrices).not.toHaveBeenCalled()
+      expect(usPriceProvider.getDailyPrices).not.toHaveBeenCalled()
+    })
+
+    it('treats empty provider rows as success with zero upserts', async () => {
+      const { service, prisma, taiwanPriceProvider, usPriceProvider } = createHarness()
+      mockEverHeld(prisma, [{ id: 'asset-2330', symbol: '2330' }])
+      taiwanPriceProvider.getDailyPrices.mockResolvedValue([])
+      usPriceProvider.getDailyPrices.mockResolvedValue([])
+
+      const result = await service.refreshPrices(new Date('2026-08-02T12:00:00.000Z'))
+
+      expect(result.status).toBe('success')
+      expect(result.markets[0]).toMatchObject({
+        market: 'tw',
+        status: 'success',
+        assetsProcessed: 1,
+        rowsUpserted: 0,
+      })
+      expect(result.markets[1]).toMatchObject({
+        market: 'us',
+        status: 'success',
+        assetsProcessed: 1,
+        rowsUpserted: 0,
+      })
+      expect(prisma.price.upsert).not.toHaveBeenCalled()
+    })
+  })
 })

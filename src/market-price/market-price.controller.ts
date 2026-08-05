@@ -1,7 +1,15 @@
-import { Body, Controller, Post } from '@nestjs/common'
-import { ApiCookieAuth, ApiCreatedResponse, ApiTags } from '@nestjs/swagger'
+import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common'
+import {
+  ApiCookieAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger'
 import { UserRole } from '@prisma/client'
+import { ErrorResponse } from '../common/dto'
 import { Roles } from '../common/decorators/roles.decorator'
+import { RefreshPricesResponseDto } from './dto/refresh-prices.response.dto'
 import { SyncTaiwanPricesDto } from './dto/sync-taiwan-prices.dto'
 import { SyncTaiwanPricesResponseDto } from './dto/sync-taiwan-prices.response.dto'
 import { SyncUsPricesDto } from './dto/sync-us-prices.dto'
@@ -13,6 +21,18 @@ import { MarketPriceService } from './market-price.service'
 @ApiCookieAuth('access_token')
 export class MarketPriceController {
   constructor(private readonly marketPriceService: MarketPriceService) {}
+
+  /**
+   * Manual TW+US refresh for any authenticated account.
+   * Scope (dates/assets/markets) is backend-owned; request body is ignored.
+   */
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: RefreshPricesResponseDto })
+  @ApiUnauthorizedResponse({ type: ErrorResponse })
+  async refreshPrices(): Promise<RefreshPricesResponseDto> {
+    return this.marketPriceService.refreshPrices()
+  }
 
   @Post('sync/taiwan')
   @Roles(UserRole.admin)
