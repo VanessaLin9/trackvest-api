@@ -23,8 +23,9 @@ export class MarketPriceController {
   constructor(private readonly marketPriceService: MarketPriceService) {}
 
   /**
-   * Manual TW+US refresh for any authenticated account.
-   * Scope (dates/assets/markets) is backend-owned; request body is ignored.
+   * 手動刷新 ever-held TW／US 價格（PR #43）。
+   * 任何已登入角色可呼叫（不加 @Roles）；不開既有 admin sync 權限。
+   * 日期／資產／市場範圍後端自決；HTTP 200 回 domain outcome，不是 Nest POST 預設 201。
    */
   @Post('refresh')
   @HttpCode(HttpStatus.OK)

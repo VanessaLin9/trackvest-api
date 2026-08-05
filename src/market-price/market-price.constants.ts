@@ -6,8 +6,8 @@ export const TW_DAILY_LOOKBACK_DAYS = 2
 export const US_DAILY_LOOKBACK_DAYS = 2
 
 /**
- * Inclusive calendar-day window for manual POST /prices/refresh only.
- * Covers typical weekends/holidays; does not change cron daily lookback.
+ * Manual refresh 專用含首尾 14 個日曆日 window（PR #43）。
+ * 涵蓋一般週末／休市；刻意不改 cron daily lookback（仍為 2 天）。
  */
 export const MANUAL_REFRESH_LOOKBACK_DAYS = 14
 

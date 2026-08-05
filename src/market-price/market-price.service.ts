@@ -139,9 +139,10 @@ export class MarketPriceService {
   }
 
   /**
-   * Manual refresh for any authenticated user (POST /prices/refresh).
-   * Runs TW then US with isolated failures; each market uses its own timezone
-   * and a fixed 14-day calendar window. Does not depend on ENABLE_SCHEDULED_JOBS.
+   * POST /prices/refresh orchestration（PR #43）。
+   * TW／US 各自以市場 timezone 算 14 日 window，失敗隔離後組成
+   * success｜partial_success｜failed；不依賴 ENABLE_SCHEDULED_JOBS。
+   * markets 順序固定 tw → us，方便 client／測試穩定判讀。
    */
   async refreshPrices(now: Date = new Date()): Promise<RefreshPricesResult> {
     const twResult = await this.refreshMarket('tw', now)
@@ -552,6 +553,7 @@ export class MarketPriceService {
         rowsUpserted: result.rowsUpserted,
       }
     } catch (error) {
+      // Server 保留 provider 細節；client 只拿固定 errorCode／安全訊息（PR #43）
       const detail = error instanceof Error ? error.stack ?? error.message : String(error)
       this.logger.error(
         `${runtime.logLabel} manual refresh failed for window ${startDate}→${endDate}: ${detail}`,
@@ -566,6 +568,7 @@ export class MarketPriceService {
     }
   }
 
+  /** 含首尾共 MANUAL_REFRESH_LOOKBACK_DAYS 個日曆日；周末仍涵蓋前一個周五（PR #43）。 */
   private resolveManualRefreshWindow(
     timeZone: string,
     now: Date,
@@ -575,6 +578,10 @@ export class MarketPriceService {
     return { startDate, endDate }
   }
 
+  /**
+   * Domain outcome 聚合（PR #43）：雙成 success、單成 partial_success、雙敗 failed；
+   * 皆走 HTTP 200，transport／auth 失敗才用非 2xx。
+   */
   private resolveRefreshOverallStatus(
     markets: RefreshPricesMarketResult[],
   ): RefreshPricesOverallStatus {
