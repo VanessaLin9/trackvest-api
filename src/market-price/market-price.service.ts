@@ -3,6 +3,7 @@ import { Prisma, TxType } from '@prisma/client'
 import { PrismaService } from '../prisma.service'
 import {
   DEFAULT_BACKFILL_MAX_ASSETS_PER_RUN,
+  MANUAL_REFRESH_LOOKBACK_DAYS,
   TAIWAN_MARKET_TIME_ZONE,
   TW_DAILY_LOOKBACK_DAYS,
   US_DAILY_LOOKBACK_DAYS,
@@ -61,6 +62,31 @@ export type SyncMarketPricesResult = {
 /** @deprecated Use SyncMarketPricesResult */
 export type SyncTaiwanPricesResult = SyncMarketPricesResult
 
+export type RefreshPricesOverallStatus = 'success' | 'partial_success' | 'failed'
+
+export type RefreshPricesMarketSuccess = {
+  market: MarketPriceMarket
+  status: 'success'
+  startDate: string
+  endDate: string
+  assetsProcessed: number
+  rowsUpserted: number
+}
+
+export type RefreshPricesMarketFailure = {
+  market: MarketPriceMarket
+  status: 'failed'
+  errorCode: 'PRICE_REFRESH_FAILED'
+  message: string
+}
+
+export type RefreshPricesMarketResult = RefreshPricesMarketSuccess | RefreshPricesMarketFailure
+
+export type RefreshPricesResult = {
+  status: RefreshPricesOverallStatus
+  markets: RefreshPricesMarketResult[]
+}
+
 type EverHeldAsset = {
   id: string
   symbol: string
@@ -110,6 +136,23 @@ export class MarketPriceService {
 
   async syncUsPrices(input: SyncTaiwanPricesInput = {}): Promise<SyncMarketPricesResult> {
     return this.syncMarketPrices({ ...input, market: 'us' })
+  }
+
+  /**
+   * POST /prices/refresh orchestration（PR #43）。
+   * TW／US 各自以市場 timezone 算 14 日 window，失敗隔離後組成
+   * success｜partial_success｜failed；不依賴 ENABLE_SCHEDULED_JOBS。
+   * markets 順序固定 tw → us，方便 client／測試穩定判讀。
+   */
+  async refreshPrices(now: Date = new Date()): Promise<RefreshPricesResult> {
+    const twResult = await this.refreshMarket('tw', now)
+    const usResult = await this.refreshMarket('us', now)
+    const markets: RefreshPricesMarketResult[] = [twResult, usResult]
+
+    return {
+      status: this.resolveRefreshOverallStatus(markets),
+      markets,
+    }
   }
 
   /** @deprecated Use syncDaily via syncMarketPrices */
@@ -484,6 +527,72 @@ export class MarketPriceService {
 
   private todayInMarket(timeZone: string): string {
     return toTimeZoneIsoDate(new Date(), timeZone)
+  }
+
+  private async refreshMarket(
+    market: MarketPriceMarket,
+    now: Date,
+  ): Promise<RefreshPricesMarketResult> {
+    const runtime = this.resolveMarketRuntime(market)
+    const { startDate, endDate } = this.resolveManualRefreshWindow(runtime.timeZone, now)
+
+    try {
+      const result = await this.syncMarketPrices({
+        market,
+        mode: 'daily',
+        startDate,
+        endDate,
+      })
+
+      return {
+        market,
+        status: 'success',
+        startDate: result.startDate,
+        endDate: result.endDate,
+        assetsProcessed: result.assetsProcessed,
+        rowsUpserted: result.rowsUpserted,
+      }
+    } catch (error) {
+      // Server 保留 provider 細節；client 只拿固定 errorCode／安全訊息（PR #43）
+      const detail = error instanceof Error ? error.stack ?? error.message : String(error)
+      this.logger.error(
+        `${runtime.logLabel} manual refresh failed for window ${startDate}→${endDate}: ${detail}`,
+      )
+
+      return {
+        market,
+        status: 'failed',
+        errorCode: 'PRICE_REFRESH_FAILED',
+        message: `${runtime.logLabel} price refresh failed`,
+      }
+    }
+  }
+
+  /** 含首尾共 MANUAL_REFRESH_LOOKBACK_DAYS 個日曆日；周末仍涵蓋前一個周五（PR #43）。 */
+  private resolveManualRefreshWindow(
+    timeZone: string,
+    now: Date,
+  ): { startDate: string; endDate: string } {
+    const endDate = toTimeZoneIsoDate(now, timeZone)
+    const startDate = shiftIsoDate(endDate, -(MANUAL_REFRESH_LOOKBACK_DAYS - 1))
+    return { startDate, endDate }
+  }
+
+  /**
+   * Domain outcome 聚合（PR #43）：雙成 success、單成 partial_success、雙敗 failed；
+   * 皆走 HTTP 200，transport／auth 失敗才用非 2xx。
+   */
+  private resolveRefreshOverallStatus(
+    markets: RefreshPricesMarketResult[],
+  ): RefreshPricesOverallStatus {
+    const successCount = markets.filter((entry) => entry.status === 'success').length
+    if (successCount === markets.length) {
+      return 'success'
+    }
+    if (successCount === 0) {
+      return 'failed'
+    }
+    return 'partial_success'
   }
 
   private getBackfillMaxAssetsPerRun(): number {

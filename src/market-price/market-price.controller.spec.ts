@@ -1,3 +1,16 @@
+import {
+  ExecutionContext,
+  ForbiddenException,
+  HttpStatus,
+  UnauthorizedException,
+} from '@nestjs/common'
+import { PATH_METADATA, METHOD_METADATA, HTTP_CODE_METADATA } from '@nestjs/common/constants'
+import { RequestMethod } from '@nestjs/common'
+import { Reflector } from '@nestjs/core'
+import { UserRole } from '@prisma/client'
+import { ACCESS_TOKEN_COOKIE } from '../auth/auth.config'
+import type { AccessTokenPayload, AccessTokenService } from '../auth/tokens/access-token.service'
+import { AuthGuard } from '../common/guards/auth.guard'
 import { withEnv } from '../deployment/testing/with-env'
 import { MarketPriceController } from './market-price.controller'
 import { TaiwanPriceSyncModeDto } from './dto/sync-taiwan-prices.dto'
@@ -14,6 +27,7 @@ describe('MarketPriceController (CP0 characterization)', () => {
     const marketPriceService = {
       syncTaiwanPrices: jest.fn(),
       syncUsPrices: jest.fn(),
+      refreshPrices: jest.fn(),
     }
 
     const controller = new MarketPriceController(
@@ -89,6 +103,48 @@ describe('MarketPriceController (CP0 characterization)', () => {
     })
   })
 
+  it('refreshPrices delegates to one orchestration method and returns its contract', async () => {
+    const { controller, marketPriceService } = createHarness()
+    const payload = {
+      status: 'partial_success' as const,
+      markets: [
+        {
+          market: 'tw' as const,
+          status: 'success' as const,
+          startDate: '2026-07-20',
+          endDate: '2026-08-02',
+          assetsProcessed: 2,
+          rowsUpserted: 18,
+        },
+        {
+          market: 'us' as const,
+          status: 'failed' as const,
+          errorCode: 'PRICE_REFRESH_FAILED' as const,
+          message: 'US price refresh failed',
+        },
+      ],
+    }
+    marketPriceService.refreshPrices.mockResolvedValue(payload)
+
+    const result = await controller.refreshPrices()
+
+    expect(marketPriceService.refreshPrices).toHaveBeenCalledTimes(1)
+    expect(marketPriceService.refreshPrices).toHaveBeenCalledWith()
+    expect(result).toEqual(payload)
+  })
+
+  it('refreshPrices is POST /prices/refresh with HTTP 200', () => {
+    const handler = Object.getOwnPropertyDescriptor(
+      MarketPriceController.prototype,
+      'refreshPrices',
+    )!.value
+
+    expect(Reflect.getMetadata(PATH_METADATA, MarketPriceController)).toBe('prices')
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('refresh')
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(RequestMethod.POST)
+    expect(Reflect.getMetadata(HTTP_CODE_METADATA, handler)).toBe(HttpStatus.OK)
+  })
+
   describe('when ENABLE_SCHEDULED_JOBS=false', () => {
     it('syncTaiwanPrices still delegates to marketPriceService', async () => {
       await withEnv({ ENABLE_SCHEDULED_JOBS: 'false' }, async () => {
@@ -122,6 +178,117 @@ describe('MarketPriceController (CP0 characterization)', () => {
           mode: UsPriceSyncModeDto.daily,
         })
       })
+    })
+
+    it('refreshPrices still delegates to marketPriceService', async () => {
+      await withEnv({ ENABLE_SCHEDULED_JOBS: 'false' }, async () => {
+        const { controller, marketPriceService } = createHarness()
+        marketPriceService.refreshPrices.mockResolvedValue({
+          status: 'success',
+          markets: [],
+        })
+
+        await controller.refreshPrices()
+
+        expect(marketPriceService.refreshPrices).toHaveBeenCalledTimes(1)
+      })
+    })
+  })
+
+  describe('auth metadata via AuthGuard', () => {
+    const reflector = new Reflector()
+
+    function buildAccessTokens(
+      payloadFor: Record<string, AccessTokenPayload>,
+    ): AccessTokenService {
+      return {
+        verify: jest.fn((token: string) => {
+          const payload = payloadFor[token]
+          if (!payload) throw new UnauthorizedException('Invalid or expired access token')
+          return payload
+        }),
+        sign: jest.fn(),
+      } as unknown as AccessTokenService
+    }
+
+    function buildContext(
+      handler: (...args: unknown[]) => unknown,
+      request: { cookies?: Record<string, string>; user?: unknown },
+    ): ExecutionContext {
+      return {
+        switchToHttp: () => ({ getRequest: () => request }),
+        getHandler: () => handler,
+        getClass: () => MarketPriceController,
+      } as unknown as ExecutionContext
+    }
+
+    it('allows regular authenticated users on refreshPrices', () => {
+      const guard = new AuthGuard(
+        reflector,
+        buildAccessTokens({ 'tok-user': { sub: 'u1', role: UserRole.user } }),
+      )
+      const handler = Object.getOwnPropertyDescriptor(
+        MarketPriceController.prototype,
+        'refreshPrices',
+      )!.value
+      const request = { cookies: { [ACCESS_TOKEN_COOKIE]: 'tok-user' } }
+
+      expect(guard.canActivate(buildContext(handler, request))).toBe(true)
+      expect(request).toMatchObject({ user: { id: 'u1', role: UserRole.user } })
+    })
+
+    it('allows admin users on refreshPrices', () => {
+      const guard = new AuthGuard(
+        reflector,
+        buildAccessTokens({ 'tok-admin': { sub: 'a1', role: UserRole.admin } }),
+      )
+      const handler = Object.getOwnPropertyDescriptor(
+        MarketPriceController.prototype,
+        'refreshPrices',
+      )!.value
+      const request = { cookies: { [ACCESS_TOKEN_COOKIE]: 'tok-admin' } }
+
+      expect(guard.canActivate(buildContext(handler, request))).toBe(true)
+    })
+
+    it('rejects unauthenticated refreshPrices requests', () => {
+      const guard = new AuthGuard(reflector, buildAccessTokens({}))
+      const handler = Object.getOwnPropertyDescriptor(
+        MarketPriceController.prototype,
+        'refreshPrices',
+      )!.value
+
+      expect(() => guard.canActivate(buildContext(handler, { cookies: {} }))).toThrow(
+        UnauthorizedException,
+      )
+    })
+
+    it('keeps syncTaiwanPrices admin-only', () => {
+      const guard = new AuthGuard(
+        reflector,
+        buildAccessTokens({ 'tok-user': { sub: 'u1', role: UserRole.user } }),
+      )
+      const handler = Object.getOwnPropertyDescriptor(
+        MarketPriceController.prototype,
+        'syncTaiwanPrices',
+      )!.value
+      const request = { cookies: { [ACCESS_TOKEN_COOKIE]: 'tok-user' } }
+
+      expect(() => guard.canActivate(buildContext(handler, request))).toThrow(ForbiddenException)
+    })
+
+    it('keeps syncUsPrices admin-only', () => {
+      const guard = new AuthGuard(
+        reflector,
+        buildAccessTokens({ 'tok-user': { sub: 'u1', role: UserRole.user } }),
+      )
+      const handler = Object.getOwnPropertyDescriptor(
+        MarketPriceController.prototype,
+        'syncUsPrices',
+      )!.value
+      const request = { cookies: { [ACCESS_TOKEN_COOKIE]: 'tok-user' } }
+
+      expect(() => guard.canActivate(buildContext(handler, request))).toThrow(ForbiddenException)
     })
   })
 })

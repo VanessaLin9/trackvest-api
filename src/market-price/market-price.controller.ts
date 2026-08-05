@@ -1,7 +1,15 @@
-import { Body, Controller, Post } from '@nestjs/common'
-import { ApiCookieAuth, ApiCreatedResponse, ApiTags } from '@nestjs/swagger'
+import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common'
+import {
+  ApiCookieAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger'
 import { UserRole } from '@prisma/client'
+import { ErrorResponse } from '../common/dto'
 import { Roles } from '../common/decorators/roles.decorator'
+import { RefreshPricesResponseDto } from './dto/refresh-prices.response.dto'
 import { SyncTaiwanPricesDto } from './dto/sync-taiwan-prices.dto'
 import { SyncTaiwanPricesResponseDto } from './dto/sync-taiwan-prices.response.dto'
 import { SyncUsPricesDto } from './dto/sync-us-prices.dto'
@@ -13,6 +21,19 @@ import { MarketPriceService } from './market-price.service'
 @ApiCookieAuth('access_token')
 export class MarketPriceController {
   constructor(private readonly marketPriceService: MarketPriceService) {}
+
+  /**
+   * 手動刷新 ever-held TW／US 價格（PR #43）。
+   * 任何已登入角色可呼叫（不加 @Roles）；不開既有 admin sync 權限。
+   * 日期／資產／市場範圍後端自決；HTTP 200 回 domain outcome，不是 Nest POST 預設 201。
+   */
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: RefreshPricesResponseDto })
+  @ApiUnauthorizedResponse({ type: ErrorResponse })
+  async refreshPrices(): Promise<RefreshPricesResponseDto> {
+    return this.marketPriceService.refreshPrices()
+  }
 
   @Post('sync/taiwan')
   @Roles(UserRole.admin)
