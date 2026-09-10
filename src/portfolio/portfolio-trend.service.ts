@@ -3,6 +3,7 @@ import { TxType } from '@prisma/client'
 import { OwnershipService } from '../common/services/ownership.service'
 import { roundTo, toNumber } from '../common/utils/number.util'
 import { PrismaService } from '../prisma.service'
+import { roundTwShareQuantity } from '../corporate-actions/corp-action-ratio.util'
 import { GetPortfolioDisplayCurrencyDto } from './dto/get-portfolio-display-currency.dto'
 import {
   PortfolioHoldingTrendResponseDto,
@@ -35,7 +36,20 @@ type OpenLot = {
   unitCost: number
 }
 
+type HistoricalSplit = {
+  assetId: string
+  exDate: Date
+  ratio: number
+  market: string
+}
+
 type TrendEvent =
+  | {
+      kind: 'split'
+      timestamp: Date
+      date: string
+      split: HistoricalSplit
+    }
   | {
       kind: 'transaction'
       timestamp: Date
@@ -51,7 +65,7 @@ type TrendEvent =
 
 /**
  * 歷史淨值／單檔趨勢（PR #10；拆出 PR #26）。
- * 以交易 + Price 時序重建每日持倉市值，再套 displayCurrency FX（PR #11）。
+ * 以交易、分割及 Price 時序重建每日持倉市值，再套 displayCurrency FX。
  */
 @Injectable()
 export class PortfolioTrendService {
@@ -113,7 +127,7 @@ export class PortfolioTrendService {
     }))
 
     const assetIds = [...new Set(normalizedTransactions.map((transaction) => transaction.assetId))]
-    const [prices, accounts, assets] = await Promise.all([
+    const [prices, accounts, assets, splits] = await Promise.all([
       this.loadHistoricalPrices(assetIds),
       this.prisma.account.findMany({
         where: {
@@ -134,12 +148,13 @@ export class PortfolioTrendService {
           baseCurrency: true,
         },
       }),
+      this.loadHistoricalSplits(assetIds),
     ])
     const displayCurrencyContext = this.holdingsSnapshotService.resolveDisplayCurrencyContext(
       accounts.map((account) => account.currency),
       query,
     )
-    const timeline = this.buildTimelineEvents(normalizedTransactions, prices)
+    const timeline = this.buildTimelineEvents(normalizedTransactions, prices, splits)
     const fxContextByDate = await this.holdingsSnapshotService.buildFxContextsByDate({
       dates: this.extractTimelineDates(timeline),
       portfolioBaseCurrency: displayCurrencyContext.effectiveDisplayCurrency,
@@ -211,7 +226,7 @@ export class PortfolioTrendService {
       tradeTime: transaction.tradeTime,
     }))
 
-    const [prices, accounts, asset] = await Promise.all([
+    const [prices, accounts, asset, splits] = await Promise.all([
       this.loadHistoricalPrices([assetId]),
       this.prisma.account.findMany({
         where: {
@@ -230,12 +245,13 @@ export class PortfolioTrendService {
           baseCurrency: true,
         },
       }),
+      this.loadHistoricalSplits([assetId]),
     ])
     const displayCurrencyContext = this.holdingsSnapshotService.resolveDisplayCurrencyContext(
       accounts.map((account) => account.currency),
       query,
     )
-    const timeline = this.buildTimelineEvents(normalizedTransactions, prices)
+    const timeline = this.buildTimelineEvents(normalizedTransactions, prices, splits)
     const fxContextByDate = await this.holdingsSnapshotService.buildFxContextsByDate({
       dates: this.extractTimelineDates(timeline),
       portfolioBaseCurrency: displayCurrencyContext.effectiveDisplayCurrency,
@@ -259,6 +275,19 @@ export class PortfolioTrendService {
         fxContextByDate,
       ),
     }
+  }
+
+  private async loadHistoricalSplits(assetIds: string[]): Promise<HistoricalSplit[]> {
+    const actions = await this.prisma.corporateAction.findMany({
+      where: {
+        assetId: { in: assetIds },
+        type: { in: ['split', 'reverse_split'] },
+        exDate: { lte: new Date() },
+      },
+      orderBy: [{ exDate: 'asc' }, { id: 'asc' }],
+      select: { assetId: true, exDate: true, ratio: true, market: true },
+    })
+    return actions.map((action) => ({ ...action, ratio: toNumber(action.ratio) }))
   }
 
   private async loadHistoricalPrices(assetIds: string[]): Promise<HistoricalPriceRecord[]> {
@@ -302,6 +331,10 @@ export class PortfolioTrendService {
       const dateEvents = timeline.filter((event) => event.date === date)
 
       for (const event of dateEvents) {
+        if (event.kind === 'split') {
+          this.applySplitEvent(openLotsByScope, latestPriceByAsset, event.split)
+          continue
+        }
         if (event.kind === 'price') {
           latestPriceByAsset.set(event.price.assetId, event.price.price)
           continue
@@ -348,6 +381,10 @@ export class PortfolioTrendService {
       const dateEvents = timeline.filter((event) => event.date === date)
 
       for (const event of dateEvents) {
+        if (event.kind === 'split') {
+          this.applySplitEvent(openLotsByScope, latestPriceByAsset, event.split)
+          continue
+        }
         if (event.kind === 'price') {
           latestPriceByAsset.set(event.price.assetId, event.price.price)
           continue
@@ -383,8 +420,15 @@ export class PortfolioTrendService {
   private buildTimelineEvents(
     transactions: HistoricalTransactionRecord[],
     prices: HistoricalPriceRecord[],
+    splits: HistoricalSplit[],
   ): TrendEvent[] {
     return [
+      ...splits.map((split) => ({
+        kind: 'split' as const,
+        timestamp: split.exDate,
+        date: split.exDate.toISOString().slice(0, 10),
+        split,
+      })),
       ...transactions.map((transaction) => ({
         kind: 'transaction' as const,
         timestamp: transaction.tradeTime,
@@ -404,7 +448,8 @@ export class PortfolioTrendService {
       }
 
       if (left.kind !== right.kind) {
-        return left.kind === 'transaction' ? -1 : 1
+        const priority = { split: 0, transaction: 1, price: 2 }
+        return priority[left.kind] - priority[right.kind]
       }
 
       const timestampDiff = left.timestamp.getTime() - right.timestamp.getTime()
@@ -426,6 +471,28 @@ export class PortfolioTrendService {
 
   private extractTimelineDates(timeline: TrendEvent[]): string[] {
     return [...new Set(timeline.map((event) => event.date))]
+  }
+
+  private applySplitEvent(
+    openLotsByScope: Map<string, OpenLot[]>,
+    latestPriceByAsset: Map<string, number>,
+    split: HistoricalSplit,
+  ): void {
+    if (!Number.isFinite(split.ratio) || split.ratio <= 0) {
+      throw new Error('split ratio must be a positive finite number')
+    }
+    for (const [scopeKey, lots] of openLotsByScope) {
+      if (scopeKey.split(':')[1] !== split.assetId) continue
+      for (const lot of lots) {
+        if (lot.remainingQuantity <= 1e-9) continue
+        const quantity = lot.remainingQuantity * split.ratio
+        lot.remainingQuantity = split.market === 'tw' ? roundTwShareQuantity(quantity) : quantity
+        lot.unitCost /= split.ratio
+      }
+    }
+    // A carried-forward quote is still in pre-split units until a new quote arrives.
+    const latestPrice = latestPriceByAsset.get(split.assetId)
+    if (latestPrice != null) latestPriceByAsset.set(split.assetId, latestPrice / split.ratio)
   }
 
   private applyTransactionEvent(

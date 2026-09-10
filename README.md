@@ -167,6 +167,12 @@ Admin HTTP (admin role): `POST /corp-actions/sync/splits`
 
 Scheduled crons: TW weekdays 18:00 Taipei; US placeholder weekdays 18:30 New York.
 
+Crons run only when `ENABLE_SCHEDULED_JOBS=true`. Price sync does not fetch split events;
+after importing older transactions, run split sync over the relevant history (the default
+window is five years). Portfolio and holding trends replay persisted split events before
+same-day transactions and closing prices. If no new price exists on the split date, the
+carried-forward price is divided by the ratio so the split alone does not change valuation.
+
 ### 0050 acceptance (local)
 
 After reset/seed, sync the demo split and verify holdings:
@@ -178,6 +184,24 @@ pnpm corp-actions:verify-0050
 ```
 
 Expected: **260** open `0050` shares on demo `Broker TWD`, avgCost ~**47** TWD, with a `CorporateAction` row for the 2025-06-18 1:4 split. `Transaction` quantities stay 100/50/80/40/20.
+
+For an existing local test database with additional transactions, do **not** reseed or
+use the fixed 260-share expectation. Check the current 0050 history instead:
+
+```bash
+# Read-only: verify the persisted split, quantities, costs, FIFO, GL and holding trend
+pnpm exec ts-node scripts/check-0050-split.ts
+
+# Test database only: save a JSON baseline to a temporary directory, sync only 0050
+# twice and verify after each run (requires FIN_MIND_TOKEN).
+pnpm exec ts-node scripts/check-0050-split.ts --apply
+```
+
+This check expects the one 2025-06-18 1:4 split and TWD accounts. It computes expected
+quantities from the actual transactions and checks that those source transactions remain
+unchanged. Repeated sync may archive and replace sell GL entries; only one active entry
+per sale must remain. Reverse splits that produce fractional Taiwan shares still use the
+existing rounding policy; cash-in-lieu settlement is not implemented.
 
 Unit tests for replay engine:
 
