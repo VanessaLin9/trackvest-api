@@ -245,7 +245,8 @@ describe('US splits and broker cash-in-lieu (e2e)', () => {
         amount: 150,
         price: 30,
         tradeTime: '2025-06-03T12:00:00Z',
-      })
+  })
+
       .expect(201);
     expect(
       (
@@ -253,6 +254,13 @@ describe('US splits and broker cash-in-lieu (e2e)', () => {
       ).quantity.toString(),
     ).toBe('2');
   });
+
+  it('accepts a decimal entitlement summed from multiple lots', async () => {
+    const { pay, asset } = await fixture([1, 1, 1])
+    const { body: sale } = await pay({ amount: '30', quantity: '0.3' }).expect(201)
+    expect(sale.quantity).toBe('0.3')
+    expect(await prisma.position.count({ where: { assetId: asset.id } })).toBe(0)
+  })
 
   it('requires reconciliation when another split occurs before payment', async () => {
     const { pay, asset } = await fixture();

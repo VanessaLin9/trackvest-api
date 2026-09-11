@@ -124,9 +124,14 @@ export class CashInLieuService {
               market: event.market as CorpActionMarket,
             })),
           });
+          // The replay engine's public numeric result can contain a binary
+          // floating-point tail after summing multiple lots (e.g.
+          // 0.1 + 0.1 + 0.1). Normalize only this externally reported
+          // fractional entitlement before comparing it with the broker's
+          // Decimal quantity; the persisted settlement remains Decimal.
           const entitlement = new Prisma.Decimal(
             ledger.position?.quantity ?? 0,
-          ).mod(1);
+          ).toDecimalPlaces(12).mod(1);
           if (!entitlement.equals(quantity)) {
             throw new BadRequestException(
               `Broker quantity does not match fractional entitlement (${entitlement.toString()})`,
