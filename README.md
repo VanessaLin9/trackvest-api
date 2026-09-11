@@ -193,6 +193,10 @@ requesting the next asset. If a later asset fails, retry the sync when access re
 API quotas apply to both split sync and US price sync.
 Requests are spaced at least 1.1 seconds apart within one process, with one-minute
 per-provider history reuse. This does not coordinate multiple workers or lift daily quotas.
+Each sync run persists per-asset `pending`／`running`／`succeeded`／`failed` state.
+If a provider quota or network error interrupts a run, the next run resumes the latest
+incomplete run and skips assets already marked `succeeded`; failures are retried and
+recorded for diagnosis.
 
 ### 0050 acceptance (local)
 

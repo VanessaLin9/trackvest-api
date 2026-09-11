@@ -271,4 +271,23 @@ describe('CorpActionService', () => {
       },
     })
   })
+
+  it('resumes a failed run by skipping assets already marked succeeded', async () => {
+    const { service, prisma, usSplitProvider } = createHarness()
+    const run = { id: 'run-1', market: 'us', status: 'failed' }
+    const runAsset = { id: 'run-asset-1', status: 'succeeded' }
+    prisma.asset.findMany.mockResolvedValue([{ id: assetId, symbol: 'AAPL' }])
+    ;(prisma as any).corporateActionSyncRun = {
+      findFirst: jest.fn().mockResolvedValue(run),
+      update: jest.fn().mockResolvedValue({ ...run, status: 'running' }),
+    }
+    ;(prisma as any).corporateActionSyncAsset = {
+      upsert: jest.fn().mockResolvedValue(runAsset),
+    }
+
+    const result = await service.syncSplits({ market: 'us', startDate: '2020-01-01', endDate: '2026-09-12' })
+
+    expect(result).toMatchObject({ assetsProcessed: 1, eventsUpserted: 0, scopesReplayed: 0 })
+    expect(usSplitProvider.fetchSplitEvents).not.toHaveBeenCalled()
+  })
 })

@@ -46,6 +46,7 @@ export class CorpActionService {
     const market = input.market ?? 'all'
     const endDate = input.endDate ?? new Date().toISOString().slice(0, 10)
     const startDate = input.startDate ?? this.defaultLookbackStart(endDate)
+    const syncRun = await this.prepareSyncRun(market, startDate, endDate)
 
     let assetsProcessed = 0
     let eventsUpserted = 0
@@ -64,25 +65,36 @@ export class CorpActionService {
       assetsProcessed += assets.length
 
       for (const asset of assets) {
+        const runAsset = await this.prepareSyncAsset(syncRun, asset)
+        if (runAsset?.status === 'succeeded') continue
+        await this.markSyncAssetRunning(runAsset)
         const upsertedActionsByAsset = new Map<string, string[]>()
-        const events = await provider.fetchSplitEvents({
-          stockId: asset.symbol,
-          startDate,
-          endDate,
-        })
+        try {
+          const events = await provider.fetchSplitEvents({
+            stockId: asset.symbol,
+            startDate,
+            endDate,
+          })
 
-        for (const event of events) {
-          const corporateAction = await this.upsertCorporateAction(asset.id, provider, event)
-          eventsUpserted += 1
+          for (const event of events) {
+            const corporateAction = await this.upsertCorporateAction(asset.id, provider, event)
+            eventsUpserted += 1
 
-          const actionIds = upsertedActionsByAsset.get(asset.id) ?? []
-          actionIds.push(corporateAction.id)
-          upsertedActionsByAsset.set(asset.id, actionIds)
+            const actionIds = upsertedActionsByAsset.get(asset.id) ?? []
+            actionIds.push(corporateAction.id)
+            upsertedActionsByAsset.set(asset.id, actionIds)
+          }
+          scopesReplayed += await this.replayAffectedScopes(upsertedActionsByAsset)
+          await this.markSyncAssetSucceeded(runAsset)
+        } catch (error) {
+          await this.markSyncAssetFailed(runAsset, error)
+          await this.markSyncRunFailed(syncRun, error)
+          throw error
         }
-        // Finish each asset before the next provider request can fail or hit its quota.
-        scopesReplayed += await this.replayAffectedScopes(upsertedActionsByAsset)
       }
     }
+
+    await this.markSyncRunCompleted(syncRun)
 
     return {
       market,
@@ -91,6 +103,58 @@ export class CorpActionService {
       scopesReplayed,
       replayPending: eventsUpserted > 0 && scopesReplayed === 0,
     }
+  }
+
+  private async prepareSyncRun(market: CorpActionMarket | 'all', startDate: string, endDate: string) {
+    const model = (this.prisma as any).corporateActionSyncRun as typeof this.prisma.corporateActionSyncRun | undefined
+    if (!model) return null
+    const failedRun = await model.findFirst({
+      where: { market, status: { in: ['running', 'failed'] }, startDate: { lte: new Date(`${startDate}T00:00:00.000Z`) } },
+      orderBy: { createdAt: 'desc' },
+    })
+    if (failedRun) {
+      return model.update({ where: { id: failedRun.id }, data: { endDate: new Date(`${endDate}T00:00:00.000Z`), status: 'running', error: null } })
+    }
+    return model.create({ data: { market, startDate: new Date(`${startDate}T00:00:00.000Z`), endDate: new Date(`${endDate}T00:00:00.000Z`) } })
+  }
+
+  private async prepareSyncAsset(run: any, asset: { id: string; symbol: string }) {
+    if (!run) return null
+    const model = (this.prisma as any).corporateActionSyncAsset
+    return model.upsert({
+      where: { runId_assetId: { runId: run.id, assetId: asset.id } },
+      create: { runId: run.id, assetId: asset.id, symbol: asset.symbol },
+      update: { symbol: asset.symbol },
+    })
+  }
+
+  private async markSyncAssetRunning(runAsset: any) {
+    if (!runAsset) return
+    await (this.prisma as any).corporateActionSyncAsset.update({ where: { id: runAsset.id }, data: { status: 'running', attempts: { increment: 1 }, startedAt: new Date(), error: null } })
+  }
+
+  private async markSyncAssetSucceeded(runAsset: any) {
+    if (!runAsset) return
+    await (this.prisma as any).corporateActionSyncAsset.update({ where: { id: runAsset.id }, data: { status: 'succeeded', completedAt: new Date(), error: null } })
+  }
+
+  private async markSyncAssetFailed(runAsset: any, error: unknown) {
+    if (!runAsset) return
+    await (this.prisma as any).corporateActionSyncAsset.update({ where: { id: runAsset.id }, data: { status: 'failed', error: this.syncError(error) } })
+  }
+
+  private async markSyncRunFailed(run: any, error: unknown) {
+    if (!run) return
+    await (this.prisma as any).corporateActionSyncRun.update({ where: { id: run.id }, data: { status: 'failed', error: this.syncError(error) } })
+  }
+
+  private async markSyncRunCompleted(run: any) {
+    if (!run) return
+    await (this.prisma as any).corporateActionSyncRun.update({ where: { id: run.id }, data: { status: 'completed', completedAt: new Date(), error: null } })
+  }
+
+  private syncError(error: unknown): string {
+    return error instanceof Error ? error.message.slice(0, 1000) : 'Unknown sync error'
   }
 
   /**
