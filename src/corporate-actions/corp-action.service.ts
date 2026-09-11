@@ -46,7 +46,6 @@ export class CorpActionService {
     const market = input.market ?? 'all'
     const endDate = input.endDate ?? new Date().toISOString().slice(0, 10)
     const startDate = input.startDate ?? this.defaultLookbackStart(endDate)
-    const syncRun = await this.prepareSyncRun(market, startDate, endDate)
 
     let assetsProcessed = 0
     let eventsUpserted = 0
@@ -60,8 +59,14 @@ export class CorpActionService {
       providers.push(this.usSplitProvider)
     }
 
+    const providerAssets = [] as Array<{ provider: SplitEventProvider; assets: Array<{ id: string; symbol: string }> }>
     for (const provider of providers) {
-      const assets = await this.resolveAssetsForMarket(provider.market, input.assetIds)
+      providerAssets.push({ provider, assets: await this.resolveAssetsForMarket(provider.market, input.assetIds) })
+    }
+    const scopeKey = this.syncScopeKey(market, startDate, providerAssets.flatMap(({ assets }) => assets.map((asset) => asset.id)))
+    const syncRun = await this.prepareSyncRun(market, startDate, endDate, scopeKey)
+
+    for (const { provider, assets } of providerAssets) {
       assetsProcessed += assets.length
 
       for (const asset of assets) {
@@ -105,17 +110,21 @@ export class CorpActionService {
     }
   }
 
-  private async prepareSyncRun(market: CorpActionMarket | 'all', startDate: string, endDate: string) {
+  private async prepareSyncRun(market: CorpActionMarket | 'all', startDate: string, endDate: string, scopeKey: string) {
     const model = (this.prisma as any).corporateActionSyncRun as typeof this.prisma.corporateActionSyncRun | undefined
     if (!model) return null
     const failedRun = await model.findFirst({
-      where: { market, status: { in: ['running', 'failed'] }, startDate: { lte: new Date(`${startDate}T00:00:00.000Z`) } },
+      where: { market, scopeKey, status: { in: ['running', 'failed'] }, startDate: { lte: new Date(`${startDate}T00:00:00.000Z`) } },
       orderBy: { createdAt: 'desc' },
     })
     if (failedRun) {
       return model.update({ where: { id: failedRun.id }, data: { endDate: new Date(`${endDate}T00:00:00.000Z`), status: 'running', error: null } })
     }
-    return model.create({ data: { market, startDate: new Date(`${startDate}T00:00:00.000Z`), endDate: new Date(`${endDate}T00:00:00.000Z`) } })
+    return model.create({ data: { market, scopeKey, startDate: new Date(`${startDate}T00:00:00.000Z`), endDate: new Date(`${endDate}T00:00:00.000Z`) } })
+  }
+
+  private syncScopeKey(market: CorpActionMarket | 'all', startDate: string, assetIds: string[]): string {
+    return `${market}:${startDate}:${[...new Set(assetIds)].sort().join(',')}`
   }
 
   private async prepareSyncAsset(run: any, asset: { id: string; symbol: string }) {
@@ -150,6 +159,8 @@ export class CorpActionService {
 
   private async markSyncRunCompleted(run: any) {
     if (!run) return
+    const pending = await (this.prisma as any).corporateActionSyncAsset.count({ where: { runId: run.id, status: { not: 'succeeded' } } })
+    if (pending > 0) return
     await (this.prisma as any).corporateActionSyncRun.update({ where: { id: run.id }, data: { status: 'completed', completedAt: new Date(), error: null } })
   }
 

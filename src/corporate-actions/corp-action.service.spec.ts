@@ -283,6 +283,7 @@ describe('CorpActionService', () => {
     }
     ;(prisma as any).corporateActionSyncAsset = {
       upsert: jest.fn().mockResolvedValue(runAsset),
+      count: jest.fn().mockResolvedValue(0),
     }
 
     const result = await service.syncSplits({ market: 'us', startDate: '2020-01-01', endDate: '2026-09-12' })

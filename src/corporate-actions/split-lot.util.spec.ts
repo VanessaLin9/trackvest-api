@@ -1,5 +1,6 @@
 import { adjustLotForSplit } from './split-lot.util';
 import { replayScopeLedger } from './position-replay.engine';
+import { Prisma } from '@prisma/client';
 
 describe('fractional split entitlements', () => {
   it('preserves fractional shares and cost instead of rounding each lot', () => {
@@ -43,13 +44,14 @@ describe('fractional split entitlements', () => {
           },
         ],
       });
-      expect(ledger.position).toMatchObject({ quantity: 1, avgCost: 200 });
+      expect(ledger.position?.quantity.toNumber()).toBe(1);
+      expect(ledger.position?.avgCost.toNumber()).toBe(200);
       expect(ledger.sellMatches).toEqual([
         {
           sellTransactionId: 'cash-in-lieu',
           buyLotKey: 'lot-1',
-          quantity: 0.5,
-          unitCost: 100,
+          quantity: new Prisma.Decimal(0.5),
+          unitCost: new Prisma.Decimal(100),
         },
       ]);
     },
@@ -78,10 +80,11 @@ describe('fractional split entitlements', () => {
         },
       ],
     });
-    expect(ledger.position).toMatchObject({ quantity: 2, avgCost: 50 });
+    expect(ledger.position?.quantity.toNumber()).toBe(2);
+    expect(ledger.position?.avgCost.toNumber()).toBe(50);
     expect(ledger.sellMatches[0]).toMatchObject({
-      quantity: 0.5,
-      unitCost: 100,
+      quantity: new Prisma.Decimal(0.5),
+      unitCost: new Prisma.Decimal(100),
     });
   });
 });

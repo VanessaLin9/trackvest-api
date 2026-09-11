@@ -257,6 +257,7 @@ describe('US splits and broker cash-in-lieu (e2e)', () => {
 
   it('accepts a decimal entitlement summed from multiple lots', async () => {
     const { pay, asset } = await fixture([1, 1, 1])
+    expect((await prisma.position.findFirstOrThrow({ where: { assetId: asset.id } })).quantity.toString()).toBe('0.3')
     const { body: sale } = await pay({ amount: '30', quantity: '0.3' }).expect(201)
     expect(sale.quantity).toBe('0.3')
     expect(await prisma.position.count({ where: { assetId: asset.id } })).toBe(0)

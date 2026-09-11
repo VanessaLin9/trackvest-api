@@ -115,12 +115,12 @@ export class CashInLieuService {
               id: tx.id,
               type: tx.type as 'buy' | 'sell',
               tradeTime: tx.tradeTime,
-              quantity: tx.quantity!.toNumber(),
-              amount: tx.amount.toNumber(),
+              quantity: tx.quantity!,
+              amount: tx.amount,
             })),
             corporateActions: actions.map((event) => ({
               exDate: event.exDate,
-              ratio: event.ratio.toNumber(),
+              ratio: event.ratio,
               market: event.market as CorpActionMarket,
             })),
           });
@@ -129,9 +129,9 @@ export class CashInLieuService {
           // 0.1 + 0.1 + 0.1). Normalize only this externally reported
           // fractional entitlement before comparing it with the broker's
           // Decimal quantity; the persisted settlement remains Decimal.
-          const entitlement = new Prisma.Decimal(
-            ledger.position?.quantity ?? 0,
-          ).toDecimalPlaces(12).mod(1);
+          const entitlement = new Prisma.Decimal(ledger.position?.quantity ?? 0)
+            .toDecimalPlaces(12)
+            .mod(1);
           if (!entitlement.equals(quantity)) {
             throw new BadRequestException(
               `Broker quantity does not match fractional entitlement (${entitlement.toString()})`,

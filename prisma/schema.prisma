@@ -95,6 +95,7 @@ model Asset {
 model CorporateActionSyncRun {
   id          String   @id @default(uuid())
   market      String
+  scopeKey    String
   startDate   DateTime
   endDate     DateTime
   status      String   @default("running")
