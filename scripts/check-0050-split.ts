@@ -11,7 +11,7 @@ import { PostingService } from '../src/gl/posting.service'
 import { CorpActionService } from '../src/corporate-actions/corp-action.service'
 import { PositionReplayService } from '../src/corporate-actions/position-replay.service'
 import { FinmindTwSplitProvider } from '../src/corporate-actions/providers/finmind-tw-split.provider'
-import { UsSplitInferProvider } from '../src/corporate-actions/providers/us-split-infer.provider'
+import { AlphaVantageUsSplitProvider } from '../src/corporate-actions/providers/alpha-vantage-us-split.provider'
 import { PortfolioTrendService } from '../src/portfolio/portfolio-trend.service'
 import { PortfolioHoldingsSnapshotService } from '../src/portfolio/portfolio-holdings-snapshot.service'
 import { FxRateService } from '../src/fx/fx-rate.service'
@@ -61,7 +61,7 @@ async function main() {
         new PositionReplayService(),
         posting,
         new FinmindTwSplitProvider(),
-        new UsSplitInferProvider(),
+        new AlphaVantageUsSplitProvider(),
       )
       for (let run = 1; run <= 2; run++) {
         console.log(

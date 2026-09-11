@@ -116,6 +116,7 @@ model Transaction {
   fee           Decimal  @default(0)
   tax           Decimal  @default(0)
   brokerOrderNo String?
+  cashInLieuActionId String?
   tradeTime     DateTime
   note          String?
 
@@ -127,11 +128,13 @@ model Transaction {
   tags    TxTag[]
   buyLots PositionLot[]  @relation("BuyTransactionLots")
   sellLotMatches SellLotMatch[] @relation("SellTransactionMatches")
+  cashInLieuAction CorporateAction? @relation(fields: [cashInLieuActionId], references: [id], onDelete: Restrict)
 
   @@index([accountId, isDeleted, tradeTime])
   @@index([assetId, isDeleted, tradeTime])
   @@index([type])
   @@unique([accountId, brokerOrderNo])
+  @@unique([accountId, cashInLieuActionId])
 }
 
 model AssetAlias {
@@ -270,6 +273,7 @@ model CorporateAction {
   afterPrice   Decimal?
   asset        Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
   applications CorporateActionApplication[]
+  cashInLieuTransactions Transaction[]
 
   @@unique([assetId, exDate, type, source])
   @@index([assetId, exDate])

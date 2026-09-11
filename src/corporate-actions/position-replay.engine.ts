@@ -1,5 +1,5 @@
 import { CorpActionMarket } from './corp-action.types'
-import { roundTwShareQuantity } from './corp-action-ratio.util'
+import { adjustLotForSplit } from './split-lot.util'
 import { toNumber } from '../common/utils/number.util'
 
 export type ReplayTransaction = {
@@ -60,7 +60,7 @@ type ReplayLot = ReplayLotState
 /**
  * 純函式持倉時序引擎（PR #19）：buy／sell／split 排成 timeline。
  * 同日事件：split priority=0 先於交易（ex-date 當日先調股數再買賣）。
- * TW 股數拆完後整數化（見 `roundTwShareQuantity`）。
+ * 分割保留畸零股權益及成本，直到券商回報實際處分。
  */
 type TimelineEvent =
   | {
@@ -107,7 +107,7 @@ export function replayScopeLedger(input: ReplayScopeInput): ReplayLedgerResult {
 
   for (const event of buildTimeline(input)) {
     if (event.kind === 'split') {
-      applySplitToOpenLots(lots, event.ratio, event.market)
+      applySplitToOpenLots(lots, event.ratio)
       continue
     }
 
@@ -250,7 +250,6 @@ function buildTimeline(input: ReplayScopeInput): TimelineEvent[] {
 function applySplitToOpenLots(
   lots: ReplayLot[],
   ratio: number,
-  market: CorpActionMarket,
 ): void {
   if (ratio <= 0 || !Number.isFinite(ratio)) {
     throw new Error('split ratio must be a positive finite number')
@@ -261,16 +260,6 @@ function applySplitToOpenLots(
       continue
     }
 
-    // qty × ratio、unitCost ÷ ratio；TW 再整數化股數（PR #19）。
-    let remainingQuantity = lot.remainingQuantity * ratio
-    let originalQuantity = lot.originalQuantity * ratio
-    if (market === 'tw') {
-      remainingQuantity = roundTwShareQuantity(remainingQuantity)
-      originalQuantity = roundTwShareQuantity(originalQuantity)
-    }
-
-    lot.remainingQuantity = remainingQuantity
-    lot.originalQuantity = originalQuantity
-    lot.unitCost = lot.unitCost / ratio
+    adjustLotForSplit(lot, ratio)
   }
 }

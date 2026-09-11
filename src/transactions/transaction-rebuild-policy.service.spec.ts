@@ -8,6 +8,7 @@ describe('TransactionRebuildPolicyService', () => {
 
   function createHarness() {
     const txClient = {
+      corporateAction: { findFirst: jest.fn().mockResolvedValue(null) },
       transaction: {
         findFirst: jest.fn(),
       },
@@ -43,6 +44,14 @@ describe('TransactionRebuildPolicyService', () => {
       shouldPostCurrentTransaction: true,
     })
     expect(txClient.transaction.findFirst).not.toHaveBeenCalled()
+  })
+
+  it.each(['buy', 'sell'] as const)('replays a backdated %s before an already recorded split without later trades', async (type) => {
+    const { policy, txClient } = createHarness()
+    txClient.corporateAction.findFirst.mockResolvedValue({ id: 'split' })
+    const decision = await policy.resolveCreateMutation(txClient as never, { accountId, assetId, type, tradeTime })
+    expect(decision.needsFullScopeReplay).toBe(true)
+    expect(decision.canUseIncrementalSellPlan).toBe(false)
   })
 
   it('requires full scope replay when creating a backdated buy before future sells', async () => {

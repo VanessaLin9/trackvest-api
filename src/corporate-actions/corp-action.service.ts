@@ -19,7 +19,7 @@ import {
 
 /**
  * 拆股 sync：upsert CorporateAction → 對 affected (account, asset) replay → 重貼 sell GL（PR #19）。
- * TW 資料來自 FinMind；US provider 目前為 stub（見 `UsSplitInferProvider`）。
+ * TW 資料來自 FinMind；US 使用 Alpha Vantage 的明確分割事件。
  */
 @Injectable()
 export class CorpActionService {
@@ -49,7 +49,7 @@ export class CorpActionService {
 
     let assetsProcessed = 0
     let eventsUpserted = 0
-    const upsertedActionsByAsset = new Map<string, string[]>()
+    let scopesReplayed = 0
 
     const providers: SplitEventProvider[] = []
     if (market === 'all' || market === 'tw') {
@@ -64,6 +64,7 @@ export class CorpActionService {
       assetsProcessed += assets.length
 
       for (const asset of assets) {
+        const upsertedActionsByAsset = new Map<string, string[]>()
         const events = await provider.fetchSplitEvents({
           stockId: asset.symbol,
           startDate,
@@ -78,10 +79,10 @@ export class CorpActionService {
           actionIds.push(corporateAction.id)
           upsertedActionsByAsset.set(asset.id, actionIds)
         }
+        // Finish each asset before the next provider request can fail or hit its quota.
+        scopesReplayed += await this.replayAffectedScopes(upsertedActionsByAsset)
       }
     }
-
-    const scopesReplayed = await this.replayAffectedScopes(upsertedActionsByAsset)
 
     return {
       market,

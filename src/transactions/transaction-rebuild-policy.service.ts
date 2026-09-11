@@ -163,6 +163,13 @@ export class TransactionRebuildPolicyService {
     candidate: ScopedTransactionCandidate,
     scope: PositionScope,
   ) {
+    const laterSplit = await prisma.corporateAction.findFirst({
+      where: { assetId: scope.assetId, exDate: { gt: candidate.tradeTime, lte: new Date() } },
+      select: { id: true },
+    })
+    // Backdated buys/sells must use the units at their trade date, not current lots.
+    if (laterSplit) return true
+
     if (candidate.type === 'sell') {
       return this.hasLaterScopedActivityInScope(prisma, scope, candidate.tradeTime)
     }

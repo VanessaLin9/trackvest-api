@@ -1,7 +1,7 @@
 // src/gl/posting.service.ts
 import { BadRequestException, Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma.service'
-import type { Currency, Prisma, Transaction, TxType } from '@prisma/client'
+import { Prisma, type Currency, type Transaction, type TxType } from '@prisma/client'
 import { OwnershipService } from '../common/services/ownership.service'
 import { GlService } from './services/gl.service'
 import {
@@ -198,45 +198,47 @@ export class PostingService {
           throw new BadRequestException('Sell transaction is missing FIFO lot matches')
         }
 
-        const netProceeds = toNumber(tx.amount)
-        const charges = toNumber(tx.fee) + toNumber(tx.tax)
-        const grossProceeds = netProceeds + charges
+        const netProceeds = new Prisma.Decimal(tx.amount)
+        const charges = new Prisma.Decimal(tx.fee).add(tx.tax)
+        const grossProceeds = netProceeds.add(charges)
         const historicalCost = matches.reduce(
-          (sum, match) => sum + toNumber(match.quantity) * toNumber(match.unitCost),
-          0,
+          (sum, match) => sum.add(new Prisma.Decimal(match.quantity).mul(match.unitCost)),
+          new Prisma.Decimal(0),
         )
-        const realizedPnl = grossProceeds - historicalCost
+        const realizedPnl = grossProceeds.sub(historicalCost)
+        // Broker-confirmed decimal payments must reach GL without a floating-point round trip.
+        const postingAmount = (amount: Prisma.Decimal) => tx.cashInLieuActionId ? amount : amount.toNumber()
 
         const lines: GlLineInput[] = [
-          { glAccountId: cashGlId, side: 'debit', amount: netProceeds, currency: ccy, note: 'sell proceeds in' },
-          { glAccountId: investGlId, side: 'credit', amount: historicalCost, currency: ccy, note: 'sell cost basis out' },
+          { glAccountId: cashGlId, side: 'debit', amount: postingAmount(netProceeds), currency: ccy, note: 'sell proceeds in' },
+          { glAccountId: investGlId, side: 'credit', amount: postingAmount(historicalCost), currency: ccy, note: 'sell cost basis out' },
         ]
 
-        if (charges > 0) {
+        if (charges.gt(0)) {
           lines.push({
             glAccountId: feeGlId,
             side: 'debit',
-            amount: charges,
+            amount: postingAmount(charges),
             currency: ccy,
             note: 'sell fee and tax',
           })
         }
 
-        if (realizedPnl > 0) {
+        if (realizedPnl.gt(0)) {
           const realizedGainGlId = await this.glService.getRealizedGainIncomeGlAccountId(userId, prisma)
           lines.push({
             glAccountId: realizedGainGlId,
             side: 'credit',
-            amount: realizedPnl,
+            amount: postingAmount(realizedPnl),
             currency: ccy,
             note: 'realized gain',
           })
-        } else if (realizedPnl < 0) {
+        } else if (realizedPnl.lt(0)) {
           const realizedLossGlId = await this.glService.getRealizedLossExpenseGlAccountId(userId, prisma)
           lines.push({
             glAccountId: realizedLossGlId,
             side: 'debit',
-            amount: Math.abs(realizedPnl),
+            amount: postingAmount(realizedPnl.abs()),
             currency: ccy,
             note: 'realized loss',
           })

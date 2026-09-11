@@ -123,6 +123,24 @@ describe('split-adjusted portfolio trends', () => {
     )
   })
 
+  it('keeps fractional rights and does not treat cash-in-lieu as a market quote', async () => {
+    const { service, prisma } = harness(0.1)
+    const [buy] = await prisma.transaction.findMany()
+    prisma.transaction.findMany.mockResolvedValue([
+      { ...buy, quantity: 15, price: 10, amount: 150 },
+      { ...buy, id: 'cash', type: 'sell', quantity: 0.5, price: 120, amount: 60,
+        cashInLieuActionId: 'reverse-split', tradeTime: new Date('2025-06-20') },
+    ])
+    prisma.price.findMany.mockResolvedValue([
+      { assetId: '0050', asOf: new Date('2025-06-17'), price: 10 },
+    ])
+    const result = await service.getHoldingTrend('user-1', '0050')
+    expect(result.points.find((p) => p.date === '2025-06-18')).toMatchObject({
+      investedAmount: 150, marketValue: 150,
+    })
+    expect(result.points.at(-1)).toMatchObject({ investedAmount: 100, marketValue: 100 })
+  })
+
   it('applies successive splits only to existing lots of the affected asset', async () => {
     const { service, prisma } = harness()
     const txs = await prisma.transaction.findMany()

@@ -3,7 +3,7 @@ import { TxType } from '@prisma/client'
 import { OwnershipService } from '../common/services/ownership.service'
 import { roundTo, toNumber } from '../common/utils/number.util'
 import { PrismaService } from '../prisma.service'
-import { roundTwShareQuantity } from '../corporate-actions/corp-action-ratio.util'
+import { adjustLotForSplit } from '../corporate-actions/split-lot.util'
 import { GetPortfolioDisplayCurrencyDto } from './dto/get-portfolio-display-currency.dto'
 import {
   PortfolioHoldingTrendResponseDto,
@@ -23,6 +23,7 @@ type HistoricalTransactionRecord = {
   amount: number
   price: number | null
   tradeTime: Date
+  cashInLieuActionId?: string | null
 }
 
 type HistoricalPriceRecord = {
@@ -103,6 +104,7 @@ export class PortfolioTrendService {
         amount: true,
         price: true,
         tradeTime: true,
+        cashInLieuActionId: true,
       },
     })
 
@@ -124,6 +126,7 @@ export class PortfolioTrendService {
       amount: toNumber(transaction.amount),
       price: transaction.price == null ? null : toNumber(transaction.price),
       tradeTime: transaction.tradeTime,
+      cashInLieuActionId: transaction.cashInLieuActionId,
     }))
 
     const assetIds = [...new Set(normalizedTransactions.map((transaction) => transaction.assetId))]
@@ -208,6 +211,7 @@ export class PortfolioTrendService {
         amount: true,
         price: true,
         tradeTime: true,
+        cashInLieuActionId: true,
       },
     })
 
@@ -224,6 +228,7 @@ export class PortfolioTrendService {
       amount: toNumber(transaction.amount),
       price: transaction.price == null ? null : toNumber(transaction.price),
       tradeTime: transaction.tradeTime,
+      cashInLieuActionId: transaction.cashInLieuActionId,
     }))
 
     const [prices, accounts, asset, splits] = await Promise.all([
@@ -485,9 +490,7 @@ export class PortfolioTrendService {
       if (scopeKey.split(':')[1] !== split.assetId) continue
       for (const lot of lots) {
         if (lot.remainingQuantity <= 1e-9) continue
-        const quantity = lot.remainingQuantity * split.ratio
-        lot.remainingQuantity = split.market === 'tw' ? roundTwShareQuantity(quantity) : quantity
-        lot.unitCost /= split.ratio
+        adjustLotForSplit(lot, split.ratio)
       }
     }
     // A carried-forward quote is still in pre-split units until a new quote arrives.
@@ -503,7 +506,7 @@ export class PortfolioTrendService {
     const scopeKey = `${transaction.accountId}:${transaction.assetId}`
     const scopeLots = openLotsByScope.get(scopeKey) ?? []
 
-    if (transaction.price != null && transaction.price > 0) {
+    if (!transaction.cashInLieuActionId && transaction.price != null && transaction.price > 0) {
       latestPriceByAsset.set(transaction.assetId, transaction.price)
     }
 

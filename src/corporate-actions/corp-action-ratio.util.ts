@@ -26,7 +26,3 @@ export function snapTwSplitRatio(
   }
   return raw
 }
-
-export function roundTwShareQuantity(quantity: number): number {
-  return Math.round(quantity)
-}
