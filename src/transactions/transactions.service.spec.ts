@@ -40,6 +40,7 @@ describe('TransactionsService', () => {
 
   function createHarness() {
     const txClient = {
+      corporateAction: { findFirst: jest.fn().mockResolvedValue(null) },
       transaction: {
         create: jest.fn(),
         findFirst: jest.fn(),

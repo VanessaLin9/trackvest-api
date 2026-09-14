@@ -19,7 +19,7 @@ import {
 
 /**
  * 拆股 sync：upsert CorporateAction → 對 affected (account, asset) replay → 重貼 sell GL（PR #19）。
- * TW 資料來自 FinMind；US provider 目前為 stub（見 `UsSplitInferProvider`）。
+ * TW 資料來自 FinMind；US 使用 Alpha Vantage 的明確分割事件。
  */
 @Injectable()
 export class CorpActionService {
@@ -49,7 +49,7 @@ export class CorpActionService {
 
     let assetsProcessed = 0
     let eventsUpserted = 0
-    const upsertedActionsByAsset = new Map<string, string[]>()
+    let scopesReplayed = 0
 
     const providers: SplitEventProvider[] = []
     if (market === 'all' || market === 'tw') {
@@ -59,29 +59,47 @@ export class CorpActionService {
       providers.push(this.usSplitProvider)
     }
 
+    const providerAssets = [] as Array<{ provider: SplitEventProvider; assets: Array<{ id: string; symbol: string }> }>
     for (const provider of providers) {
-      const assets = await this.resolveAssetsForMarket(provider.market, input.assetIds)
+      providerAssets.push({ provider, assets: await this.resolveAssetsForMarket(provider.market, input.assetIds) })
+    }
+    const scopeKey = this.syncScopeKey(market, startDate, providerAssets.flatMap(({ assets }) => assets.map((asset) => asset.id)))
+    const syncRun = await this.prepareSyncRun(market, startDate, endDate, scopeKey)
+
+    for (const { provider, assets } of providerAssets) {
       assetsProcessed += assets.length
 
       for (const asset of assets) {
-        const events = await provider.fetchSplitEvents({
-          stockId: asset.symbol,
-          startDate,
-          endDate,
-        })
+        const runAsset = await this.prepareSyncAsset(syncRun, asset)
+        if (runAsset?.status === 'succeeded') continue
+        await this.markSyncAssetRunning(runAsset)
+        const upsertedActionsByAsset = new Map<string, string[]>()
+        try {
+          const events = await provider.fetchSplitEvents({
+            stockId: asset.symbol,
+            startDate,
+            endDate,
+          })
 
-        for (const event of events) {
-          const corporateAction = await this.upsertCorporateAction(asset.id, provider, event)
-          eventsUpserted += 1
+          for (const event of events) {
+            const corporateAction = await this.upsertCorporateAction(asset.id, provider, event)
+            eventsUpserted += 1
 
-          const actionIds = upsertedActionsByAsset.get(asset.id) ?? []
-          actionIds.push(corporateAction.id)
-          upsertedActionsByAsset.set(asset.id, actionIds)
+            const actionIds = upsertedActionsByAsset.get(asset.id) ?? []
+            actionIds.push(corporateAction.id)
+            upsertedActionsByAsset.set(asset.id, actionIds)
+          }
+          scopesReplayed += await this.replayAffectedScopes(upsertedActionsByAsset)
+          await this.markSyncAssetSucceeded(runAsset)
+        } catch (error) {
+          await this.markSyncAssetFailed(runAsset, error)
+          await this.markSyncRunFailed(syncRun, error)
+          throw error
         }
       }
     }
 
-    const scopesReplayed = await this.replayAffectedScopes(upsertedActionsByAsset)
+    await this.markSyncRunCompleted(syncRun)
 
     return {
       market,
@@ -90,6 +108,64 @@ export class CorpActionService {
       scopesReplayed,
       replayPending: eventsUpserted > 0 && scopesReplayed === 0,
     }
+  }
+
+  private async prepareSyncRun(market: CorpActionMarket | 'all', startDate: string, endDate: string, scopeKey: string) {
+    const model = (this.prisma as any).corporateActionSyncRun as typeof this.prisma.corporateActionSyncRun | undefined
+    if (!model) return null
+    const failedRun = await model.findFirst({
+      where: { market, scopeKey, status: { in: ['running', 'failed'] }, startDate: { lte: new Date(`${startDate}T00:00:00.000Z`) } },
+      orderBy: { createdAt: 'desc' },
+    })
+    if (failedRun) {
+      return model.update({ where: { id: failedRun.id }, data: { endDate: new Date(`${endDate}T00:00:00.000Z`), status: 'running', error: null } })
+    }
+    return model.create({ data: { market, scopeKey, startDate: new Date(`${startDate}T00:00:00.000Z`), endDate: new Date(`${endDate}T00:00:00.000Z`) } })
+  }
+
+  private syncScopeKey(market: CorpActionMarket | 'all', startDate: string, assetIds: string[]): string {
+    return `${market}:${startDate}:${[...new Set(assetIds)].sort().join(',')}`
+  }
+
+  private async prepareSyncAsset(run: any, asset: { id: string; symbol: string }) {
+    if (!run) return null
+    const model = (this.prisma as any).corporateActionSyncAsset
+    return model.upsert({
+      where: { runId_assetId: { runId: run.id, assetId: asset.id } },
+      create: { runId: run.id, assetId: asset.id, symbol: asset.symbol },
+      update: { symbol: asset.symbol },
+    })
+  }
+
+  private async markSyncAssetRunning(runAsset: any) {
+    if (!runAsset) return
+    await (this.prisma as any).corporateActionSyncAsset.update({ where: { id: runAsset.id }, data: { status: 'running', attempts: { increment: 1 }, startedAt: new Date(), error: null } })
+  }
+
+  private async markSyncAssetSucceeded(runAsset: any) {
+    if (!runAsset) return
+    await (this.prisma as any).corporateActionSyncAsset.update({ where: { id: runAsset.id }, data: { status: 'succeeded', completedAt: new Date(), error: null } })
+  }
+
+  private async markSyncAssetFailed(runAsset: any, error: unknown) {
+    if (!runAsset) return
+    await (this.prisma as any).corporateActionSyncAsset.update({ where: { id: runAsset.id }, data: { status: 'failed', error: this.syncError(error) } })
+  }
+
+  private async markSyncRunFailed(run: any, error: unknown) {
+    if (!run) return
+    await (this.prisma as any).corporateActionSyncRun.update({ where: { id: run.id }, data: { status: 'failed', error: this.syncError(error) } })
+  }
+
+  private async markSyncRunCompleted(run: any) {
+    if (!run) return
+    const pending = await (this.prisma as any).corporateActionSyncAsset.count({ where: { runId: run.id, status: { not: 'succeeded' } } })
+    if (pending > 0) return
+    await (this.prisma as any).corporateActionSyncRun.update({ where: { id: run.id }, data: { status: 'completed', completedAt: new Date(), error: null } })
+  }
+
+  private syncError(error: unknown): string {
+    return error instanceof Error ? error.message.slice(0, 1000) : 'Unknown sync error'
   }
 
   /**

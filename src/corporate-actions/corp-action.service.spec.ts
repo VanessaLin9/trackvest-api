@@ -1,6 +1,6 @@
 import { CorpActionService } from './corp-action.service'
 import { FinmindTwSplitProvider } from './providers/finmind-tw-split.provider'
-import { UsSplitInferProvider } from './providers/us-split-infer.provider'
+import { AlphaVantageUsSplitProvider } from './providers/alpha-vantage-us-split.provider'
 
 describe('CorpActionService', () => {
   const assetId = 'yuanta50-asset'
@@ -12,7 +12,8 @@ describe('CorpActionService', () => {
 
   function createHarness() {
     const twSplitProvider = new FinmindTwSplitProvider()
-    const usSplitProvider = new UsSplitInferProvider()
+    const usSplitProvider = new AlphaVantageUsSplitProvider()
+    jest.spyOn(usSplitProvider, 'fetchSplitEvents').mockResolvedValue([])
 
     const txClient = {
       transaction: {
@@ -71,8 +72,32 @@ describe('CorpActionService', () => {
       },
     ])
 
-    return { service, prisma, txClient, positionReplayService, postingService }
+    return { service, prisma, txClient, positionReplayService, postingService, twSplitProvider, usSplitProvider }
   }
+
+  it('finishes replay for an asset before the next provider request hits a quota error', async () => {
+    const { service, prisma, twSplitProvider, positionReplayService } = createHarness()
+    prisma.asset.findMany.mockResolvedValue([{ id: assetId, symbol: '0050' }, { id: 'second', symbol: 'OTHER' }])
+    prisma.corporateAction.upsert.mockResolvedValue({ id: corporateActionId })
+    prisma.transaction.findMany.mockResolvedValue([{ accountId: accountWithOpenLots, assetId }])
+    jest.mocked(twSplitProvider.fetchSplitEvents)
+      .mockResolvedValueOnce([{ stockId: '0050', exDate: '2025-06-18', direction: 'split', ratio: 4, sourceKey: '0050:2025-06-18' }])
+      .mockRejectedValueOnce(new Error('quota exceeded'))
+    await expect(service.syncSplits({ market: 'tw' })).rejects.toThrow('quota exceeded')
+    expect(positionReplayService.rebuildScope).toHaveBeenCalledTimes(1)
+    expect(positionReplayService.rebuildScope.mock.invocationCallOrder[0]).toBeLessThan(jest.mocked(twSplitProvider.fetchSplitEvents).mock.invocationCallOrder[1])
+  })
+
+  it('persists and replays explicit US reverse split events', async () => {
+    const { service, prisma, usSplitProvider, positionReplayService } = createHarness()
+    prisma.asset.findMany.mockResolvedValue([{ id: assetId, symbol: 'TEST' }])
+    prisma.corporateAction.upsert.mockResolvedValue({ id: corporateActionId })
+    prisma.transaction.findMany.mockResolvedValue([{ accountId: accountWithOpenLots, assetId }])
+    jest.mocked(usSplitProvider.fetchSplitEvents).mockResolvedValue([{ stockId: 'TEST', exDate: '2025-06-18', direction: 'reverse_split', ratio: 0.1, sourceKey: 'TEST:2025-06-18' }])
+    expect(await service.syncSplits({ market: 'us' })).toMatchObject({ eventsUpserted: 1, scopesReplayed: 1 })
+    expect(prisma.corporateAction.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ source: 'alpha-vantage', market: 'us', type: 'reverse_split', ratio: 0.1 }) }))
+    expect(positionReplayService.rebuildScope).toHaveBeenCalledTimes(1)
+  })
 
   it('syncSplits upserts corporate actions without mutating position lots directly', async () => {
     const { service, prisma } = createHarness()
@@ -245,5 +270,25 @@ describe('CorpActionService', () => {
         appliedAt: expect.any(Date),
       },
     })
+  })
+
+  it('resumes a failed run by skipping assets already marked succeeded', async () => {
+    const { service, prisma, usSplitProvider } = createHarness()
+    const run = { id: 'run-1', market: 'us', status: 'failed' }
+    const runAsset = { id: 'run-asset-1', status: 'succeeded' }
+    prisma.asset.findMany.mockResolvedValue([{ id: assetId, symbol: 'AAPL' }])
+    ;(prisma as any).corporateActionSyncRun = {
+      findFirst: jest.fn().mockResolvedValue(run),
+      update: jest.fn().mockResolvedValue({ ...run, status: 'running' }),
+    }
+    ;(prisma as any).corporateActionSyncAsset = {
+      upsert: jest.fn().mockResolvedValue(runAsset),
+      count: jest.fn().mockResolvedValue(0),
+    }
+
+    const result = await service.syncSplits({ market: 'us', startDate: '2020-01-01', endDate: '2026-09-12' })
+
+    expect(result).toMatchObject({ assetsProcessed: 1, eventsUpserted: 0, scopesReplayed: 0 })
+    expect(usSplitProvider.fetchSplitEvents).not.toHaveBeenCalled()
   })
 })

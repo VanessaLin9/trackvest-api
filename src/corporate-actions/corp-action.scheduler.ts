@@ -29,7 +29,7 @@ export class CorpActionScheduler {
     }
   }
 
-  /** Daily US split sync placeholder (v1 provider returns no events). */
+  /** Daily US historical split sync through Alpha Vantage. */
   @Cron('30 18 * * 1-5', { timeZone: 'America/New_York' })
   async syncUsSplitsCron() {
     if (!isScheduledJobsEnabled()) {

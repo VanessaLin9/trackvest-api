@@ -33,6 +33,9 @@ import { PortfolioTrendService } from './portfolio-trend.service'
 describe('PortfolioService', () => {
   function createHarness() {
     const prisma = {
+      corporateAction: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       position: {
         findMany: jest.fn(),
       },

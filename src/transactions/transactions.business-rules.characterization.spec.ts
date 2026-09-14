@@ -12,6 +12,7 @@ describe('TransactionsService business rules (characterization)', () => {
 
   function createHarness() {
     const txClient = {
+      corporateAction: { findFirst: jest.fn().mockResolvedValue(null) },
       transaction: {
         create: jest.fn(),
         update: jest.fn(),

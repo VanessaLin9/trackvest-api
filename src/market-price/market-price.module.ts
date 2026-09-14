@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common'
+import { AlphaVantageUsSplitProvider } from '../corporate-actions/providers/alpha-vantage-us-split.provider'
 import { MarketPriceController } from './market-price.controller'
 import { MarketPriceScheduler } from './market-price.scheduler'
 import { MarketPriceService } from './market-price.service'
@@ -12,6 +13,7 @@ import { FinmindUsPriceProvider } from './providers/finmind-us-price.provider'
 @Module({
   controllers: [MarketPriceController],
   providers: [
+    AlphaVantageUsSplitProvider,
     MarketPriceService,
     MarketPriceScheduler,
     FinmindTaiwanPriceProvider,

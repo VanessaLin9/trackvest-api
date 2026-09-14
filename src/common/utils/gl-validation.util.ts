@@ -1,12 +1,12 @@
 import { BadRequestException } from '@nestjs/common'
-import { Currency } from '@prisma/client'
+import { Currency, Prisma } from '@prisma/client'
 
 export type GlSide = 'debit' | 'credit'
 
 export interface GlLineInput {
   glAccountId: string
   side: GlSide
-  amount: number
+  amount: number | Prisma.Decimal
   currency: Currency
   note?: string
 }
@@ -18,12 +18,12 @@ export interface GlLineInput {
 export function ensureBalanced(lines: GlLineInput[]): void {
   const debit = lines
     .filter((l) => l.side === 'debit')
-    .reduce((sum, l) => sum + l.amount, 0)
+    .reduce((sum, l) => sum.add(l.amount), new Prisma.Decimal(0))
   const credit = lines
     .filter((l) => l.side === 'credit')
-    .reduce((sum, l) => sum + l.amount, 0)
+    .reduce((sum, l) => sum.add(l.amount), new Prisma.Decimal(0))
 
-  if (Math.abs(debit - credit) > 1e-6) {
+  if (debit.sub(credit).abs().gt('0.000001')) {
     throw new BadRequestException(
       `Entry not balanced: debit=${debit}, credit=${credit}`,
     )
@@ -58,7 +58,7 @@ export function validateGlLines(lines: GlLineInput[]): void {
 export function calculateTotalDebit(lines: GlLineInput[]): number {
   return lines
     .filter((l) => l.side === 'debit')
-    .reduce((sum, l) => sum + l.amount, 0)
+    .reduce((sum, l) => sum.add(l.amount), new Prisma.Decimal(0)).toNumber()
 }
 
 /**
@@ -67,6 +67,5 @@ export function calculateTotalDebit(lines: GlLineInput[]): number {
 export function calculateTotalCredit(lines: GlLineInput[]): number {
   return lines
     .filter((l) => l.side === 'credit')
-    .reduce((sum, l) => sum + l.amount, 0)
+    .reduce((sum, l) => sum.add(l.amount), new Prisma.Decimal(0)).toNumber()
 }
-

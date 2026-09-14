@@ -168,6 +168,10 @@ export class TransactionsService {
       throw new NotFoundException('Transaction not found')
     }
 
+    if (existing.cashInLieuActionId) {
+      throw new BadRequestException('Cash-in-lieu settlements cannot be edited as ordinary trades; delete and re-record the broker payment')
+    }
+
     const nextTransaction: CreateTransactionDto = {
       accountId: dto.accountId ?? existing.accountId,
       assetId: dto.assetId === undefined ? existing.assetId ?? undefined : dto.assetId,

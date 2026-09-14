@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common'
+import { CashInLieuService } from './cash-in-lieu.service'
+import { CashInLieuController } from './cash-in-lieu.controller'
 import { GlModule } from '../gl/gl.module'
 import { CorpActionController } from './corp-action.controller'
 import { CorpActionScheduler } from './corp-action.scheduler'
@@ -9,24 +11,25 @@ import {
   US_SPLIT_EVENT_PROVIDER,
 } from './corp-action.types'
 import { FinmindTwSplitProvider } from './providers/finmind-tw-split.provider'
-import { UsSplitInferProvider } from './providers/us-split-infer.provider'
+import { AlphaVantageUsSplitProvider } from './providers/alpha-vantage-us-split.provider'
 
 @Module({
   imports: [GlModule],
-  controllers: [CorpActionController],
+  controllers: [CorpActionController, CashInLieuController],
   providers: [
+    CashInLieuService,
     CorpActionService,
     CorpActionScheduler,
     PositionReplayService,
     FinmindTwSplitProvider,
-    UsSplitInferProvider,
+    AlphaVantageUsSplitProvider,
     {
       provide: TW_SPLIT_EVENT_PROVIDER,
       useExisting: FinmindTwSplitProvider,
     },
     {
       provide: US_SPLIT_EVENT_PROVIDER,
-      useExisting: UsSplitInferProvider,
+      useExisting: AlphaVantageUsSplitProvider,
     },
   ],
   exports: [CorpActionService, PositionReplayService],

@@ -4,6 +4,9 @@ import { Expose } from 'class-transformer'
 import { TransactionBaseDto } from './transaction.base.dto'
 
 export class TransactionBaseResponseDto {
+  @ApiProperty({ nullable: true, description: 'Reverse split associated with a cash-in-lieu payment' })
+  @Expose()
+  cashInLieuActionId!: string | null
   @ApiProperty({ example: 'e8e1d0a6-...' })
   @Expose()
   id!: string

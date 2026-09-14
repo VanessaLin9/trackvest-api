@@ -165,7 +165,38 @@ pnpm corp-actions:sync-splits tw 2025-06-01 2025-07-31
 
 Admin HTTP (admin role): `POST /corp-actions/sync/splits`
 
-Scheduled crons: TW weekdays 18:00 Taipei; US placeholder weekdays 18:30 New York.
+Scheduled crons: TW weekdays 18:00 Taipei; US weekdays 18:30 New York.
+
+Crons run only when `ENABLE_SCHEDULED_JOBS=true`. Price sync does not persist corporate actions;
+after importing older transactions, run split sync over the relevant history (the default
+window is five years). Portfolio and holding trends replay persisted split events before
+same-day transactions and closing prices. If no new price exists on the split date, the
+carried-forward price is divided by the ratio so the split alone does not change valuation.
+
+### US splits
+
+Set `ALPHAVANTAGE_API_KEY` in `.env`. US sync uses explicit historical
+[Alpha Vantage SPLITS events](https://www.alphavantage.co/documentation/#splits),
+not changes in adjusted close (which also reflect dividends).
+
+```bash
+pnpm corp-actions:sync-splits us 1970-01-01
+# Read-only live AAPL event and historical-price acceptance
+pnpm exec ts-node scripts/check-us-splits.ts
+# Test DB only: back up affected records, then sync ever-held US assets
+pnpm exec ts-node scripts/check-us-splits.ts --apply
+```
+
+Missing keys, quota/access errors and malformed upstream responses fail explicitly;
+they are not treated as an empty split history. A completed asset is replayed before
+requesting the next asset. If a later asset fails, retry the sync when access recovers.
+API quotas apply to both split sync and US price sync.
+Requests are spaced at least 1.1 seconds apart within one process, with one-minute
+per-provider history reuse. This does not coordinate multiple workers or lift daily quotas.
+Each sync run persists per-asset `pending`／`running`／`succeeded`／`failed` state.
+If a provider quota or network error interrupts a run, the next run resumes the latest
+incomplete run and skips assets already marked `succeeded`; failures are retried and
+recorded for diagnosis.
 
 ### 0050 acceptance (local)
 
@@ -178,6 +209,24 @@ pnpm corp-actions:verify-0050
 ```
 
 Expected: **260** open `0050` shares on demo `Broker TWD`, avgCost ~**47** TWD, with a `CorporateAction` row for the 2025-06-18 1:4 split. `Transaction` quantities stay 100/50/80/40/20.
+
+For an existing local test database with additional transactions, do **not** reseed or
+use the fixed 260-share expectation. Check the current 0050 history instead:
+
+```bash
+# Read-only: verify the persisted split, quantities, costs, FIFO, GL and holding trend
+pnpm exec ts-node scripts/check-0050-split.ts
+
+# Test database only: save a JSON baseline to a temporary directory, sync only 0050
+# twice and verify after each run (requires FIN_MIND_TOKEN).
+pnpm exec ts-node scripts/check-0050-split.ts --apply
+```
+
+This check expects the one 2025-06-18 1:4 split and TWD accounts. It computes expected
+quantities from the actual transactions and checks that those source transactions remain
+unchanged. Repeated sync may archive and replace sell GL entries; only one active entry
+per sale must remain. Reverse splits that produce fractional Taiwan shares still use the
+existing rounding policy; cash-in-lieu settlement is not implemented.
 
 Unit tests for replay engine:
 
@@ -206,7 +255,20 @@ pnpm prices:sync-us -- --mode=backfill
 
 Admin HTTP (admin role): `POST /prices/sync/taiwan`, `POST /prices/sync/us`.
 
-Portfolio valuation uses `Close` for US symbols; `adjClose` is stored for future trend/split work.
+US price sync also requires `ALPHAVANTAGE_API_KEY`. FinMind US OHLC is split-adjusted:
+the provider restores original-share OHLC using all later split events through today,
+including events after the requested price window. Rows use provider
+`finmind-us-unadjusted`; `adjClose` and volume retain the upstream values.
+Portfolio valuation uses the restored `close`, not `adjClose`.
+
+Existing US historical prices are not automatically rewritten by a deployment.
+Refresh the affected historical window explicitly (daily mode upserts existing rows),
+and sync corporate actions over the same holding history:
+
+```bash
+pnpm prices:sync-us -- --mode=daily --start-date=2020-01-01 --end-date=2026-09-10
+pnpm corp-actions:sync-splits us 2020-01-01
+```
 
 ## Taiwan asset catalog bootstrap
 
