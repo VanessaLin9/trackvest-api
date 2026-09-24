@@ -134,7 +134,7 @@ export class TransactionsController {
     return this.svc.remove(id, userId)
   }
 
-  // 硬刪會清掉交易並重算持倉，產品畫面沒有這個動作。只留給 admin。
+  // 硬刪會清掉交易並重算持倉，產品畫面沒有這個動作。只留給 admin（PR #46）。
   // 一般使用者仍走上面的 DELETE /transactions/:id 軟刪。
   @Delete(':id/hard')
   @Roles(UserRole.admin)

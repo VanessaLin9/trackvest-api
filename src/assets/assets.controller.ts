@@ -31,7 +31,7 @@ import { Serialize } from '../common/interceptors/serialize.interceptor'
 export class AssetsController {
   constructor(private readonly svc: AssetsService) {}
 
-  // 資產是全域目錄。建立、修改、刪除只給 admin；一般使用者只能讀與搜尋。
+  // 資產是全域目錄。建立、修改、刪除只給 admin；一般使用者只能讀與搜尋（PR #46）。
   @Post()
   @Roles(UserRole.admin)
   @ApiCreatedResponse({ type: AssetResponseDto })
@@ -40,7 +40,7 @@ export class AssetsController {
     return this.svc.create(dto)
   }
 
-  // 別名不是改目錄本體。國泰匯入修復要讓已登入使用者把券商名稱對到既有標的，所以這裡不加 @Roles(admin)。
+  // 別名不是改目錄本體。國泰匯入修復要讓已登入使用者把券商名稱對到既有標的，所以這裡不加 @Roles(admin)（PR #46）。
   @Post(':id/aliases')
   @ApiOperation({
     summary: 'Create a broker-specific asset alias',
