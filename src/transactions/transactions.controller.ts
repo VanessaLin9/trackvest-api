@@ -19,8 +19,10 @@ import { ImportPreviewResponseDto } from './dto/import-preview.response.dto'
 import { ImportCommitResponseDto } from './dto/import-commit.response.dto'
 import { ImportCommitRejectedResponseDto } from './dto/import-commit-rejected.response.dto'
 import { ErrorResponse } from 'src/common/dto'
+import { UserRole } from '@prisma/client'
 import { AuthUser } from '../common/decorators/auth-user.decorator'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
+import { Roles } from '../common/decorators/roles.decorator'
 import { Serialize } from '../common/interceptors/serialize.interceptor'
 import { AuthenticatedUser } from '../common/types/auth-user'
 
@@ -132,7 +134,10 @@ export class TransactionsController {
     return this.svc.remove(id, userId)
   }
 
+  // 硬刪會清掉交易並重算持倉，產品畫面沒有這個動作。只留給 admin。
+  // 一般使用者仍走上面的 DELETE /transactions/:id 軟刪。
   @Delete(':id/hard')
+  @Roles(UserRole.admin)
   @ApiOkResponse({ type: TransactionResponseDto })
   @Serialize(TransactionResponseDto)
   async hardDelete(

@@ -10,6 +10,8 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger'
+import { UserRole } from '@prisma/client'
+import { Roles } from '../common/decorators/roles.decorator'
 import { AssetsService } from './assets.service'
 import {
   AssetAliasConflictResponseDto,
@@ -29,13 +31,16 @@ import { Serialize } from '../common/interceptors/serialize.interceptor'
 export class AssetsController {
   constructor(private readonly svc: AssetsService) {}
 
+  // 資產是全域目錄。建立、修改、刪除只給 admin；一般使用者只能讀與搜尋。
   @Post()
+  @Roles(UserRole.admin)
   @ApiCreatedResponse({ type: AssetResponseDto })
   @Serialize(AssetResponseDto)
   async create(@Body() dto: CreateAndUpdateAssetDto) {
     return this.svc.create(dto)
   }
 
+  // 別名不是改目錄本體。國泰匯入修復要讓已登入使用者把券商名稱對到既有標的，所以這裡不加 @Roles(admin)。
   @Post(':id/aliases')
   @ApiOperation({
     summary: 'Create a broker-specific asset alias',
@@ -77,6 +82,7 @@ export class AssetsController {
   }
 
   @Patch(':id')
+  @Roles(UserRole.admin)
   @ApiOkResponse({ type: AssetResponseDto })
   @Serialize(AssetResponseDto)
   async update(@Param('id') id: string, @Body() dto: CreateAndUpdateAssetDto) {
@@ -84,6 +90,7 @@ export class AssetsController {
   }
 
   @Delete(':id')
+  @Roles(UserRole.admin)
   @ApiOkResponse({ type: AssetResponseDto })
   @Serialize(AssetResponseDto)
   async remove(@Param('id') id: string) {
