@@ -1,14 +1,4 @@
-import { ApiProperty, IntersectionType } from '@nestjs/swagger'
-import { IsUUID } from 'class-validator'
 import { AccountBaseDto } from './account.base.dto'
 
-class UserIdOnlyDto {
-  @ApiProperty({ example: 'c2610e4e-1cca-401e-afa7-1ebf541d0000' })
-  @IsUUID()
-  userId!: string
-}
-  
-export class CreateAndUpdateAccountDto extends IntersectionType(
-  AccountBaseDto,
-  UserIdOnlyDto,
-) {}
+/** HTTP 建立／更新帳戶不再帶 userId。擁有者由 session 決定（PR #46）。 */
+export class CreateAndUpdateAccountDto extends AccountBaseDto {}

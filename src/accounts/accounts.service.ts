@@ -4,7 +4,7 @@ import { Account, AccountType, Currency, GlAccountType, Prisma } from '@prisma/c
 import { PrismaService } from '../prisma.service'
 import { CreateAndUpdateAccountDto } from './dto/account.createAndUpdate.dto'
 import { OwnershipService } from '../common/services/ownership.service'
-import { UserContext } from '../common/types/auth-user'
+import { AuthenticatedUser, UserContext } from '../common/types/auth-user'
 import { SUPPORTED_BROKER } from './account-broker.constants'
 
 type DbClient = Prisma.TransactionClient | PrismaService
@@ -41,18 +41,18 @@ export class AccountsService {
     return normalizedBroker
   }
 
-  private buildAccountData(dto: CreateAndUpdateAccountDto) {
-    const trimmedName = dto.name.trim()
+  private buildAccountData(input: CreateAndUpdateAccountDto & { userId: string }) {
+    const trimmedName = input.name.trim()
     if (!trimmedName) {
       throw new BadRequestException('Account name is required')
     }
 
     return {
-      userId: dto.userId,
+      userId: input.userId,
       name: trimmedName,
-      type: dto.type,
-      currency: dto.currency,
-      broker: this.normalizeBroker(dto.type, dto.broker),
+      type: input.type,
+      currency: input.currency,
+      broker: this.normalizeBroker(input.type, input.broker),
     }
   }
 
@@ -106,18 +106,22 @@ export class AccountsService {
    * 呼叫端已開 transaction 時建立帳戶（onboarding signup 用；PR #32）。
    * 一併 ensure 連結的現金 GL；不開 nested `$transaction`。
    */
-  async createInTransaction(dto: CreateAndUpdateAccountDto, db: DbClient) {
+  async createInTransaction(
+    dto: CreateAndUpdateAccountDto & { userId: string },
+    db: DbClient,
+  ) {
     const account = await db.account.create({ data: this.buildAccountData(dto) })
     await this.ensureLinkedGlAccount(account, db)
     return account
   }
 
-  async create(dto: CreateAndUpdateAccountDto, _user: UserContext) {
-    // Controller is responsible for `assertSameUserOrAdmin(dto.userId, user)`
-    // before reaching here. We still verify the target user exists.
-    await this.ownershipService.validateUserExists(dto.userId)
+  async create(dto: CreateAndUpdateAccountDto, user: AuthenticatedUser) {
+    // HTTP 建立一律掛在 session user。onboarding 走 createInTransaction，自己帶新 user id（PR #46）。
+    await this.ownershipService.validateUserExists(user.id)
 
-    return this.prisma.$transaction(async (db) => this.createInTransaction(dto, db))
+    return this.prisma.$transaction(async (db) =>
+      this.createInTransaction({ ...dto, userId: user.id }, db),
+    )
   }
 
   async findAll(user: UserContext) {
@@ -140,9 +144,12 @@ export class AccountsService {
     await this.ownershipService.validateAccountOwnership(id, user)
 
     return this.prisma.$transaction(async (db) => {
+      const existing = await db.account.findUnique({ where: { id } })
+      if (!existing) throw new NotFoundException('Account not found')
+
       const account = await db.account.update({
         where: { id },
-        data: this.buildAccountData(dto),
+        data: this.buildAccountData({ ...dto, userId: existing.userId }),
       })
       await this.ensureLinkedGlAccount(account, db)
       return account
