@@ -12,7 +12,7 @@ import { TransactionsService } from './transactions.service'
 import { FindTransactionsDto } from './dto/find-transaction.dto'
 import { CreateTransactionDto } from './dto/create-transaction.dto'
 import { CreateAndUpdateTransactionDto } from './dto/transaction.createAndUpdate.dto'
-import { TransactionResponseDto } from './dto/transaction.response.dto'
+import { TransactionListResponseDto, TransactionResponseDto } from './dto/transaction.response.dto'
 import { ImportTransactionsDto } from './dto/import-transactions.dto'
 import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
 import { ImportPreviewResponseDto } from './dto/import-preview.response.dto'
@@ -94,8 +94,10 @@ export class TransactionsController {
     return this.importService.commitImportTransactions(dto, userId)
   }
 
+  // 列表與單筆共用 TransactionResponseDto。金額是十進位字串；Swagger 不再把列表寫成陣列（PR #46）。
   @Get()
-  @ApiOkResponse({ type: TransactionResponseDto, isArray: true })
+  @ApiOkResponse({ type: TransactionListResponseDto })
+  @Serialize(TransactionListResponseDto)
   async findAll(
     @Query() q: FindTransactionsDto,
     @AuthUser() user: AuthenticatedUser,
