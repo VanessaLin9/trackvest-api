@@ -1,6 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { AssetClass, AssetType } from '@prisma/client'
+import { AssetClass, AssetType, TxType } from '@prisma/client'
 import { PortfolioDisplayCurrencyResponseDto } from './portfolio-display-currency.response.dto'
+
+export class PortfolioHoldingLastActivityDto {
+  @ApiProperty({ enum: TxType, example: TxType.buy })
+  type!: TxType
+
+  @ApiProperty({ example: '2026-04-04', description: 'UTC 日期 YYYY-MM-DD' })
+  tradeDate!: string
+
+  @ApiProperty({ nullable: true, description: '使用者自己寫的備註。沒有備註時前端用 type 與 tradeDate 組文案。' })
+  note!: string | null
+}
 
 export class PortfolioHoldingItemResponseDto {
   @ApiProperty({ example: 'asset-1' })
@@ -48,8 +59,12 @@ export class PortfolioHoldingItemResponseDto {
   @ApiProperty({ example: 0.2764 })
   weight!: number
 
-  @ApiProperty({ example: 'Buy on 2026-04-05', nullable: true })
-  lastActivitySummary!: string | null
+  @ApiProperty({
+    nullable: true,
+    type: PortfolioHoldingLastActivityDto,
+    description: '最近一筆交易的種類與日期。文案由前端 i18n 組，不回英文句子（PR #46）。',
+  })
+  lastActivity!: PortfolioHoldingLastActivityDto | null
 }
 
 export class PortfolioAllocationByTypeItemResponseDto {

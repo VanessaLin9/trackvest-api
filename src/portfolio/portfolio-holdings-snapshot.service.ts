@@ -242,7 +242,7 @@ export class PortfolioHoldingsSnapshotService {
           pnl: roundTo(pnl, 8),
           returnRate: convertedInvestedAmount > 0 ? roundTo(pnl / convertedInvestedAmount, 8) : 0,
           weight: 0,
-          lastActivitySummary: this.formatLastActivitySummary(
+          lastActivity: this.buildLastActivity(
             lastActivityByAssetId.get(holding.assetId) ?? null,
           ),
         }
@@ -385,33 +385,20 @@ export class PortfolioHoldingsSnapshotService {
     return normalizeAssetCurrencyInput(value)
   }
 
-  private formatLastActivitySummary(activity: HoldingActivityRecord | null): string | null {
+  private buildLastActivity(activity: HoldingActivityRecord | null): {
+    type: TxType
+    tradeDate: string
+    note: string | null
+  } | null {
     if (!activity) {
       return null
     }
 
     const note = activity.note?.trim()
-    if (note) {
-      return note
-    }
-
-    return `${this.getActivityLabel(activity.type)} on ${activity.tradeTime.toISOString().slice(0, 10)}`
-  }
-
-  private getActivityLabel(type: TxType): string {
-    switch (type) {
-      case 'buy':
-        return 'Buy'
-      case 'sell':
-        return 'Sell'
-      case 'dividend':
-        return 'Dividend'
-      case 'fee':
-        return 'Fee'
-      case 'deposit':
-        return 'Deposit'
-      case 'withdraw':
-        return 'Withdraw'
+    return {
+      type: activity.type,
+      tradeDate: activity.tradeTime.toISOString().slice(0, 10),
+      note: note ? note : null,
     }
   }
 }
