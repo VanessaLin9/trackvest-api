@@ -1,10 +1,10 @@
 // src/main.ts
 import { NestFactory } from '@nestjs/core'
 import { ValidationPipe } from '@nestjs/common'
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'
+import { SwaggerModule } from '@nestjs/swagger'
 import cookieParser from 'cookie-parser'
 import { AppModule } from './app.module'
-import { REFRESH_TOKEN_COOKIE } from './auth/auth.config'
+import { buildSwaggerConfig } from './swagger'
 
 
 async function bootstrap() {
@@ -38,22 +38,7 @@ async function bootstrap() {
   // Swagger（/docs）— cookie-based auth. Users can login via POST /auth/login
   // and the browser's cookie jar will carry the httpOnly access_token on
   // subsequent Try-it-out requests (same-origin).
-  const swaggerCfg = new DocumentBuilder()
-    .setTitle('Trackvest API')
-    .setDescription('API for investment bookkeeping')
-    .setVersion('0.2.0')
-    .addCookieAuth('access_token', { type: 'apiKey', in: 'cookie', name: 'access_token' })
-    .addCookieAuth(REFRESH_TOKEN_COOKIE, { type: 'apiKey', in: 'cookie', name: REFRESH_TOKEN_COOKIE })
-    .addTag('auth', 'Login / refresh / logout / me')
-    .addTag('health', 'Health check')
-    .addTag('users', 'User management')
-    .addTag('onboarding', 'First-run signup and initialization')
-    .addTag('accounts', 'Cash/Broker/Bank accounts')
-    .addTag('assets', 'Tradable assets catalog')
-    .addTag('transactions', 'Transaction records')
-    .addTag('gl', 'Double-entry ledger(entries & postings)')
-    .build()
-  const swaggerDoc = SwaggerModule.createDocument(app, swaggerCfg)
+  const swaggerDoc = SwaggerModule.createDocument(app, buildSwaggerConfig())
   SwaggerModule.setup('docs', app, swaggerDoc, {
     jsonDocumentUrl: 'docs/json',
     swaggerOptions: { withCredentials: true },

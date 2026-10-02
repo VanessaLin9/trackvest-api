@@ -341,7 +341,11 @@ describe('PortfolioService', () => {
         pnl: 120,
         returnRate: 0.22641509,
         weight: 0.76470588,
-        lastActivitySummary: 'trim position',
+        lastActivity: {
+          type: 'sell',
+          tradeDate: '2026-04-03',
+          note: 'trim position',
+        },
       },
       {
         assetId: 'asset-2',
@@ -359,7 +363,11 @@ describe('PortfolioService', () => {
         pnl: 0,
         returnRate: 0,
         weight: 0.23529412,
-        lastActivitySummary: 'Buy on 2026-04-04',
+        lastActivity: {
+          type: 'buy',
+          tradeDate: '2026-04-04',
+          note: null,
+        },
       },
     ])
     expect(result.allocationByType).toEqual([
@@ -745,7 +753,7 @@ describe('PortfolioService', () => {
         pnl: 50,
         returnRate: 0.26315789,
         weight: 1,
-        lastActivitySummary: null,
+        lastActivity: null,
       },
     ])
     expect(result.allocationByType).toEqual([
@@ -1209,7 +1217,7 @@ describe('PortfolioService', () => {
         pnl: 50,
         returnRate: 0.25,
         weight: 0.86956522,
-        lastActivitySummary: null,
+        lastActivity: null,
       },
       {
         assetId: 'asset-1',
@@ -1227,7 +1235,7 @@ describe('PortfolioService', () => {
         pnl: 6.25,
         returnRate: 0.2,
         weight: 0.13043478,
-        lastActivitySummary: null,
+        lastActivity: null,
       },
     ])
     expect(result.allocationByType).toEqual([
@@ -1335,7 +1343,7 @@ describe('PortfolioService', () => {
           pnl: 1280,
           returnRate: 0.2,
           weight: 1,
-          lastActivitySummary: null,
+          lastActivity: null,
         },
       ],
       allocationByType: [

@@ -1,6 +1,6 @@
 import { ValidationPipe, type INestApplication } from '@nestjs/common'
 import { Test, type TestingModule } from '@nestjs/testing'
-import { AssetType, Currency, GlAccountPurpose, GlAccountType } from '@prisma/client'
+import { AssetType, Currency, GlAccountPurpose, GlAccountType, UserRole } from '@prisma/client'
 import cookieParser from 'cookie-parser'
 import request from 'supertest'
 import type { App } from 'supertest/types'
@@ -127,8 +127,8 @@ describe('Transactions sell FIFO (e2e)', () => {
     return { user, account, asset }
   }
 
-  function auth(userId: string) {
-    return { Cookie: authCookieFor(app, { id: userId }) }
+  function auth(userId: string, role: UserRole = UserRole.user) {
+    return { Cookie: authCookieFor(app, { id: userId, role }) }
   }
 
   async function createTransaction(
@@ -465,7 +465,7 @@ describe('Transactions sell FIFO (e2e)', () => {
 
     await request(app.getHttpServer())
       .delete(`/transactions/${sell.body.id}/hard`)
-      .set(auth(user.id))
+      .set(auth(user.id, UserRole.admin))
       .expect(200)
 
     const position = await findActivePosition(account.id, asset.id)
@@ -578,7 +578,7 @@ describe('Transactions sell FIFO (e2e)', () => {
 
     await request(app.getHttpServer())
       .delete(`/transactions/${buy1.body.id}/hard`)
-      .set(auth(user.id))
+      .set(auth(user.id, UserRole.admin))
       .expect(200)
 
     const position = await findActivePosition(account.id, asset.id)
@@ -1258,7 +1258,7 @@ describe('Transactions sell FIFO (e2e)', () => {
 
       await request(app.getHttpServer())
         .delete(`/transactions/${buy1.body.id}/hard`)
-        .set(auth(user.id))
+        .set(auth(user.id, UserRole.admin))
         .expect(200)
 
       const position = await findActivePosition(account.id, asset.id)

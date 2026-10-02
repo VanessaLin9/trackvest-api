@@ -12,15 +12,17 @@ import { TransactionsService } from './transactions.service'
 import { FindTransactionsDto } from './dto/find-transaction.dto'
 import { CreateTransactionDto } from './dto/create-transaction.dto'
 import { CreateAndUpdateTransactionDto } from './dto/transaction.createAndUpdate.dto'
-import { TransactionResponseDto } from './dto/transaction.response.dto'
+import { TransactionListResponseDto, TransactionResponseDto } from './dto/transaction.response.dto'
 import { ImportTransactionsDto } from './dto/import-transactions.dto'
 import { ImportTransactionsResponseDto } from './dto/import-transactions.response.dto'
 import { ImportPreviewResponseDto } from './dto/import-preview.response.dto'
 import { ImportCommitResponseDto } from './dto/import-commit.response.dto'
 import { ImportCommitRejectedResponseDto } from './dto/import-commit-rejected.response.dto'
 import { ErrorResponse } from 'src/common/dto'
+import { UserRole } from '@prisma/client'
 import { AuthUser } from '../common/decorators/auth-user.decorator'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
+import { Roles } from '../common/decorators/roles.decorator'
 import { Serialize } from '../common/interceptors/serialize.interceptor'
 import { AuthenticatedUser } from '../common/types/auth-user'
 
@@ -92,8 +94,10 @@ export class TransactionsController {
     return this.importService.commitImportTransactions(dto, userId)
   }
 
+  // 列表與單筆共用 TransactionResponseDto。金額是十進位字串；Swagger 不再把列表寫成陣列（PR #46）。
   @Get()
-  @ApiOkResponse({ type: TransactionResponseDto, isArray: true })
+  @ApiOkResponse({ type: TransactionListResponseDto })
+  @Serialize(TransactionListResponseDto)
   async findAll(
     @Query() q: FindTransactionsDto,
     @AuthUser() user: AuthenticatedUser,
@@ -132,7 +136,10 @@ export class TransactionsController {
     return this.svc.remove(id, userId)
   }
 
+  // 硬刪會清掉交易並重算持倉，產品畫面沒有這個動作。只留給 admin（PR #46）。
+  // 一般使用者仍走上面的 DELETE /transactions/:id 軟刪。
   @Delete(':id/hard')
+  @Roles(UserRole.admin)
   @ApiOkResponse({ type: TransactionResponseDto })
   @Serialize(TransactionResponseDto)
   async hardDelete(

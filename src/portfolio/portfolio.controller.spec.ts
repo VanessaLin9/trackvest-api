@@ -70,7 +70,11 @@ describe('PortfolioController', () => {
           pnl: 100,
           returnRate: 0.2,
           weight: 1,
-          lastActivitySummary: 'Buy on 2026-04-05',
+          lastActivity: {
+            type: 'buy',
+            tradeDate: '2026-04-05',
+            note: null,
+          },
         },
       ],
       allocationByType: [
@@ -113,7 +117,11 @@ describe('PortfolioController', () => {
           pnl: 100,
           returnRate: 0.2,
           weight: 1,
-          lastActivitySummary: 'Buy on 2026-04-05',
+          lastActivity: {
+            type: 'buy',
+            tradeDate: '2026-04-05',
+            note: null,
+          },
         },
       ],
       allocationByType: [
