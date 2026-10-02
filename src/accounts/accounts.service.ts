@@ -20,8 +20,15 @@ export class AccountsService {
     return db ?? this.prisma
   }
 
-  /** Broker 帳戶只允許 SUPPORTED_BROKER 或空（PR #3）；非 broker 類型強制清掉 broker。 */
-  private normalizeBroker(type: AccountType, broker?: string | null): string | null {
+  /**
+   * 新建只允許 cathay 或空（PR #3）。
+   * 更新可沿用帳戶上已有的其他代碼，例如 seed 的 ib，不能改成新的不支援券商（PR #46）。
+   */
+  private normalizeBroker(
+    type: AccountType,
+    broker?: string | null,
+    existingBroker?: string | null,
+  ): string | null {
     const normalizedBroker = broker?.trim().toLowerCase() || null
 
     if (type !== AccountType.broker) {
@@ -32,16 +39,24 @@ export class AccountsService {
       return null
     }
 
-    if (normalizedBroker !== SUPPORTED_BROKER) {
-      throw new BadRequestException(
-        `Broker must be ${SUPPORTED_BROKER} or empty for broker accounts`,
-      )
+    if (normalizedBroker === SUPPORTED_BROKER) {
+      return normalizedBroker
     }
 
-    return normalizedBroker
+    const keptBroker = existingBroker?.trim().toLowerCase() || null
+    if (keptBroker && normalizedBroker === keptBroker) {
+      return keptBroker
+    }
+
+    throw new BadRequestException(
+      `Broker must be ${SUPPORTED_BROKER} or empty for broker accounts`,
+    )
   }
 
-  private buildAccountData(input: CreateAndUpdateAccountDto & { userId: string }) {
+  private buildAccountData(
+    input: CreateAndUpdateAccountDto & { userId: string },
+    existingBroker?: string | null,
+  ) {
     const trimmedName = input.name.trim()
     if (!trimmedName) {
       throw new BadRequestException('Account name is required')
@@ -52,7 +67,7 @@ export class AccountsService {
       name: trimmedName,
       type: input.type,
       currency: input.currency,
-      broker: this.normalizeBroker(input.type, input.broker),
+      broker: this.normalizeBroker(input.type, input.broker, existingBroker),
     }
   }
 
@@ -149,7 +164,7 @@ export class AccountsService {
 
       const account = await db.account.update({
         where: { id },
-        data: this.buildAccountData({ ...dto, userId: existing.userId }),
+        data: this.buildAccountData({ ...dto, userId: existing.userId }, existing.broker),
       })
       await this.ensureLinkedGlAccount(account, db)
       return account

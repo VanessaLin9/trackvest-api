@@ -90,4 +90,75 @@ describe('AccountsService session owner', () => {
       }),
     })
   })
+
+  it('rejects a new unsupported broker', async () => {
+    const { service } = createHarness()
+
+    await expect(
+      service.create(
+        {
+          name: 'Broker USD',
+          type: AccountType.broker,
+          currency: Currency.USD,
+          broker: 'ib',
+        },
+        sessionUser,
+      ),
+    ).rejects.toThrow('Broker must be cathay or empty')
+  })
+
+  it('keeps a stored broker that is not cathay when the update sends it back', async () => {
+    const { service, db } = createHarness()
+    db.account.findUnique.mockResolvedValue({
+      id: 'acc-1',
+      userId: 'owner-1',
+      name: 'Broker USD',
+      type: AccountType.broker,
+      currency: Currency.USD,
+      broker: 'ib',
+    })
+
+    await service.update(
+      'acc-1',
+      {
+        name: 'Broker USD renamed',
+        type: AccountType.broker,
+        currency: Currency.USD,
+        broker: 'ib',
+      },
+      sessionUser,
+    )
+
+    expect(db.account.update).toHaveBeenCalledWith({
+      where: { id: 'acc-1' },
+      data: expect.objectContaining({
+        broker: 'ib',
+      }),
+    })
+  })
+
+  it('does not let an update switch a cathay account to an unsupported broker', async () => {
+    const { service, db } = createHarness()
+    db.account.findUnique.mockResolvedValue({
+      id: 'acc-1',
+      userId: 'owner-1',
+      name: 'Broker TWD',
+      type: AccountType.broker,
+      currency: Currency.TWD,
+      broker: 'cathay',
+    })
+
+    await expect(
+      service.update(
+        'acc-1',
+        {
+          name: 'Broker TWD',
+          type: AccountType.broker,
+          currency: Currency.TWD,
+          broker: 'ib',
+        },
+        sessionUser,
+      ),
+    ).rejects.toThrow('Broker must be cathay or empty')
+  })
 })
