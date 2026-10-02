@@ -1,0 +1,5043 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "AuthController_refresh",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "refresh_token": []
+          }
+        ],
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "refresh_token": []
+          }
+        ],
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "AuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "HealthController_ping",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Liveness probe"
+          }
+        },
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/users": {
+      "post": {
+        "operationId": "UsersController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ]
+      },
+      "get": {
+        "operationId": "UsersController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/assets": {
+      "post": {
+        "operationId": "AssetsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAndUpdateAssetDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "assets"
+        ]
+      },
+      "get": {
+        "operationId": "AssetsController_findAll",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Keyword search over symbol and name",
+            "schema": {
+              "example": "apple inc",
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Asset type filter",
+            "schema": {
+              "example": "equity",
+              "type": "string",
+              "enum": [
+                "equity",
+                "etf",
+                "crypto",
+                "cash"
+              ]
+            }
+          },
+          {
+            "name": "assetClass",
+            "required": false,
+            "in": "query",
+            "description": "Asset class filter",
+            "schema": {
+              "example": "bond",
+              "type": "string",
+              "enum": [
+                "equity",
+                "bond",
+                "cash",
+                "crypto",
+                "precious_metal"
+              ]
+            }
+          },
+          {
+            "name": "baseCurrency",
+            "required": false,
+            "in": "query",
+            "description": "Base currency filter",
+            "schema": {
+              "example": "USD",
+              "type": "string",
+              "enum": [
+                "TWD",
+                "USD",
+                "JPY",
+                "EUR"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "take",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "example": 10,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetListResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/assets/{id}/aliases": {
+      "post": {
+        "description": "Maps a Cathay broker display name to an existing catalog Asset. Creating the same normalized (alias, broker) pair for the same Asset is idempotent. If the pair already maps to another Asset, returns ASSET_ALIAS_CONFLICT without overwriting.",
+        "operationId": "AssetsController_createAlias",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAssetAliasDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetAliasResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetAliasConflictResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "summary": "Create a broker-specific asset alias",
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/assets/symbol/{symbol}": {
+      "get": {
+        "operationId": "AssetsController_findBySymbol",
+        "parameters": [
+          {
+            "name": "symbol",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/assets/{id}": {
+      "get": {
+        "operationId": "AssetsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "assets"
+        ]
+      },
+      "patch": {
+        "operationId": "AssetsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAndUpdateAssetDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "assets"
+        ]
+      },
+      "delete": {
+        "operationId": "AssetsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/fx/rates/today": {
+      "get": {
+        "operationId": "FxRateController_getTodayRate",
+        "parameters": [
+          {
+            "name": "base",
+            "required": false,
+            "in": "query",
+            "description": "Base currency for the requested FX reference rate",
+            "schema": {
+              "default": "TWD",
+              "example": "TWD",
+              "type": "string",
+              "enum": [
+                "TWD",
+                "USD"
+              ]
+            }
+          },
+          {
+            "name": "quote",
+            "required": false,
+            "in": "query",
+            "description": "Quote currency for the requested FX reference rate",
+            "schema": {
+              "default": "USD",
+              "example": "USD",
+              "type": "string",
+              "enum": [
+                "TWD",
+                "USD"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FxRateResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "fx"
+        ]
+      }
+    },
+    "/prices/refresh": {
+      "post": {
+        "operationId": "MarketPriceController_refreshPrices",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshPricesResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "prices"
+        ]
+      }
+    },
+    "/prices/sync/taiwan": {
+      "post": {
+        "operationId": "MarketPriceController_syncTaiwanPrices",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncTaiwanPricesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncTaiwanPricesResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "prices"
+        ]
+      }
+    },
+    "/prices/sync/us": {
+      "post": {
+        "operationId": "MarketPriceController_syncUsPrices",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncUsPricesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncUsPricesResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "prices"
+        ]
+      }
+    },
+    "/corp-actions/sync/splits": {
+      "post": {
+        "operationId": "CorpActionController_syncSplits",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncSplitsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncSplitsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "corp-actions"
+        ]
+      }
+    },
+    "/corp-actions/{id}/cash-in-lieu": {
+      "post": {
+        "operationId": "CashInLieuController_record",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashInLieuDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "summary": "Record confirmed broker cash in lieu of fractional shares",
+        "tags": [
+          "corp-actions"
+        ]
+      }
+    },
+    "/gl/accounts": {
+      "get": {
+        "operationId": "GlController_getAccounts",
+        "parameters": [
+          {
+            "name": "type",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GetAccountDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "gl"
+        ]
+      }
+    },
+    "/gl/entries": {
+      "get": {
+        "operationId": "GlController_getEntries",
+        "parameters": [
+          {
+            "name": "accountId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GlEntryDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "gl"
+        ]
+      }
+    },
+    "/gl/transfer": {
+      "post": {
+        "operationId": "GlController_transfer",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostTransferCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created GL entry with two lines"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "gl"
+        ]
+      }
+    },
+    "/gl/expense": {
+      "post": {
+        "operationId": "GlController_expense",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostExpenseCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created GL entry for an expense (debit expense, credit cash/bank)."
+          },
+          "400": {
+            "description": "Validation failed or not balanced."
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "gl"
+        ]
+      }
+    },
+    "/gl/income": {
+      "post": {
+        "operationId": "GlController_income",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostIncomeCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created GL entry for an income (debit cash/bank, credit income)."
+          },
+          "400": {
+            "description": "Validation failed or not balanced."
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "gl"
+        ]
+      }
+    },
+    "/accounts": {
+      "post": {
+        "operationId": "AccountsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAndUpdateAccountDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "accounts"
+        ]
+      },
+      "get": {
+        "operationId": "AccountsController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccountResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
+    "/accounts/{id}": {
+      "get": {
+        "operationId": "AccountsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "accounts"
+        ]
+      },
+      "patch": {
+        "operationId": "AccountsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAndUpdateAccountDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "accounts"
+        ]
+      },
+      "delete": {
+        "operationId": "AccountsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
+    "/onboarding/signup": {
+      "post": {
+        "operationId": "OnboardingController_signup",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingSignupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingSignupResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "onboarding"
+        ]
+      }
+    },
+    "/transactions": {
+      "post": {
+        "operationId": "TransactionsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTransactionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "transactions"
+        ]
+      },
+      "get": {
+        "operationId": "TransactionsController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionListResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/transactions/import": {
+      "post": {
+        "deprecated": true,
+        "description": "Prefer preview + commit. This endpoint follows the same commit-time plan (ready-only chronological writes).",
+        "operationId": "TransactionsController_importTransactions",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportTransactionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportTransactionsResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "summary": "Deprecated: use POST /transactions/import/preview then /transactions/import/commit",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/transactions/import/preview": {
+      "post": {
+        "description": "Evaluates rows without writing. Applies chronological sell-readiness planning and returns typed row statuses. canCommit is true when there is at least one ready row and no commit-blocking error (file-internal duplicate), or when the upload is all-skipped. Sell codes SELL_HISTORY_REQUIRED, SELL_INSUFFICIENT_LOTS, and SELL_SAME_DAY_ORDER_AMBIGUOUS are row-local and do not block other ready rows.",
+        "operationId": "TransactionsController_previewImportTransactions",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportTransactionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportPreviewResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "summary": "Preview broker CSV import",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/transactions/import/commit": {
+      "post": {
+        "description": "Re-evaluates the same plan as preview, then creates only ready rows in chronological write order. Error and skipped rows are not written. Unexpected create failures still return IMPORT_COMMIT_FAILED.",
+        "operationId": "TransactionsController_commitImportTransactions",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportTransactionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCommitRejectedResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "summary": "Commit broker CSV import",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/transactions/{id}": {
+      "get": {
+        "operationId": "TransactionsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "transactions"
+        ]
+      },
+      "patch": {
+        "operationId": "TransactionsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAndUpdateTransactionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "transactions"
+        ]
+      },
+      "delete": {
+        "operationId": "TransactionsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/transactions/{id}/hard": {
+      "delete": {
+        "operationId": "TransactionsController_hardDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/dashboard/summary": {
+      "get": {
+        "description": "General-ledger totals for the signed-in user. The product homepage uses /portfolio, not this route.",
+        "operationId": "DashboardController_getSummary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSummaryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "summary": "GL summary",
+        "tags": [
+          "dashboard"
+        ]
+      }
+    },
+    "/dashboard/activity": {
+      "get": {
+        "description": "Recent general-ledger activity. Not the holding activity line on the portfolio homepage.",
+        "operationId": "DashboardController_getActivity",
+        "parameters": [
+          {
+            "name": "take",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "example": 10,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardActivityDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "summary": "GL activity",
+        "tags": [
+          "dashboard"
+        ]
+      }
+    },
+    "/portfolio/summary": {
+      "get": {
+        "operationId": "PortfolioController_getSummary",
+        "parameters": [
+          {
+            "name": "displayCurrency",
+            "required": false,
+            "in": "query",
+            "description": "Deprecated alias for preferredBaseCurrency",
+            "schema": {
+              "example": "USD",
+              "type": "string",
+              "enum": [
+                "TWD",
+                "USD",
+                "JPY",
+                "EUR"
+              ]
+            }
+          },
+          {
+            "name": "preferredBaseCurrency",
+            "required": false,
+            "in": "query",
+            "description": "Preferred display currency for normalized portfolio values",
+            "schema": {
+              "example": "USD",
+              "type": "string",
+              "enum": [
+                "TWD",
+                "USD",
+                "JPY",
+                "EUR"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioSummaryResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
+    "/portfolio/holdings": {
+      "get": {
+        "operationId": "PortfolioController_getHoldings",
+        "parameters": [
+          {
+            "name": "displayCurrency",
+            "required": false,
+            "in": "query",
+            "description": "Deprecated alias for preferredBaseCurrency",
+            "schema": {
+              "example": "USD",
+              "type": "string",
+              "enum": [
+                "TWD",
+                "USD",
+                "JPY",
+                "EUR"
+              ]
+            }
+          },
+          {
+            "name": "preferredBaseCurrency",
+            "required": false,
+            "in": "query",
+            "description": "Preferred display currency for normalized portfolio values",
+            "schema": {
+              "example": "USD",
+              "type": "string",
+              "enum": [
+                "TWD",
+                "USD",
+                "JPY",
+                "EUR"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioHoldingsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
+    "/portfolio/rebalance": {
+      "get": {
+        "operationId": "PortfolioController_getRebalance",
+        "parameters": [
+          {
+            "name": "displayCurrency",
+            "required": false,
+            "in": "query",
+            "description": "Deprecated alias for preferredBaseCurrency",
+            "schema": {
+              "example": "USD",
+              "type": "string",
+              "enum": [
+                "TWD",
+                "USD",
+                "JPY",
+                "EUR"
+              ]
+            }
+          },
+          {
+            "name": "preferredBaseCurrency",
+            "required": false,
+            "in": "query",
+            "description": "Preferred display currency for normalized portfolio values",
+            "schema": {
+              "example": "USD",
+              "type": "string",
+              "enum": [
+                "TWD",
+                "USD",
+                "JPY",
+                "EUR"
+              ]
+            }
+          },
+          {
+            "name": "targetEquity",
+            "required": false,
+            "in": "query",
+            "description": "Target equity allocation ratio. If omitted, backend uses the default or derives it from targetBond.",
+            "schema": {
+              "minimum": 0,
+              "maximum": 1,
+              "example": 0.8,
+              "type": "number"
+            }
+          },
+          {
+            "name": "targetBond",
+            "required": false,
+            "in": "query",
+            "description": "Target bond allocation ratio. If omitted, backend uses the default or derives it from targetEquity.",
+            "schema": {
+              "minimum": 0,
+              "maximum": 1,
+              "example": 0.2,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioRebalanceResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
+    "/portfolio/trend": {
+      "get": {
+        "operationId": "PortfolioController_getTrend",
+        "parameters": [
+          {
+            "name": "displayCurrency",
+            "required": false,
+            "in": "query",
+            "description": "Deprecated alias for preferredBaseCurrency",
+            "schema": {
+              "example": "USD",
+              "type": "string",
+              "enum": [
+                "TWD",
+                "USD",
+                "JPY",
+                "EUR"
+              ]
+            }
+          },
+          {
+            "name": "preferredBaseCurrency",
+            "required": false,
+            "in": "query",
+            "description": "Preferred display currency for normalized portfolio values",
+            "schema": {
+              "example": "USD",
+              "type": "string",
+              "enum": [
+                "TWD",
+                "USD",
+                "JPY",
+                "EUR"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioTrendResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
+    "/portfolio/holdings/{assetId}/trend": {
+      "get": {
+        "operationId": "PortfolioController_getHoldingTrend",
+        "parameters": [
+          {
+            "name": "assetId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "displayCurrency",
+            "required": false,
+            "in": "query",
+            "description": "Deprecated alias for preferredBaseCurrency",
+            "schema": {
+              "example": "USD",
+              "type": "string",
+              "enum": [
+                "TWD",
+                "USD",
+                "JPY",
+                "EUR"
+              ]
+            }
+          },
+          {
+            "name": "preferredBaseCurrency",
+            "required": false,
+            "in": "query",
+            "description": "Preferred display currency for normalized portfolio values",
+            "schema": {
+              "example": "USD",
+              "type": "string",
+              "enum": [
+                "TWD",
+                "USD",
+                "JPY",
+                "EUR"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioHoldingTrendResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "portfolio"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Trackvest API",
+    "description": "API for investment bookkeeping",
+    "version": "0.2.0",
+    "contact": {}
+  },
+  "tags": [
+    {
+      "name": "auth",
+      "description": "Login / refresh / logout / me"
+    },
+    {
+      "name": "health",
+      "description": "Health check"
+    },
+    {
+      "name": "users",
+      "description": "User management"
+    },
+    {
+      "name": "onboarding",
+      "description": "First-run signup and initialization"
+    },
+    {
+      "name": "accounts",
+      "description": "Cash/Broker/Bank accounts"
+    },
+    {
+      "name": "assets",
+      "description": "Tradable assets catalog"
+    },
+    {
+      "name": "transactions",
+      "description": "Transaction records"
+    },
+    {
+      "name": "gl",
+      "description": "Double-entry ledger(entries & postings)"
+    }
+  ],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "cookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "refresh_token"
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "number",
+            "example": 400
+          },
+          "error": {
+            "type": "string",
+            "example": "Bad Request"
+          },
+          "message": {
+            "type": "string",
+            "example": "Entry not balanced: debit=..., credit=..."
+          }
+        },
+        "required": [
+          "statusCode",
+          "error",
+          "message"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string",
+            "example": "correct horse battery staple",
+            "minLength": 6
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "AuthUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "user"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "role"
+        ]
+      },
+      "CreateUserDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string",
+            "example": "user123"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "UserResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "user"
+            ]
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "role",
+          "createdAt"
+        ]
+      },
+      "CreateAndUpdateAssetDto": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "資產代號",
+            "example": "AAPL"
+          },
+          "name": {
+            "type": "string",
+            "description": "資產名稱",
+            "example": "Apple Inc."
+          },
+          "type": {
+            "type": "string",
+            "description": "資產類型",
+            "example": "equity",
+            "enum": [
+              "equity",
+              "etf",
+              "crypto",
+              "cash"
+            ]
+          },
+          "baseCurrency": {
+            "type": "string",
+            "description": "基礎貨幣",
+            "example": "USD",
+            "enum": [
+              "TWD",
+              "USD",
+              "JPY",
+              "EUR"
+            ]
+          },
+          "assetClass": {
+            "type": "string",
+            "description": "資產本質分類；若省略，後端只會在可明確推論時自動補上",
+            "example": "equity",
+            "enum": [
+              "equity",
+              "bond",
+              "cash",
+              "crypto",
+              "precious_metal"
+            ]
+          }
+        },
+        "required": [
+          "symbol",
+          "name",
+          "type",
+          "baseCurrency"
+        ]
+      },
+      "AssetResponseDto": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "資產代號",
+            "example": "AAPL"
+          },
+          "name": {
+            "type": "string",
+            "description": "資產名稱",
+            "example": "Apple Inc."
+          },
+          "type": {
+            "type": "string",
+            "description": "資產類型",
+            "example": "equity",
+            "enum": [
+              "equity",
+              "etf",
+              "crypto",
+              "cash"
+            ]
+          },
+          "assetClass": {
+            "type": "string",
+            "description": "資產本質分類",
+            "example": "equity",
+            "enum": [
+              "equity",
+              "bond",
+              "cash",
+              "crypto",
+              "precious_metal"
+            ]
+          },
+          "baseCurrency": {
+            "type": "string",
+            "description": "基礎貨幣",
+            "example": "USD",
+            "enum": [
+              "TWD",
+              "USD",
+              "JPY",
+              "EUR"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "example": "e8e1d0a6-..."
+          }
+        },
+        "required": [
+          "symbol",
+          "name",
+          "type",
+          "assetClass",
+          "baseCurrency",
+          "id"
+        ]
+      },
+      "CreateAssetAliasDto": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "description": "Raw broker display name to map to an existing Asset",
+            "example": "國泰台灣領袖50"
+          },
+          "broker": {
+            "type": "string",
+            "description": "Broker scope for the alias. Only Cathay is accepted in this flow.",
+            "example": "cathay",
+            "enum": [
+              "cathay"
+            ]
+          }
+        },
+        "required": [
+          "alias",
+          "broker"
+        ]
+      },
+      "AssetAliasMappedAssetDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "e8e1d0a6-..."
+          },
+          "symbol": {
+            "type": "string",
+            "example": "00900"
+          },
+          "name": {
+            "type": "string",
+            "example": "國泰台灣領袖50"
+          }
+        },
+        "required": [
+          "id",
+          "symbol",
+          "name"
+        ]
+      },
+      "AssetAliasResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "a1b2c3d4-..."
+          },
+          "assetId": {
+            "type": "string",
+            "example": "e8e1d0a6-..."
+          },
+          "alias": {
+            "type": "string",
+            "example": "國泰台灣領袖50"
+          },
+          "broker": {
+            "type": "string",
+            "example": "cathay"
+          },
+          "asset": {
+            "$ref": "#/components/schemas/AssetAliasMappedAssetDto"
+          }
+        },
+        "required": [
+          "id",
+          "assetId",
+          "alias",
+          "broker",
+          "asset"
+        ]
+      },
+      "AssetAliasConflictResponseDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "ASSET_ALIAS_CONFLICT"
+          },
+          "message": {
+            "type": "string",
+            "example": "Asset alias already maps to another asset"
+          },
+          "existingAsset": {
+            "$ref": "#/components/schemas/AssetAliasMappedAssetDto"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "existingAsset"
+        ]
+      },
+      "AssetListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssetResponseDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "take": {
+            "type": "number",
+            "example": 10
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "take"
+        ]
+      },
+      "FxRateResponseDto": {
+        "type": "object",
+        "properties": {
+          "base": {
+            "type": "string",
+            "example": "TWD"
+          },
+          "quote": {
+            "type": "string",
+            "example": "USD"
+          },
+          "rate": {
+            "type": "number",
+            "example": 0.03125
+          },
+          "date": {
+            "type": "string",
+            "example": "2026-04-14"
+          },
+          "provider": {
+            "type": "string",
+            "example": "db"
+          }
+        },
+        "required": [
+          "base",
+          "quote",
+          "rate",
+          "date",
+          "provider"
+        ]
+      },
+      "RefreshPricesMarketResultDto": {
+        "type": "object",
+        "properties": {
+          "market": {
+            "type": "string",
+            "enum": [
+              "tw",
+              "us"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "success",
+              "failed"
+            ]
+          },
+          "startDate": {
+            "type": "string",
+            "example": "2026-07-20"
+          },
+          "endDate": {
+            "type": "string",
+            "example": "2026-08-02"
+          },
+          "assetsProcessed": {
+            "type": "number"
+          },
+          "rowsUpserted": {
+            "type": "number"
+          },
+          "errorCode": {
+            "type": "string",
+            "example": "PRICE_REFRESH_FAILED"
+          },
+          "message": {
+            "type": "string",
+            "example": "US price refresh failed"
+          }
+        },
+        "required": [
+          "market",
+          "status"
+        ]
+      },
+      "RefreshPricesResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "success",
+              "partial_success",
+              "failed"
+            ]
+          },
+          "markets": {
+            "description": "Fixed order: tw, then us.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RefreshPricesMarketResultDto"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "markets"
+        ]
+      },
+      "SyncTaiwanPricesDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "backfill"
+            ],
+            "default": "daily",
+            "description": "daily = recent window; backfill = first buy → today for incomplete assets"
+          },
+          "startDate": {
+            "type": "string",
+            "example": "2026-05-27"
+          },
+          "endDate": {
+            "type": "string",
+            "example": "2026-06-03"
+          },
+          "maxAssetsPerRun": {
+            "type": "number",
+            "description": "Backfill only: max assets per run (FinMind rate limit)",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 50
+          },
+          "assetIds": {
+            "description": "Limit sync to specific assets (UUIDs)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "SyncTaiwanPricesPerAssetDto": {
+        "type": "object",
+        "properties": {
+          "assetId": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "rows": {
+            "type": "number"
+          },
+          "skipped": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "assetId",
+          "symbol",
+          "rows"
+        ]
+      },
+      "SyncTaiwanPricesResponseDto": {
+        "type": "object",
+        "properties": {
+          "market": {
+            "type": "string",
+            "example": "tw"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "backfill"
+            ]
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "assetsRequested": {
+            "type": "number"
+          },
+          "assetsProcessed": {
+            "type": "number"
+          },
+          "assetsSkipped": {
+            "type": "number"
+          },
+          "rowsUpserted": {
+            "type": "number"
+          },
+          "perAsset": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncTaiwanPricesPerAssetDto"
+            }
+          }
+        },
+        "required": [
+          "market",
+          "mode",
+          "startDate",
+          "endDate",
+          "assetsRequested",
+          "assetsProcessed",
+          "assetsSkipped",
+          "rowsUpserted",
+          "perAsset"
+        ]
+      },
+      "SyncUsPricesDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "backfill"
+            ],
+            "default": "daily",
+            "description": "daily = recent window; backfill = first buy → today for incomplete assets"
+          },
+          "startDate": {
+            "type": "string",
+            "example": "2026-05-27"
+          },
+          "endDate": {
+            "type": "string",
+            "example": "2026-06-03"
+          },
+          "maxAssetsPerRun": {
+            "type": "number",
+            "description": "Backfill only: max assets per run (FinMind rate limit)",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 50
+          },
+          "assetIds": {
+            "description": "Limit sync to specific assets (UUIDs)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "SyncUsPricesPerAssetDto": {
+        "type": "object",
+        "properties": {
+          "assetId": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "rows": {
+            "type": "number"
+          },
+          "skipped": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "assetId",
+          "symbol",
+          "rows"
+        ]
+      },
+      "SyncUsPricesResponseDto": {
+        "type": "object",
+        "properties": {
+          "market": {
+            "type": "string",
+            "example": "us"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "backfill"
+            ]
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "assetsRequested": {
+            "type": "number"
+          },
+          "assetsProcessed": {
+            "type": "number"
+          },
+          "assetsSkipped": {
+            "type": "number"
+          },
+          "rowsUpserted": {
+            "type": "number"
+          },
+          "perAsset": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncUsPricesPerAssetDto"
+            }
+          }
+        },
+        "required": [
+          "market",
+          "mode",
+          "startDate",
+          "endDate",
+          "assetsRequested",
+          "assetsProcessed",
+          "assetsSkipped",
+          "rowsUpserted",
+          "perAsset"
+        ]
+      },
+      "SyncSplitsDto": {
+        "type": "object",
+        "properties": {
+          "market": {
+            "type": "string",
+            "enum": [
+              "tw",
+              "us",
+              "all"
+            ],
+            "default": "all"
+          },
+          "startDate": {
+            "type": "string",
+            "example": "2020-01-01"
+          },
+          "endDate": {
+            "type": "string",
+            "example": "2026-06-05"
+          },
+          "assetIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "SyncSplitsResponseDto": {
+        "type": "object",
+        "properties": {
+          "market": {
+            "type": "string",
+            "enum": [
+              "tw",
+              "us",
+              "all"
+            ]
+          },
+          "assetsProcessed": {
+            "type": "number"
+          },
+          "eventsUpserted": {
+            "type": "number"
+          },
+          "scopesReplayed": {
+            "type": "number"
+          },
+          "replayPending": {
+            "type": "boolean",
+            "description": "True when split events were stored but affected-scope replay has not run yet."
+          }
+        },
+        "required": [
+          "market",
+          "assetsProcessed",
+          "eventsUpserted",
+          "scopesReplayed",
+          "replayPending"
+        ]
+      },
+      "CashInLieuDto": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string",
+            "description": "Actual net cash received, as a decimal string",
+            "example": "12.34"
+          },
+          "quantity": {
+            "type": "string",
+            "description": "Fractional shares disposed per broker statement",
+            "example": "0.5"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "TWD",
+              "USD",
+              "JPY",
+              "EUR"
+            ]
+          },
+          "paidAt": {
+            "type": "string",
+            "example": "2025-06-20T00:00:00Z"
+          },
+          "reference": {
+            "type": "string",
+            "description": "Broker statement/payment reference"
+          }
+        },
+        "required": [
+          "accountId",
+          "amount",
+          "quantity",
+          "currency",
+          "paidAt",
+          "reference"
+        ]
+      },
+      "GetAccountDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          },
+          "userId": {
+            "type": "string",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          },
+          "name": {
+            "type": "string",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          },
+          "type": {
+            "type": "string",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          },
+          "currency": {
+            "type": "string",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          },
+          "linkedAccountId": {
+            "type": "string",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "name",
+          "type",
+          "currency",
+          "linkedAccountId"
+        ]
+      },
+      "GlLineDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          },
+          "glAccountId": {
+            "type": "string",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          },
+          "glAccountName": {
+            "type": "string",
+            "example": "Expense: Food"
+          },
+          "side": {
+            "type": "string",
+            "example": "debit",
+            "enum": [
+              "debit",
+              "credit"
+            ]
+          },
+          "amount": {
+            "type": "number",
+            "example": 320
+          },
+          "currency": {
+            "type": "string",
+            "example": "TWD"
+          }
+        },
+        "required": [
+          "id",
+          "glAccountId",
+          "glAccountName",
+          "side",
+          "amount",
+          "currency"
+        ]
+      },
+      "GlEntryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          },
+          "userId": {
+            "type": "string",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          },
+          "date": {
+            "type": "string",
+            "example": "2025-01-15T10:00:00Z"
+          },
+          "memo": {
+            "type": "string",
+            "example": "Transfer from account to account"
+          },
+          "source": {
+            "type": "string",
+            "example": "manual:transfer"
+          },
+          "refTxId": {
+            "type": "string",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GlLineDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "date",
+          "memo",
+          "source",
+          "refTxId",
+          "lines"
+        ]
+      },
+      "PostTransferCommand": {
+        "type": "object",
+        "properties": {
+          "fromGlAccountId": {
+            "type": "string",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          },
+          "toGlAccountId": {
+            "type": "string",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          },
+          "amount": {
+            "type": "number",
+            "example": 1000
+          },
+          "currency": {
+            "type": "string",
+            "example": "TWD",
+            "enum": [
+              "TWD",
+              "USD",
+              "JPY",
+              "EUR"
+            ]
+          },
+          "date": {
+            "type": "string",
+            "example": "2025-01-01T00:00:00.000Z"
+          },
+          "memo": {
+            "type": "string",
+            "example": "Transfer from account to account"
+          },
+          "source": {
+            "type": "string",
+            "example": "manual:transfer"
+          }
+        },
+        "required": [
+          "fromGlAccountId",
+          "toGlAccountId",
+          "amount",
+          "currency"
+        ]
+      },
+      "PostExpenseCommand": {
+        "type": "object",
+        "properties": {
+          "payFromGlAccountId": {
+            "type": "string",
+            "example": "GL_ACC_ID_CASH_OR_BANK"
+          },
+          "expenseGlAccountId": {
+            "type": "string",
+            "example": "GL_ACC_ID_EXPENSE"
+          },
+          "amount": {
+            "type": "number",
+            "example": 320
+          },
+          "currency": {
+            "type": "string",
+            "example": "TWD",
+            "enum": [
+              "TWD",
+              "USD",
+              "JPY",
+              "EUR"
+            ]
+          },
+          "date": {
+            "type": "string",
+            "example": "2025-11-04T12:00:00.000Z"
+          },
+          "memo": {
+            "type": "string",
+            "example": "Lunch"
+          },
+          "source": {
+            "type": "string",
+            "example": "manual:expense"
+          }
+        },
+        "required": [
+          "payFromGlAccountId",
+          "expenseGlAccountId",
+          "amount",
+          "currency"
+        ]
+      },
+      "PostIncomeCommand": {
+        "type": "object",
+        "properties": {
+          "receiveToGlAccountId": {
+            "type": "string",
+            "example": "GL_ACC_ID_CASH_OR_BANK"
+          },
+          "incomeGlAccountId": {
+            "type": "string",
+            "example": "GL_ACC_ID_INCOME"
+          },
+          "amount": {
+            "type": "number",
+            "example": 1500
+          },
+          "currency": {
+            "type": "string",
+            "example": "TWD",
+            "enum": [
+              "TWD",
+              "USD",
+              "JPY",
+              "EUR"
+            ]
+          },
+          "date": {
+            "type": "string",
+            "example": "2025-11-04T09:30:00.000Z"
+          },
+          "memo": {
+            "type": "string",
+            "example": "Salary (partial)"
+          },
+          "source": {
+            "type": "string",
+            "example": "manual:income"
+          }
+        },
+        "required": [
+          "receiveToGlAccountId",
+          "incomeGlAccountId",
+          "amount",
+          "currency"
+        ]
+      },
+      "CreateAndUpdateAccountDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "帳戶名稱",
+            "example": "My Broker Account"
+          },
+          "type": {
+            "type": "string",
+            "description": "帳戶類型",
+            "example": "broker",
+            "enum": [
+              "broker",
+              "bank",
+              "cash"
+            ]
+          },
+          "currency": {
+            "type": "string",
+            "description": "幣別",
+            "example": "TWD",
+            "enum": [
+              "TWD",
+              "USD",
+              "JPY",
+              "EUR"
+            ]
+          },
+          "broker": {
+            "type": "string",
+            "description": "券商識別碼，只有 broker account 需要",
+            "example": "cathay"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "currency"
+        ]
+      },
+      "AccountResponseDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "帳戶名稱",
+            "example": "My Broker Account"
+          },
+          "type": {
+            "type": "string",
+            "description": "帳戶類型",
+            "example": "broker",
+            "enum": [
+              "broker",
+              "bank",
+              "cash"
+            ]
+          },
+          "currency": {
+            "type": "string",
+            "description": "幣別",
+            "example": "TWD",
+            "enum": [
+              "TWD",
+              "USD",
+              "JPY",
+              "EUR"
+            ]
+          },
+          "broker": {
+            "type": "string",
+            "description": "券商識別碼，只有 broker account 需要",
+            "example": "cathay"
+          },
+          "id": {
+            "type": "string",
+            "example": "e8e1d0a6-..."
+          },
+          "userId": {
+            "type": "string",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2025-10-08T05:00:00.000Z"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "currency",
+          "id",
+          "userId",
+          "createdAt"
+        ]
+      },
+      "OnboardingStarterAccountDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "My Broker Account"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "broker",
+              "bank",
+              "cash"
+            ],
+            "example": "broker"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "TWD"
+            ],
+            "example": "TWD",
+            "default": "TWD"
+          },
+          "broker": {
+            "type": "string",
+            "example": "cathay",
+            "description": "券商識別碼，只有 broker account 需要"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "currency"
+        ]
+      },
+      "OnboardingSignupDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string",
+            "example": "user123"
+          },
+          "starterAccount": {
+            "$ref": "#/components/schemas/OnboardingStarterAccountDto"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "starterAccount"
+        ]
+      },
+      "OnboardingSignupResponseDto": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserResponseDto"
+          },
+          "starterAccount": {
+            "$ref": "#/components/schemas/AccountResponseDto"
+          }
+        },
+        "required": [
+          "user",
+          "starterAccount"
+        ]
+      },
+      "CreateTransactionDto": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "description": "帳戶ID",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          },
+          "assetId": {
+            "type": "string",
+            "description": "資產ID",
+            "example": "e8e1d0a6-1234-5678-9abc-def012345678"
+          },
+          "type": {
+            "type": "string",
+            "description": "交易類型",
+            "example": "buy",
+            "enum": [
+              "buy",
+              "sell",
+              "deposit",
+              "withdraw",
+              "dividend",
+              "fee"
+            ]
+          },
+          "amount": {
+            "type": "number",
+            "description": "交易金額",
+            "example": 1000.5
+          },
+          "quantity": {
+            "type": "number",
+            "description": "交易數量",
+            "example": 10
+          },
+          "price": {
+            "type": "number",
+            "description": "交易價格",
+            "example": 100.05
+          },
+          "fee": {
+            "type": "number",
+            "description": "手續費",
+            "example": 5
+          },
+          "tax": {
+            "type": "number",
+            "description": "交易稅額",
+            "example": 3
+          },
+          "brokerOrderNo": {
+            "type": "string",
+            "description": "券商委託書號",
+            "example": "k0C1i"
+          },
+          "tradeTime": {
+            "type": "string",
+            "description": "交易時間",
+            "example": "2025-01-20T10:30:00.000Z"
+          },
+          "note": {
+            "type": "string",
+            "description": "備註",
+            "example": "Buy AAPL shares"
+          }
+        },
+        "required": [
+          "accountId",
+          "type",
+          "amount"
+        ]
+      },
+      "TransactionAccountSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "currency",
+          "userId"
+        ]
+      },
+      "TransactionAssetSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "baseCurrency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "symbol",
+          "name",
+          "baseCurrency"
+        ]
+      },
+      "TransactionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string"
+          },
+          "assetId": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "buy",
+              "sell",
+              "deposit",
+              "withdraw",
+              "dividend",
+              "fee"
+            ]
+          },
+          "amount": {
+            "type": "string",
+            "example": "1000.50",
+            "description": "十進位字串，不是 number"
+          },
+          "quantity": {
+            "type": "string",
+            "nullable": true,
+            "example": "10"
+          },
+          "price": {
+            "type": "string",
+            "nullable": true,
+            "example": "100.05"
+          },
+          "fee": {
+            "type": "string",
+            "nullable": true,
+            "example": "0"
+          },
+          "tax": {
+            "type": "string",
+            "nullable": true,
+            "example": "0"
+          },
+          "brokerOrderNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "cashInLieuActionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "tradeTime": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "isDeleted": {
+            "type": "boolean"
+          },
+          "deletedAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true
+          },
+          "account": {
+            "$ref": "#/components/schemas/TransactionAccountSummaryDto"
+          },
+          "asset": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TransactionAssetSummaryDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "type",
+          "amount",
+          "cashInLieuActionId",
+          "tradeTime",
+          "isDeleted",
+          "deletedAt"
+        ]
+      },
+      "ImportTransactionsDto": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "description": "Target brokerage account ID for the import",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          },
+          "csvContent": {
+            "type": "string",
+            "description": "Raw CSV or TSV content copied from the uploaded brokerage file",
+            "example": "股名\\t日期\\t成交股數\\t淨收付\\t成交單價\\t成交價金\\t手續費\\t交易稅\\t稅款\\t委託書號\\t幣別\\t備註"
+          }
+        },
+        "required": [
+          "accountId",
+          "csvContent"
+        ]
+      },
+      "ImportTransactionsErrorDto": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "number",
+            "example": 2
+          },
+          "field": {
+            "type": "string",
+            "example": "股名"
+          },
+          "message": {
+            "type": "string",
+            "example": "Asset alias not found for 富邦台50"
+          }
+        },
+        "required": [
+          "row",
+          "field",
+          "message"
+        ]
+      },
+      "ImportTransactionsResponseDto": {
+        "type": "object",
+        "properties": {
+          "totalRows": {
+            "type": "number",
+            "example": 3
+          },
+          "successCount": {
+            "type": "number",
+            "example": 2
+          },
+          "failureCount": {
+            "type": "number",
+            "example": 1
+          },
+          "createdTransactionIds": {
+            "example": [
+              "9f5a51ae-1cca-401e-afa7-1ebf541d0000"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportTransactionsErrorDto"
+            }
+          }
+        },
+        "required": [
+          "totalRows",
+          "successCount",
+          "failureCount",
+          "createdTransactionIds",
+          "errors"
+        ]
+      },
+      "ImportResolvedAssetDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "asset-id"
+          },
+          "symbol": {
+            "type": "string",
+            "example": "2330"
+          },
+          "name": {
+            "type": "string",
+            "example": "台積電"
+          }
+        },
+        "required": [
+          "id",
+          "symbol",
+          "name"
+        ]
+      },
+      "ImportPreviewNormalizedTransactionDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "example": "buy",
+            "enum": [
+              "buy",
+              "sell"
+            ]
+          },
+          "quantity": {
+            "type": "string",
+            "example": "1000"
+          },
+          "unitPrice": {
+            "type": "string",
+            "example": "1000"
+          },
+          "currency": {
+            "type": "string",
+            "example": "TWD"
+          },
+          "fees": {
+            "type": "string",
+            "example": "20"
+          },
+          "taxes": {
+            "type": "string",
+            "example": "0"
+          }
+        },
+        "required": [
+          "type",
+          "quantity",
+          "unitPrice",
+          "currency",
+          "fees",
+          "taxes"
+        ]
+      },
+      "ImportRowIssueDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "SELL_HISTORY_REQUIRED",
+            "enum": [
+              "INVALID_ROW",
+              "MISSING_REQUIRED_FIELD",
+              "DUPLICATE_BROKER_ORDER_IN_FILE",
+              "DUPLICATE_BROKER_ORDER_IN_ACCOUNT",
+              "DUPLICATE_BROKER_ORDER_ALREADY_IMPORTED",
+              "UNSUPPORTED_CURRENCY",
+              "CURRENCY_MISMATCH",
+              "ASSET_ALIAS_NOT_FOUND",
+              "SELL_HISTORY_REQUIRED",
+              "SELL_INSUFFICIENT_LOTS",
+              "SELL_SAME_DAY_ORDER_AMBIGUOUS",
+              "ACCOUNT_NOT_BROKER",
+              "UNSUPPORTED_BROKER",
+              "ACCOUNT_NOT_FOUND_OR_FORBIDDEN",
+              "COMMIT_NOT_ALLOWED_WITH_ERRORS",
+              "IMPORT_COMMIT_FAILED"
+            ],
+            "description": "Typed import issue code. Sell readiness codes: SELL_HISTORY_REQUIRED, SELL_INSUFFICIENT_LOTS, SELL_SAME_DAY_ORDER_AMBIGUOUS (row-local). DUPLICATE_BROKER_ORDER_IN_FILE is commit-blocking."
+          },
+          "field": {
+            "type": "string",
+            "example": "quantity"
+          },
+          "message": {
+            "type": "string",
+            "example": "Sell requires earlier buy history that is not available"
+          }
+        },
+        "required": [
+          "code",
+          "field",
+          "message"
+        ]
+      },
+      "ImportPreviewRowDto": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "number",
+            "example": 2
+          },
+          "status": {
+            "type": "string",
+            "example": "ready",
+            "enum": [
+              "ready",
+              "skipped",
+              "error",
+              "warning"
+            ]
+          },
+          "rawAssetName": {
+            "type": "string",
+            "example": "台積電"
+          },
+          "brokerOrderNo": {
+            "type": "string",
+            "example": "ABC123"
+          },
+          "tradeDate": {
+            "type": "string",
+            "example": "2026-07-01"
+          },
+          "resolvedAsset": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ImportResolvedAssetDto"
+              }
+            ]
+          },
+          "normalizedTransaction": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ImportPreviewNormalizedTransactionDto"
+              }
+            ]
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportRowIssueDto"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportRowIssueDto"
+            }
+          }
+        },
+        "required": [
+          "row",
+          "status",
+          "rawAssetName",
+          "brokerOrderNo",
+          "tradeDate",
+          "resolvedAsset",
+          "normalizedTransaction",
+          "errors",
+          "warnings"
+        ]
+      },
+      "ImportPreviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "totalRows": {
+            "type": "number",
+            "example": 10
+          },
+          "readyCount": {
+            "type": "number",
+            "example": 8
+          },
+          "skippedCount": {
+            "type": "number",
+            "example": 1
+          },
+          "errorCount": {
+            "type": "number",
+            "example": 2
+          },
+          "warningCount": {
+            "type": "number",
+            "example": 0
+          },
+          "canCommit": {
+            "type": "boolean",
+            "example": false
+          },
+          "writeOrderRowNumbers": {
+            "example": [
+              3,
+              2
+            ],
+            "description": "Ready row numbers in chronological write order for commit",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportPreviewRowDto"
+            }
+          }
+        },
+        "required": [
+          "totalRows",
+          "readyCount",
+          "skippedCount",
+          "errorCount",
+          "warningCount",
+          "canCommit",
+          "writeOrderRowNumbers",
+          "rows"
+        ]
+      },
+      "ImportCommitResponseDto": {
+        "type": "object",
+        "properties": {
+          "totalRows": {
+            "type": "number",
+            "example": 10
+          },
+          "successCount": {
+            "type": "number",
+            "example": 10
+          },
+          "skippedCount": {
+            "type": "number",
+            "example": 0
+          },
+          "failureCount": {
+            "type": "number",
+            "example": 0
+          },
+          "createdTransactionIds": {
+            "example": [
+              "9f5a51ae-1cca-401e-afa7-1ebf541d0000"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "totalRows",
+          "successCount",
+          "skippedCount",
+          "failureCount",
+          "createdTransactionIds"
+        ]
+      },
+      "ImportCommitRejectedResponseDto": {
+        "type": "object",
+        "properties": {
+          "totalRows": {
+            "type": "number",
+            "example": 10
+          },
+          "successCount": {
+            "type": "number",
+            "example": 0
+          },
+          "skippedCount": {
+            "type": "number",
+            "example": 0
+          },
+          "failureCount": {
+            "type": "number",
+            "example": 2
+          },
+          "errorCode": {
+            "type": "string",
+            "example": "COMMIT_NOT_ALLOWED_WITH_ERRORS"
+          },
+          "createdTransactionIds": {
+            "example": [
+              "9f5a51ae-1cca-401e-afa7-1ebf541d0000"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "preview": {
+            "$ref": "#/components/schemas/ImportPreviewResponseDto"
+          }
+        },
+        "required": [
+          "totalRows",
+          "successCount",
+          "skippedCount",
+          "failureCount",
+          "errorCode",
+          "createdTransactionIds",
+          "preview"
+        ]
+      },
+      "TransactionListResponseDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number"
+          },
+          "skip": {
+            "type": "number"
+          },
+          "take": {
+            "type": "number"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransactionResponseDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "skip",
+          "take",
+          "items"
+        ]
+      },
+      "CreateAndUpdateTransactionDto": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "description": "帳戶ID",
+            "example": "c2610e4e-1cca-401e-afa7-1ebf541d0000"
+          },
+          "assetId": {
+            "type": "string",
+            "description": "資產ID",
+            "example": "e8e1d0a6-1234-5678-9abc-def012345678"
+          },
+          "type": {
+            "type": "string",
+            "description": "交易類型",
+            "example": "buy",
+            "enum": [
+              "buy",
+              "sell",
+              "deposit",
+              "withdraw",
+              "dividend",
+              "fee"
+            ]
+          },
+          "amount": {
+            "type": "number",
+            "description": "交易金額",
+            "example": 1000.5
+          },
+          "quantity": {
+            "type": "number",
+            "description": "交易數量",
+            "example": 10
+          },
+          "price": {
+            "type": "number",
+            "description": "交易價格",
+            "example": 100.05
+          },
+          "fee": {
+            "type": "number",
+            "description": "手續費",
+            "example": 5
+          },
+          "tax": {
+            "type": "number",
+            "description": "交易稅額",
+            "example": 3
+          },
+          "brokerOrderNo": {
+            "type": "string",
+            "description": "券商委託書號",
+            "example": "k0C1i"
+          },
+          "tradeTime": {
+            "type": "string",
+            "description": "交易時間",
+            "example": "2025-01-20T10:30:00.000Z"
+          },
+          "note": {
+            "type": "string",
+            "description": "備註",
+            "example": "Buy AAPL shares"
+          }
+        }
+      },
+      "MoneySummaryDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "example": 1250
+          },
+          "currency": {
+            "type": "string",
+            "example": "TWD",
+            "nullable": true
+          }
+        },
+        "required": [
+          "amount",
+          "currency"
+        ]
+      },
+      "ReturnSummaryDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "example": 1250
+          },
+          "currency": {
+            "type": "string",
+            "example": "TWD",
+            "nullable": true
+          },
+          "rate": {
+            "type": "number",
+            "example": 6.49
+          }
+        },
+        "required": [
+          "amount",
+          "currency",
+          "rate"
+        ]
+      },
+      "InvestmentSummaryDto": {
+        "type": "object",
+        "properties": {
+          "totalAssets": {
+            "$ref": "#/components/schemas/MoneySummaryDto"
+          },
+          "totalReturn": {
+            "$ref": "#/components/schemas/ReturnSummaryDto"
+          }
+        },
+        "required": [
+          "totalAssets",
+          "totalReturn"
+        ]
+      },
+      "DashboardSummaryDto": {
+        "type": "object",
+        "properties": {
+          "todayExpense": {
+            "$ref": "#/components/schemas/MoneySummaryDto"
+          },
+          "monthExpense": {
+            "$ref": "#/components/schemas/MoneySummaryDto"
+          },
+          "investment": {
+            "$ref": "#/components/schemas/InvestmentSummaryDto"
+          }
+        },
+        "required": [
+          "todayExpense",
+          "monthExpense",
+          "investment"
+        ]
+      },
+      "DashboardAccountOverviewItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "3f3ccdc2-6bc0-4b4e-bf4b-f9936470d8eb"
+          },
+          "name": {
+            "type": "string",
+            "example": "資產-銀行(台幣)"
+          },
+          "type": {
+            "type": "string",
+            "example": "bank"
+          },
+          "currency": {
+            "type": "string",
+            "example": "TWD",
+            "nullable": true
+          },
+          "balance": {
+            "type": "number",
+            "example": 12850
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "currency",
+          "balance"
+        ]
+      },
+      "DashboardRecentActivityItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cashbook-5e9f57f5-9ca6-4ab6-b2ab-c28a3eb3894a"
+          },
+          "kind": {
+            "type": "string",
+            "example": "cashbook",
+            "enum": [
+              "cashbook",
+              "investment"
+            ]
+          },
+          "date": {
+            "type": "string",
+            "example": "2026-03-18T09:00:00.000Z"
+          },
+          "title": {
+            "type": "string",
+            "example": "Lunch"
+          },
+          "subtitle": {
+            "type": "string",
+            "example": "Expense · 資產-銀行(台幣)"
+          },
+          "amount": {
+            "type": "number",
+            "example": 180,
+            "nullable": true
+          },
+          "currency": {
+            "type": "string",
+            "example": "TWD",
+            "nullable": true
+          },
+          "direction": {
+            "type": "string",
+            "example": "out",
+            "enum": [
+              "in",
+              "out",
+              "neutral"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "date",
+          "title",
+          "subtitle",
+          "amount",
+          "currency",
+          "direction"
+        ]
+      },
+      "DashboardActivityDto": {
+        "type": "object",
+        "properties": {
+          "accountOverview": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DashboardAccountOverviewItemDto"
+            }
+          },
+          "recentActivity": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DashboardRecentActivityItemDto"
+            }
+          }
+        },
+        "required": [
+          "accountOverview",
+          "recentActivity"
+        ]
+      },
+      "PortfolioSummaryResponseDto": {
+        "type": "object",
+        "properties": {
+          "displayCurrencyMode": {
+            "type": "string",
+            "enum": [
+              "portfolio-default",
+              "preferred-base"
+            ],
+            "example": "preferred-base"
+          },
+          "requestedDisplayCurrency": {
+            "type": "string",
+            "example": "USD",
+            "nullable": true
+          },
+          "effectiveDisplayCurrency": {
+            "type": "string",
+            "example": "USD",
+            "nullable": true
+          },
+          "asOf": {
+            "type": "string",
+            "example": "2026-04-05T00:00:00.000Z"
+          },
+          "baseCurrency": {
+            "type": "string",
+            "example": "TWD",
+            "nullable": true
+          },
+          "investedCapital": {
+            "type": "number",
+            "example": 125000
+          },
+          "marketValue": {
+            "type": "number",
+            "example": 138600
+          },
+          "totalPnl": {
+            "type": "number",
+            "example": 13600
+          },
+          "totalReturnRate": {
+            "type": "number",
+            "example": 0.1088
+          },
+          "holdingsCount": {
+            "type": "number",
+            "example": 4
+          }
+        },
+        "required": [
+          "displayCurrencyMode",
+          "requestedDisplayCurrency",
+          "effectiveDisplayCurrency",
+          "asOf",
+          "baseCurrency",
+          "investedCapital",
+          "marketValue",
+          "totalPnl",
+          "totalReturnRate",
+          "holdingsCount"
+        ]
+      },
+      "PortfolioHoldingLastActivityDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "buy",
+              "sell",
+              "deposit",
+              "withdraw",
+              "dividend",
+              "fee"
+            ],
+            "example": "buy"
+          },
+          "tradeDate": {
+            "type": "string",
+            "example": "2026-04-04",
+            "description": "UTC 日期 YYYY-MM-DD"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "description": "使用者自己寫的備註。沒有備註時前端用 type 與 tradeDate 組文案。"
+          }
+        },
+        "required": [
+          "type",
+          "tradeDate",
+          "note"
+        ]
+      },
+      "PortfolioHoldingItemResponseDto": {
+        "type": "object",
+        "properties": {
+          "assetId": {
+            "type": "string",
+            "example": "asset-1"
+          },
+          "symbol": {
+            "type": "string",
+            "example": "AAPL"
+          },
+          "name": {
+            "type": "string",
+            "example": "Apple Inc."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "equity",
+              "etf",
+              "crypto",
+              "cash"
+            ],
+            "example": "equity"
+          },
+          "assetClass": {
+            "type": "string",
+            "enum": [
+              "equity",
+              "bond",
+              "cash",
+              "crypto",
+              "precious_metal"
+            ],
+            "example": "equity"
+          },
+          "quantity": {
+            "type": "number",
+            "example": 12.5
+          },
+          "avgCost": {
+            "type": "number",
+            "example": 102.35
+          },
+          "latestPrice": {
+            "type": "number",
+            "example": 118.2,
+            "nullable": true
+          },
+          "latestPriceCurrency": {
+            "type": "string",
+            "example": "USD",
+            "nullable": true
+          },
+          "assetBaseCurrency": {
+            "type": "string",
+            "example": "USD"
+          },
+          "investedAmount": {
+            "type": "number",
+            "example": 1279.375
+          },
+          "marketValue": {
+            "type": "number",
+            "example": 1477.5
+          },
+          "pnl": {
+            "type": "number",
+            "example": 198.125
+          },
+          "returnRate": {
+            "type": "number",
+            "example": 0.154859472
+          },
+          "weight": {
+            "type": "number",
+            "example": 0.2764
+          },
+          "lastActivity": {
+            "nullable": true,
+            "description": "最近一筆交易的種類與日期。文案由前端 i18n 組，不回英文句子（PR #46）。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PortfolioHoldingLastActivityDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "assetId",
+          "symbol",
+          "name",
+          "type",
+          "assetClass",
+          "quantity",
+          "avgCost",
+          "latestPrice",
+          "latestPriceCurrency",
+          "assetBaseCurrency",
+          "investedAmount",
+          "marketValue",
+          "pnl",
+          "returnRate",
+          "weight",
+          "lastActivity"
+        ]
+      },
+      "PortfolioAllocationByTypeItemResponseDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "equity",
+              "etf",
+              "crypto",
+              "cash"
+            ],
+            "example": "equity"
+          },
+          "marketValue": {
+            "type": "number",
+            "example": 48600
+          },
+          "weight": {
+            "type": "number",
+            "example": 0.35
+          }
+        },
+        "required": [
+          "type",
+          "marketValue",
+          "weight"
+        ]
+      },
+      "PortfolioAllocationByAssetClassItemResponseDto": {
+        "type": "object",
+        "properties": {
+          "assetClass": {
+            "type": "string",
+            "enum": [
+              "equity",
+              "bond",
+              "cash",
+              "crypto",
+              "precious_metal"
+            ],
+            "example": "equity"
+          },
+          "marketValue": {
+            "type": "number",
+            "example": 48600
+          },
+          "weight": {
+            "type": "number",
+            "example": 0.35
+          }
+        },
+        "required": [
+          "assetClass",
+          "marketValue",
+          "weight"
+        ]
+      },
+      "PortfolioHoldingsResponseDto": {
+        "type": "object",
+        "properties": {
+          "displayCurrencyMode": {
+            "type": "string",
+            "enum": [
+              "portfolio-default",
+              "preferred-base"
+            ],
+            "example": "preferred-base"
+          },
+          "requestedDisplayCurrency": {
+            "type": "string",
+            "example": "USD",
+            "nullable": true
+          },
+          "effectiveDisplayCurrency": {
+            "type": "string",
+            "example": "USD",
+            "nullable": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioHoldingItemResponseDto"
+            }
+          },
+          "allocationByType": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioAllocationByTypeItemResponseDto"
+            }
+          },
+          "allocationByAssetClass": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioAllocationByAssetClassItemResponseDto"
+            }
+          }
+        },
+        "required": [
+          "displayCurrencyMode",
+          "requestedDisplayCurrency",
+          "effectiveDisplayCurrency",
+          "items",
+          "allocationByType",
+          "allocationByAssetClass"
+        ]
+      },
+      "PortfolioRebalanceAllocationResponseDto": {
+        "type": "object",
+        "properties": {
+          "equity": {
+            "type": "number",
+            "example": 0.8
+          },
+          "bond": {
+            "type": "number",
+            "example": 0.2
+          }
+        },
+        "required": [
+          "equity",
+          "bond"
+        ]
+      },
+      "PortfolioRebalanceMarketValueResponseDto": {
+        "type": "object",
+        "properties": {
+          "equity": {
+            "type": "number",
+            "example": 80000
+          },
+          "bond": {
+            "type": "number",
+            "example": 20000
+          }
+        },
+        "required": [
+          "equity",
+          "bond"
+        ]
+      },
+      "PortfolioRebalanceCandidateResponseDto": {
+        "type": "object",
+        "properties": {
+          "assetClass": {
+            "type": "string",
+            "enum": [
+              "equity",
+              "bond"
+            ],
+            "example": "equity"
+          },
+          "assetId": {
+            "type": "string",
+            "example": "asset-1"
+          },
+          "symbol": {
+            "type": "string",
+            "example": "AAPL"
+          },
+          "name": {
+            "type": "string",
+            "example": "Apple Inc."
+          },
+          "currentMarketValue": {
+            "type": "number",
+            "example": 2480.67063
+          },
+          "currentWeightWithinAssetClass": {
+            "type": "number",
+            "example": 1
+          },
+          "latestPrice": {
+            "type": "number",
+            "example": 250,
+            "nullable": true
+          },
+          "latestPriceCurrency": {
+            "type": "string",
+            "example": "USD",
+            "nullable": true
+          },
+          "assetBaseCurrency": {
+            "type": "string",
+            "example": "USD"
+          },
+          "lotSize": {
+            "type": "number",
+            "example": null,
+            "nullable": true
+          },
+          "minTradeUnit": {
+            "type": "number",
+            "example": null,
+            "nullable": true
+          }
+        },
+        "required": [
+          "assetClass",
+          "assetId",
+          "symbol",
+          "name",
+          "currentMarketValue",
+          "currentWeightWithinAssetClass",
+          "latestPrice",
+          "latestPriceCurrency",
+          "assetBaseCurrency",
+          "lotSize",
+          "minTradeUnit"
+        ]
+      },
+      "PortfolioRebalanceSuggestionResponseDto": {
+        "type": "object",
+        "properties": {
+          "assetClass": {
+            "type": "string",
+            "enum": [
+              "equity",
+              "bond"
+            ],
+            "example": "equity"
+          },
+          "assetId": {
+            "type": "string",
+            "example": "asset-1"
+          },
+          "symbol": {
+            "type": "string",
+            "example": "AAPL"
+          },
+          "name": {
+            "type": "string",
+            "example": "Apple Inc."
+          },
+          "currentMarketValue": {
+            "type": "number",
+            "example": 2480.67063
+          },
+          "currentWeightWithinAssetClass": {
+            "type": "number",
+            "example": 1
+          },
+          "suggestedBuyAmount": {
+            "type": "number",
+            "example": 9689.32937
+          },
+          "estimatedQuantity": {
+            "type": "number",
+            "example": 38.75731748,
+            "nullable": true
+          },
+          "latestPrice": {
+            "type": "number",
+            "example": 250,
+            "nullable": true
+          },
+          "latestPriceCurrency": {
+            "type": "string",
+            "example": "USD",
+            "nullable": true
+          }
+        },
+        "required": [
+          "assetClass",
+          "assetId",
+          "symbol",
+          "name",
+          "currentMarketValue",
+          "currentWeightWithinAssetClass",
+          "suggestedBuyAmount",
+          "estimatedQuantity",
+          "latestPrice",
+          "latestPriceCurrency"
+        ]
+      },
+      "PortfolioRebalanceResponseDto": {
+        "type": "object",
+        "properties": {
+          "displayCurrencyMode": {
+            "type": "string",
+            "enum": [
+              "portfolio-default",
+              "preferred-base"
+            ],
+            "example": "preferred-base"
+          },
+          "requestedDisplayCurrency": {
+            "type": "string",
+            "example": "USD",
+            "nullable": true
+          },
+          "effectiveDisplayCurrency": {
+            "type": "string",
+            "example": "USD",
+            "nullable": true
+          },
+          "asOf": {
+            "type": "string",
+            "example": "2026-04-19T00:00:00.000Z"
+          },
+          "baseCurrency": {
+            "type": "string",
+            "example": "USD",
+            "nullable": true
+          },
+          "targets": {
+            "$ref": "#/components/schemas/PortfolioRebalanceAllocationResponseDto"
+          },
+          "current": {
+            "$ref": "#/components/schemas/PortfolioRebalanceAllocationResponseDto"
+          },
+          "gaps": {
+            "$ref": "#/components/schemas/PortfolioRebalanceAllocationResponseDto"
+          },
+          "marketValueByAssetClass": {
+            "$ref": "#/components/schemas/PortfolioRebalanceMarketValueResponseDto"
+          },
+          "recommendedBuyAmountByAssetClass": {
+            "$ref": "#/components/schemas/PortfolioRebalanceMarketValueResponseDto"
+          },
+          "trackedMarketValue": {
+            "type": "number",
+            "example": 100000
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioRebalanceCandidateResponseDto"
+            }
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioRebalanceSuggestionResponseDto"
+            }
+          },
+          "notes": {
+            "example": [
+              "Current ratios are calculated from equity and bond holdings only."
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "displayCurrencyMode",
+          "requestedDisplayCurrency",
+          "effectiveDisplayCurrency",
+          "asOf",
+          "baseCurrency",
+          "targets",
+          "current",
+          "gaps",
+          "marketValueByAssetClass",
+          "recommendedBuyAmountByAssetClass",
+          "trackedMarketValue",
+          "candidates",
+          "suggestions",
+          "notes"
+        ]
+      },
+      "PortfolioTrendPointResponseDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "example": "2026-04-05"
+          },
+          "date": {
+            "type": "string",
+            "example": "2026-04-05"
+          },
+          "investedCapital": {
+            "type": "number",
+            "example": 125000
+          },
+          "marketValue": {
+            "type": "number",
+            "example": 138600
+          }
+        },
+        "required": [
+          "label",
+          "date",
+          "investedCapital",
+          "marketValue"
+        ]
+      },
+      "PortfolioTrendResponseDto": {
+        "type": "object",
+        "properties": {
+          "displayCurrencyMode": {
+            "type": "string",
+            "enum": [
+              "portfolio-default",
+              "preferred-base"
+            ],
+            "example": "preferred-base"
+          },
+          "requestedDisplayCurrency": {
+            "type": "string",
+            "example": "USD",
+            "nullable": true
+          },
+          "effectiveDisplayCurrency": {
+            "type": "string",
+            "example": "USD",
+            "nullable": true
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioTrendPointResponseDto"
+            }
+          }
+        },
+        "required": [
+          "displayCurrencyMode",
+          "requestedDisplayCurrency",
+          "effectiveDisplayCurrency",
+          "points"
+        ]
+      },
+      "PortfolioHoldingTrendPointResponseDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "example": "2026-04-05"
+          },
+          "date": {
+            "type": "string",
+            "example": "2026-04-05"
+          },
+          "investedAmount": {
+            "type": "number",
+            "example": 4200
+          },
+          "marketValue": {
+            "type": "number",
+            "example": 4500
+          }
+        },
+        "required": [
+          "label",
+          "date",
+          "investedAmount",
+          "marketValue"
+        ]
+      },
+      "PortfolioHoldingTrendResponseDto": {
+        "type": "object",
+        "properties": {
+          "displayCurrencyMode": {
+            "type": "string",
+            "enum": [
+              "portfolio-default",
+              "preferred-base"
+            ],
+            "example": "preferred-base"
+          },
+          "requestedDisplayCurrency": {
+            "type": "string",
+            "example": "USD",
+            "nullable": true
+          },
+          "effectiveDisplayCurrency": {
+            "type": "string",
+            "example": "USD",
+            "nullable": true
+          },
+          "assetId": {
+            "type": "string",
+            "example": "asset-1"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioHoldingTrendPointResponseDto"
+            }
+          }
+        },
+        "required": [
+          "displayCurrencyMode",
+          "requestedDisplayCurrency",
+          "effectiveDisplayCurrency",
+          "assetId",
+          "points"
+        ]
+      }
+    }
+  }
+}
