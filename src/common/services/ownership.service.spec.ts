@@ -122,6 +122,27 @@ describe('OwnershipService', () => {
     })
   })
 
+  describe('assertCallerOwnsGlAccount', () => {
+    it('rejects an admin when the GL account belongs to someone else', async () => {
+      const prisma = buildPrisma()
+      prisma.glAccount.findUnique.mockResolvedValueOnce({ userId: 'user-1' })
+      const svc = new OwnershipService(prisma as never)
+
+      await expect(svc.assertCallerOwnsGlAccount('gl-1', adminUser.id)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      )
+      expect(prisma.user.findUnique).not.toHaveBeenCalled()
+    })
+
+    it('allows the account owner', async () => {
+      const prisma = buildPrisma()
+      prisma.glAccount.findUnique.mockResolvedValueOnce({ userId: 'user-1' })
+      const svc = new OwnershipService(prisma as never)
+
+      await expect(svc.assertCallerOwnsGlAccount('gl-1', regularUser.id)).resolves.toBeUndefined()
+    })
+  })
+
   describe('validateUserExists', () => {
     it('throws NotFoundException when the user is missing', async () => {
       const prisma = buildPrisma()

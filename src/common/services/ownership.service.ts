@@ -94,6 +94,25 @@ export class OwnershipService {
     }
   }
 
+  /**
+   * 手動轉帳、支出、收入不走 admin bypass。
+   * 分錄的 userId 是 session，若允許別人的科目，分錄會掛在管理員名下（PR #46）。
+   */
+  async assertCallerOwnsGlAccount(glAccountId: string, userId: string): Promise<void> {
+    const glAccount = await this.prisma.glAccount.findUnique({
+      where: { id: glAccountId },
+      select: { userId: true },
+    })
+
+    if (!glAccount) {
+      throw new NotFoundException('GL Account not found')
+    }
+
+    if (glAccount.userId !== userId) {
+      throw new ForbiddenException('You do not have access to this GL account')
+    }
+  }
+
   async validateGlEntryOwnership(glEntryId: string, ctx: UserContext): Promise<void> {
     const { userId, isAdmin } = await this.resolveUser(ctx)
 

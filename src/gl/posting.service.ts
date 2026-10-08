@@ -84,8 +84,8 @@ export class PostingService {
     const { userId, fromGlAccountId, toGlAccountId, amount, currency, date, memo, source } = command
 
     // Validate GL account ownership
-    await this.ownershipService.validateGlAccountOwnership(fromGlAccountId, userId)
-    await this.ownershipService.validateGlAccountOwnership(toGlAccountId, userId)
+    await this.ownershipService.assertCallerOwnsGlAccount(fromGlAccountId, userId)
+    await this.ownershipService.assertCallerOwnsGlAccount(toGlAccountId, userId)
 
     const lines: GlLineInput[] = [
       { glAccountId: toGlAccountId, side: 'debit', amount, currency, note: 'transfer in' },
@@ -108,8 +108,8 @@ export class PostingService {
     const { userId, payFromGlAccountId, expenseGlAccountId, amount, currency, date, memo, source } = command
 
     // Validate GL account ownership
-    await this.ownershipService.validateGlAccountOwnership(payFromGlAccountId, userId)
-    await this.ownershipService.validateGlAccountOwnership(expenseGlAccountId, userId)
+    await this.ownershipService.assertCallerOwnsGlAccount(payFromGlAccountId, userId)
+    await this.ownershipService.assertCallerOwnsGlAccount(expenseGlAccountId, userId)
 
     const lines: GlLineInput[] = [
       { glAccountId: expenseGlAccountId, side: 'debit', amount, currency, note: 'expense' },
@@ -132,8 +132,8 @@ export class PostingService {
     const { userId, receiveToGlAccountId, incomeGlAccountId, amount, currency, date, memo, source } = command
 
     // Validate GL account ownership
-    await this.ownershipService.validateGlAccountOwnership(receiveToGlAccountId, userId)
-    await this.ownershipService.validateGlAccountOwnership(incomeGlAccountId, userId)
+    await this.ownershipService.assertCallerOwnsGlAccount(receiveToGlAccountId, userId)
+    await this.ownershipService.assertCallerOwnsGlAccount(incomeGlAccountId, userId)
 
     const lines: GlLineInput[] = [
       { glAccountId: receiveToGlAccountId, side: 'debit', amount, currency, note: 'cash/bank in' },
