@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException } from '@nestjs/common'
 import type { Transaction } from '@prisma/client'
 import { PostingService } from './posting.service'
 
@@ -49,6 +49,7 @@ describe('PostingService', () => {
 
     const ownershipService = {
       validateGlAccountOwnership: jest.fn(),
+      assertCallerOwnsGlAccount: jest.fn(),
     }
 
     const glService = {
@@ -97,6 +98,7 @@ describe('PostingService', () => {
       service,
       prisma,
       glService,
+      ownershipService,
     }
   }
 
@@ -186,5 +188,38 @@ describe('PostingService', () => {
     )
 
     expect(prisma.glEntry.create).not.toHaveBeenCalled()
+  })
+
+  it('checks manual expense accounts without the admin ownership bypass', async () => {
+    const { service, prisma, ownershipService } = createHarness()
+
+    await service.postExpense({
+      userId,
+      payFromGlAccountId: 'cash-gl',
+      expenseGlAccountId: 'expense-gl',
+      amount: 20,
+      currency: 'TWD',
+      date: new Date('2026-04-01T00:00:00.000Z'),
+    })
+
+    expect(ownershipService.assertCallerOwnsGlAccount).toHaveBeenCalledWith('cash-gl', userId)
+    expect(ownershipService.assertCallerOwnsGlAccount).toHaveBeenCalledWith('expense-gl', userId)
+    expect(ownershipService.validateGlAccountOwnership).not.toHaveBeenCalled()
+
+    ownershipService.assertCallerOwnsGlAccount.mockRejectedValue(
+      new ForbiddenException('You do not have access to this GL account'),
+    )
+
+    await expect(
+      service.postExpense({
+        userId,
+        payFromGlAccountId: 'other-user-cash',
+        expenseGlAccountId: 'other-user-expense',
+        amount: 20,
+        currency: 'TWD',
+        date: new Date('2026-04-01T00:00:00.000Z'),
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException)
+    expect(prisma.glEntry.create).toHaveBeenCalledTimes(1)
   })
 })

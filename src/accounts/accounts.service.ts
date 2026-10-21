@@ -4,7 +4,7 @@ import { Account, AccountType, Currency, GlAccountType, Prisma } from '@prisma/c
 import { PrismaService } from '../prisma.service'
 import { CreateAndUpdateAccountDto } from './dto/account.createAndUpdate.dto'
 import { OwnershipService } from '../common/services/ownership.service'
-import { UserContext } from '../common/types/auth-user'
+import { AuthenticatedUser, UserContext } from '../common/types/auth-user'
 import { SUPPORTED_BROKER } from './account-broker.constants'
 
 type DbClient = Prisma.TransactionClient | PrismaService
@@ -20,8 +20,15 @@ export class AccountsService {
     return db ?? this.prisma
   }
 
-  /** Broker 帳戶只允許 SUPPORTED_BROKER 或空（PR #3）；非 broker 類型強制清掉 broker。 */
-  private normalizeBroker(type: AccountType, broker?: string | null): string | null {
+  /**
+   * 新建只允許 cathay 或空（PR #3）。
+   * 更新可沿用帳戶上已有的其他代碼，例如 seed 的 ib，不能改成新的不支援券商（PR #46）。
+   */
+  private normalizeBroker(
+    type: AccountType,
+    broker?: string | null,
+    existingBroker?: string | null,
+  ): string | null {
     const normalizedBroker = broker?.trim().toLowerCase() || null
 
     if (type !== AccountType.broker) {
@@ -32,27 +39,35 @@ export class AccountsService {
       return null
     }
 
-    if (normalizedBroker !== SUPPORTED_BROKER) {
-      throw new BadRequestException(
-        `Broker must be ${SUPPORTED_BROKER} or empty for broker accounts`,
-      )
+    if (normalizedBroker === SUPPORTED_BROKER) {
+      return normalizedBroker
     }
 
-    return normalizedBroker
+    const keptBroker = existingBroker?.trim().toLowerCase() || null
+    if (keptBroker && normalizedBroker === keptBroker) {
+      return keptBroker
+    }
+
+    throw new BadRequestException(
+      `Broker must be ${SUPPORTED_BROKER} or empty for broker accounts`,
+    )
   }
 
-  private buildAccountData(dto: CreateAndUpdateAccountDto) {
-    const trimmedName = dto.name.trim()
+  private buildAccountData(
+    input: CreateAndUpdateAccountDto & { userId: string },
+    existingBroker?: string | null,
+  ) {
+    const trimmedName = input.name.trim()
     if (!trimmedName) {
       throw new BadRequestException('Account name is required')
     }
 
     return {
-      userId: dto.userId,
+      userId: input.userId,
       name: trimmedName,
-      type: dto.type,
-      currency: dto.currency,
-      broker: this.normalizeBroker(dto.type, dto.broker),
+      type: input.type,
+      currency: input.currency,
+      broker: this.normalizeBroker(input.type, input.broker, existingBroker),
     }
   }
 
@@ -106,18 +121,22 @@ export class AccountsService {
    * 呼叫端已開 transaction 時建立帳戶（onboarding signup 用；PR #32）。
    * 一併 ensure 連結的現金 GL；不開 nested `$transaction`。
    */
-  async createInTransaction(dto: CreateAndUpdateAccountDto, db: DbClient) {
+  async createInTransaction(
+    dto: CreateAndUpdateAccountDto & { userId: string },
+    db: DbClient,
+  ) {
     const account = await db.account.create({ data: this.buildAccountData(dto) })
     await this.ensureLinkedGlAccount(account, db)
     return account
   }
 
-  async create(dto: CreateAndUpdateAccountDto, _user: UserContext) {
-    // Controller is responsible for `assertSameUserOrAdmin(dto.userId, user)`
-    // before reaching here. We still verify the target user exists.
-    await this.ownershipService.validateUserExists(dto.userId)
+  async create(dto: CreateAndUpdateAccountDto, user: AuthenticatedUser) {
+    // HTTP 建立一律掛在 session user。onboarding 走 createInTransaction，自己帶新 user id（PR #46）。
+    await this.ownershipService.validateUserExists(user.id)
 
-    return this.prisma.$transaction(async (db) => this.createInTransaction(dto, db))
+    return this.prisma.$transaction(async (db) =>
+      this.createInTransaction({ ...dto, userId: user.id }, db),
+    )
   }
 
   async findAll(user: UserContext) {
@@ -140,9 +159,12 @@ export class AccountsService {
     await this.ownershipService.validateAccountOwnership(id, user)
 
     return this.prisma.$transaction(async (db) => {
+      const existing = await db.account.findUnique({ where: { id } })
+      if (!existing) throw new NotFoundException('Account not found')
+
       const account = await db.account.update({
         where: { id },
-        data: this.buildAccountData(dto),
+        data: this.buildAccountData({ ...dto, userId: existing.userId }, existing.broker),
       })
       await this.ensureLinkedGlAccount(account, db)
       return account

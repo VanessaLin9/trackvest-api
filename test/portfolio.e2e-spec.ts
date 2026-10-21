@@ -392,7 +392,11 @@ describe('Portfolio overview (e2e)', () => {
           pnl: 50,
           returnRate: 0.25,
           weight: 0.86956522,
-          lastActivitySummary: 'buy usd asset',
+          lastActivity: {
+            type: 'buy',
+            tradeDate: '2026-04-02',
+            note: 'buy usd asset',
+          },
         },
         {
           assetId: twdAsset.id,
@@ -410,7 +414,11 @@ describe('Portfolio overview (e2e)', () => {
           pnl: 6.25,
           returnRate: 0.2,
           weight: 0.13043478,
-          lastActivitySummary: 'buy twd asset',
+          lastActivity: {
+            type: 'buy',
+            tradeDate: '2026-04-01',
+            note: 'buy twd asset',
+          },
         },
       ],
       allocationByType: [
@@ -493,7 +501,11 @@ describe('Portfolio overview (e2e)', () => {
           pnl: 1600,
           returnRate: 0.25,
           weight: 0.86956522,
-          lastActivitySummary: 'buy usd asset',
+          lastActivity: {
+            type: 'buy',
+            tradeDate: '2026-04-02',
+            note: 'buy usd asset',
+          },
         },
         {
           assetId: twdAsset.id,
@@ -511,7 +523,11 @@ describe('Portfolio overview (e2e)', () => {
           pnl: 200,
           returnRate: 0.2,
           weight: 0.13043478,
-          lastActivitySummary: 'buy twd asset',
+          lastActivity: {
+            type: 'buy',
+            tradeDate: '2026-04-01',
+            note: 'buy twd asset',
+          },
         },
       ],
       allocationByType: [

@@ -5,10 +5,6 @@ import { Type } from 'class-transformer'
 import { SUPPORTED_CURRENCIES } from '../../common/constants/currency.constants'
 
 export class PostIncomeCommand {
-  @ApiProperty({ example: 'c2610e4e-1cca-401e-afa7-1ebf541d0000' })
-  @IsUUID()
-  userId!: string
-
   @ApiProperty({ example: 'GL_ACC_ID_CASH_OR_BANK' })
   @IsUUID()
   receiveToGlAccountId!: string

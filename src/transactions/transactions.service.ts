@@ -260,7 +260,10 @@ export class TransactionsService {
             deletedAt: new Date(),
           },
           include: {
-            account: { select: { userId: true } },
+            // 軟刪回應走 TransactionResponseDto。account 要有 id/name/currency/userId，不能只留 userId（PR #46）。
+            account: {
+              select: { id: true, name: true, currency: true, userId: true },
+            },
           },
         })
 
@@ -276,7 +279,9 @@ export class TransactionsService {
           deletedAt: new Date(),
         },
         include: {
-          account: { select: { userId: true } },
+          account: {
+            select: { id: true, name: true, currency: true, userId: true },
+          },
         },
       })
 

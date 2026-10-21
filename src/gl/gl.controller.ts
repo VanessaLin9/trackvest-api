@@ -7,7 +7,6 @@ import { PostExpenseCommand } from './dto/post-expense.command'
 import { PostIncomeCommand } from './dto/post-income.command'
 import { AuthUser } from '../common/decorators/auth-user.decorator'
 import { CurrentUser } from '../common/decorators/current-user.decorator'
-import { OwnershipService } from '../common/services/ownership.service'
 import { AuthenticatedUser } from '../common/types/auth-user'
 import { ALL_GL_ACCOUNTS, GlService } from './services/gl.service'
 import { GlAccountType } from '@prisma/client'
@@ -21,7 +20,6 @@ import { GlEntryDto } from './dto/get-entry.dto'
 export class GlController {
   constructor(
     private readonly post: PostingService,
-    private readonly ownershipService: OwnershipService,
     private readonly glService: GlService,
   ) {}
 
@@ -43,6 +41,7 @@ export class GlController {
     return this.glService.getEntriesByAccountId(userId, accountParam)
   }
 
+  // 分錄擁有者是 session user。body.userId 會被 whitelist 丟掉，不能指定別人的帳（PR #46）。
   @Post('transfer')
   @ApiBody({ type: PostTransferCommand })
   @ApiCreatedResponse({ description: 'Created GL entry with two lines' })
@@ -50,11 +49,9 @@ export class GlController {
     @Body() command: PostTransferCommand,
     @AuthUser() user: AuthenticatedUser,
   ) {
-    this.ownershipService.assertSameUserOrAdmin(command.userId, user)
-
     const date = command.date ? new Date(command.date) : new Date()
     return this.post.postTransfer({
-      userId: command.userId,
+      userId: user.id,
       fromGlAccountId: command.fromGlAccountId,
       toGlAccountId: command.toGlAccountId,
       amount: command.amount,
@@ -73,11 +70,9 @@ export class GlController {
     @Body() command: PostExpenseCommand,
     @AuthUser() user: AuthenticatedUser,
   ) {
-    this.ownershipService.assertSameUserOrAdmin(command.userId, user)
-
     const date = command.date ? new Date(command.date) : new Date()
     return this.post.postExpense({
-      userId: command.userId,
+      userId: user.id,
       payFromGlAccountId: command.payFromGlAccountId,
       expenseGlAccountId: command.expenseGlAccountId,
       amount: command.amount,
@@ -96,11 +91,9 @@ export class GlController {
     @Body() command: PostIncomeCommand,
     @AuthUser() user: AuthenticatedUser,
   ) {
-    this.ownershipService.assertSameUserOrAdmin(command.userId, user)
-
     const date = command.date ? new Date(command.date) : new Date()
     return this.post.postIncome({
-      userId: command.userId,
+      userId: user.id,
       receiveToGlAccountId: command.receiveToGlAccountId,
       incomeGlAccountId: command.incomeGlAccountId,
       amount: command.amount,
