@@ -12,6 +12,7 @@
     "mcp:dev": "ts-node-dev --respawn --transpile-only src/mcp-main.ts",
     "build": "nest build",
     "openapi:export": "ts-node -r tsconfig-paths/register scripts/export-openapi.ts",
+    "auth:reset-password:local": "ts-node scripts/reset-local-password.ts",
     "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
