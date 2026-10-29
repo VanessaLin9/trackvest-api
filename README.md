@@ -322,6 +322,29 @@ Low-level `POST /users` still exists but only creates the user row; it does not 
 
 See [USAGE_GUIDE.md](USAGE_GUIDE.md) for curl examples and the **frontend onboarding contract** (trackvest-web PR 2).
 
+### Reset a forgotten password on the local database
+
+From this repo's directory, run in an interactive terminal (Node.js 22+):
+
+```bash
+pnpm auth:reset-password:local you@example.com
+```
+
+The command reads `.env` (existing environment variables take precedence), shows the
+target account/database, and asks for the new password twice without displaying it.
+Do not put passwords in command arguments or environment variables. Passwords must
+have at least 6 characters and fit within bcrypt's 72 UTF-8 byte limit.
+
+This is a local maintenance command: it refuses `NODE_ENV=production`, remote database
+hosts, and URL `host` overrides. Use a PostgreSQL `DATABASE_URL` on `localhost` or
+`127.0.0.1`. It updates only the named account's password hash and revokes its active
+refresh tokens in one database transaction. Account and investment data are preserved.
+Mismatched passwords, cancellation (Ctrl+C / EOF), and unknown accounts leave data unchanged.
+
+Sign in again with the new password. Already-issued access tokens remain valid until
+their configured expiry (15 minutes by default); this command does not immediately
+invalidate those JWTs. It does not require email or expose a password-reset HTTP endpoint.
+
 ### Broker CSV import (preview + commit)
 
 Recommended flow for new integrations:
