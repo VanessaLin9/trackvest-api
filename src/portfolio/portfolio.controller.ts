@@ -11,16 +11,20 @@ import {
   PortfolioTrendResponseDto,
 } from './dto/portfolio-trend.response.dto'
 import { PortfolioService } from './portfolio.service'
+import { AssetPerformanceService } from './asset-performance.service'
 import { GetPortfolioAssetPerformanceDto } from './dto/get-portfolio-asset-performance.dto'
 import { PortfolioAssetPerformanceResponseDto } from './dto/portfolio-asset-performance.response.dto'
 
 @ApiTags('portfolio')
 @Controller('portfolio')
 @ApiCookieAuth('access_token')
-// CP0 exports the frontend contract; the live route is added in CP1.
+// Keep the query DTO in components/schemas for the CP0 contract (PR #48).
 @ApiExtraModels(GetPortfolioAssetPerformanceDto, PortfolioAssetPerformanceResponseDto)
 export class PortfolioController {
-  constructor(private readonly portfolioService: PortfolioService) {}
+  constructor(
+    private readonly portfolioService: PortfolioService,
+    private readonly assetPerformanceService: AssetPerformanceService,
+  ) {}
 
   @Get('summary')
   @ApiOkResponse({ type: PortfolioSummaryResponseDto })
@@ -29,6 +33,15 @@ export class PortfolioController {
     @Query() query: GetPortfolioDisplayCurrencyDto,
   ): Promise<PortfolioSummaryResponseDto> {
     return this.portfolioService.getSummary(userId, query)
+  }
+
+  @Get('performance/assets')
+  @ApiOkResponse({ type: PortfolioAssetPerformanceResponseDto })
+  async getAssetPerformance(
+    @CurrentUser() userId: string,
+    @Query() query: GetPortfolioAssetPerformanceDto,
+  ): Promise<PortfolioAssetPerformanceResponseDto> {
+    return this.assetPerformanceService.getAssetPerformance(userId, query)
   }
 
   @Get('holdings')

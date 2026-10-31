@@ -9,10 +9,16 @@ describe('PortfolioController', () => {
       getTrend: jest.fn(),
       getHoldingTrend: jest.fn(),
     }
+    const assetPerformanceService = {
+      getAssetPerformance: jest.fn(),
+    }
 
-    const controller = new PortfolioController(portfolioService as never)
+    const controller = new PortfolioController(
+      portfolioService as never,
+      assetPerformanceService as never,
+    )
 
-    return { controller, portfolioService }
+    return { controller, portfolioService, assetPerformanceService }
   }
 
   it('returns portfolio summary from the service', async () => {
@@ -311,5 +317,18 @@ describe('PortfolioController', () => {
         },
       ],
     })
+  })
+
+  it('delegates asset performance without using the holdings snapshot', async () => {
+    const { controller, assetPerformanceService } = createHarness()
+    const response = { generatedAt: '2026-10-31T00:00:00.000Z', items: [] }
+    assetPerformanceService.getAssetPerformance.mockResolvedValue(response)
+
+    const result = await controller.getAssetPerformance('user-1', { accountId: '11111111-1111-4111-8111-111111111111' })
+
+    expect(assetPerformanceService.getAssetPerformance).toHaveBeenCalledWith('user-1', {
+      accountId: '11111111-1111-4111-8111-111111111111',
+    })
+    expect(result).toBe(response)
   })
 })

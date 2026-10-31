@@ -1931,6 +1931,43 @@
         ]
       }
     },
+    "/portfolio/performance/assets": {
+      "get": {
+        "operationId": "PortfolioController_getAssetPerformance",
+        "parameters": [
+          {
+            "name": "accountId",
+            "required": false,
+            "in": "query",
+            "description": "Optional account scope. The account must belong to the signed-in user, including when the caller is an admin.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioAssetPerformanceResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
     "/portfolio/holdings": {
       "get": {
         "operationId": "PortfolioController_getHoldings",

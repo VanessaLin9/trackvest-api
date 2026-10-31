@@ -438,7 +438,7 @@ Canonical docs right now:
 - [README.md](README.md)
 - [docs/deployment.md](docs/deployment.md) — migration policy, forbidden commands, production-like rehearsal
 - [docs/mcp.md](docs/mcp.md)
-- [docs/asset-history-performance-contract.md](docs/asset-history-performance-contract.md) — CP0 DTO schemas and frontend mocks for the planned asset-history performance endpoint; live query implementation follows in CP1
+- [docs/asset-history-performance-contract.md](docs/asset-history-performance-contract.md) — asset-history performance contract and `GET /portfolio/performance/assets`
 
 - [REFACTORING.md](REFACTORING.md) — refactor backlog, replay-engine decisions, Portfolio vs Dashboard metrics
 

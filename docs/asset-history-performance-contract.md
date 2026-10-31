@@ -4,18 +4,19 @@ Notion spec: https://app.notion.com/p/408df30cc71c812ea5d1d85d154d3492
 
 ## Delivery status
 
-CP0 publishes DTO schemas and mock responses. The live route is **not registered**
-in this checkpoint; requests to it still return 404. CP1 will implement the read
-service, route, and operation-level OpenAPI documentation. Do not merge a frontend
-that treats these fixtures as the user's real data.
+CP1 registers `GET /portfolio/performance/assets` and fills the CP0 schema from
+persisted lots, sell matches, positions, dividends, and non-seed quotes. The
+handler is read-only. Web live integration still waits for this checkpoint's
+REVIEW_PASSED; until then, frontend mocks stay on the CP0 fixtures. Do not treat
+those fixtures as the user's real data.
 
-The backend and frontend have separate branches/PRs. Use the approved CP0 commit's
-`openapi.json` and this document while CP1 is in progress; no backend checkout or
-personal database mutation is required to build frontend mocks.
+The backend and frontend have separate branches/PRs. Frontend mocks can keep using
+the approved CP0 fixtures until this checkpoint is review-passed. Integrating the
+live route does not require mutating a personal database.
 
 ## Request and response
 
-Planned request: `GET /portfolio/performance/assets?accountId=<optional UUID>`.
+`GET /portfolio/performance/assets?accountId=<optional UUID>`.
 Cookie authentication is required. Omit accountId for the signed-in user's own
 accounts; a supplied accountId must be owned by that same user, including admins.
 An invalid UUID is 400, a missing session is 401, and foreign/nonexistent account
@@ -97,6 +98,6 @@ tradeNetPnl as trading P&L excluding dividends. No recorded dividends shows “n
 recorded”; financial nulls show an unavailable-data explanation, not zero. Errors,
 empty states and loading must not block other Dashboard cards.
 
-CP0 does not implement data fetching, query invalidation, historical calculation,
-annual results, card customization, or frontend changes. CP1 and frontend CP2 can
-proceed after CP0 receives REVIEW_PASSED; live integration waits for CP1 approval.
+CP1 implements this read API only. It does not add annual results, card
+customization, frontend changes, or query invalidation. Live web integration
+waits for CP1 approval.

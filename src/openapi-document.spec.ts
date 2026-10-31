@@ -52,7 +52,7 @@ describe('openapi.json', () => {
     expect(role.enum).toEqual(['admin', 'user'])
   })
 
-  it('exports CP0 asset-performance schemas without registering a placeholder route', () => {
+  it('exports the asset-performance read route and decimal-string schemas', () => {
     const schemas = asObject(asObject(committed.components).schemas)
     const item = asObject(schemas.PortfolioAssetPerformanceItemResponseDto)
     const properties = asObject(item.properties)
@@ -70,6 +70,13 @@ describe('openapi.json', () => {
     const query = asObject(schemas.GetPortfolioAssetPerformanceDto)
     expect(query.required ?? []).toEqual([])
     expect(asObject(asObject(query.properties).accountId).format).toBe('uuid')
-    expect(asObject(committed.paths)['/portfolio/performance/assets']).toBeUndefined()
+
+    const route = asObject(asObject(committed.paths)['/portfolio/performance/assets'])
+    const operation = asObject(route.get)
+    const parameters = operation.parameters as Array<{ name: string; required: boolean }>
+    expect(parameters.find(parameter => parameter.name === 'accountId')?.required).toBe(false)
+    const ok = asObject(asObject(operation.responses)['200'])
+    const schema = asObject(asObject(asObject(ok.content)['application/json']).schema)
+    expect(schema.$ref).toBe('#/components/schemas/PortfolioAssetPerformanceResponseDto')
   })
 })
