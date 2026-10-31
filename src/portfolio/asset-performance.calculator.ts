@@ -154,6 +154,7 @@ function buildRow(group: Group, source: AssetPerformanceSource): PortfolioAssetP
     ? null
     : sumDecimals(group.lots.map(lot => lot.remainingQuantity.mul(lot.unitCost)))
   const realized = resolveRealized(group, matchesBySell, missingFifo, inconsistentLots)
+  const realizedQuantity = resolveRealizedQuantity(group, matchesBySell, missingFifo)
   const quote = latestUsableQuote(source.quotes, group.assetId)
   const quoteCurrencyDiffers = quote != null
     && normalizeAssetCurrencyInput(asset.baseCurrency) !== normalizeAssetCurrencyInput(group.currency)
@@ -186,6 +187,7 @@ function buildRow(group: Group, source: AssetPerformanceSource): PortfolioAssetP
       ? PortfolioAssetPerformanceStatus.Holding
       : PortfolioAssetPerformanceStatus.Closed,
     quantity: formatDecimal(quantity),
+    realizedQuantity: realizedQuantity == null ? null : formatDecimal(realizedQuantity),
     realizedNetPnl: realized == null ? null : formatDecimal(realized),
     remainingCost: remainingCost == null ? null : formatDecimal(remainingCost),
     latestPrice: showQuote ? formatDecimal(quote.price) : null,
@@ -201,6 +203,21 @@ function buildRow(group: Group, source: AssetPerformanceSource): PortfolioAssetP
     lastTradeAt: latest(rowsWithTime(group)),
     issues: ISSUE_ORDER.filter(issue => issues.includes(issue)),
   }
+}
+
+function resolveRealizedQuantity(
+  group: Group,
+  matchesBySell: Map<string, AssetPerformanceMatch[]>,
+  missingFifo: boolean,
+): Prisma.Decimal | null {
+  // 已實現股數是完成 FIFO match 的賣出股數加總，不是剩餘股數，也不是其中賺錢的那幾股。
+  // 沒有賣出是 0。match 缺漏或數量不符時整列為 null，不可把對上一半的股數當成總賣出。
+  // lot 與 position 不一致不拿掉已對上的股數。分割後直接加已重算的 match（PR #48）。
+  if (missingFifo) return null
+  if (group.sells.length === 0) return new Prisma.Decimal(0)
+  return sumDecimals(
+    group.sells.flatMap(sell => (matchesBySell.get(sell.id) ?? []).map(match => match.quantity)),
+  )
 }
 
 function resolveRealized(

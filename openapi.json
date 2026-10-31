@@ -4441,6 +4441,13 @@
             "example": "12.5",
             "description": "Remaining lot quantity. Never a JavaScript number."
           },
+          "realizedQuantity": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^\\d+(\\.\\d{1,8})?$",
+            "example": "4",
+            "description": "Total shares sold through completed FIFO matches for this asset and account currency. Zero when there is no sell. Null when matches are missing or do not cover the sell quantity. Not the remaining quantity, and not the profitable subset."
+          },
           "realizedNetPnl": {
             "type": "string",
             "nullable": true,
@@ -4526,6 +4533,7 @@
           "currency",
           "status",
           "quantity",
+          "realizedQuantity",
           "realizedNetPnl",
           "remainingCost",
           "latestPrice",

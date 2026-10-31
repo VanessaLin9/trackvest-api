@@ -49,6 +49,13 @@ All quantities are in shares, including fractional shares.
   fees/tax are already deducted from net proceeds; do not deduct them again.
 - `quantity` / `remainingCost`: remaining valid lots, checked against Position.
   Reuse persisted split/FIFO semantics, without replaying or writing data in GET.
+- `realizedQuantity`: sum of `SellLotMatch.quantity` for the row's active sells.
+  This is total shares sold, not the remaining `quantity` and not the profitable
+  subset. No sells is `"0"`. A missing or incomplete FIFO match makes the whole
+  value null; do not return the matched portion. `INCONSISTENT_LOTS` does not
+  hide a complete match total. After a split, add the persisted match quantities
+  and do not apply the ratio again. Same-currency accounts are summed; currencies
+  stay separate.
 - `unrealizedPnl`: quantity times usable quote minus remaining cost. A quote must
   be non-seed, finite, strictly positive, and in the row currency. A newer
   non-positive quote does not hide an older valid quote. A consistent closed row has zero quantity,
@@ -67,10 +74,10 @@ One row's unavailable values must not hide other valid rows.
 
 | Issue | Values unavailable | Values that may remain available |
 | --- | --- | --- |
-| `MISSING_FIFO` | realizedNetPnl, tradeNetPnl | Consistent remaining quantity/cost and unrealized P&L |
-| `MISSING_PRICE` | latestPrice, priceAsOf, priceSource, unrealizedPnl, tradeNetPnl | Realized P&L, quantity and remaining cost |
-| `CURRENCY_MISMATCH` | latestPrice, priceAsOf, priceSource, unrealizedPnl, tradeNetPnl | Realized P&L and remaining cost in account currency |
-| `INCONSISTENT_LOTS` | remainingCost, realizedNetPnl, unrealizedPnl, tradeNetPnl | Recorded lot quantity (with issue), quote metadata and dividend records |
+| `MISSING_FIFO` | realizedQuantity, realizedNetPnl, tradeNetPnl | Consistent remaining quantity/cost and unrealized P&L |
+| `MISSING_PRICE` | latestPrice, priceAsOf, priceSource, unrealizedPnl, tradeNetPnl | Realized shares, realized P&L, quantity and remaining cost |
+| `CURRENCY_MISMATCH` | latestPrice, priceAsOf, priceSource, unrealizedPnl, tradeNetPnl | Realized shares, realized P&L and remaining cost in account currency |
+| `INCONSISTENT_LOTS` | remainingCost, realizedNetPnl, unrealizedPnl, tradeNetPnl | Realized shares when FIFO matches are complete, recorded lot quantity, quote metadata and dividend records |
 
 A missing or invalid quote and an explicitly different quote currency are distinct
 issues; do not add MISSING_PRICE solely because CURRENCY_MISMATCH suppresses the
@@ -95,9 +102,11 @@ handwritten response types. Keep generatedAt distinct from priceAsOf.
 
 Homepage card and `/performance` share data and presentation, with native-currency
 groups, all/holding/closed filters, search and 20-row client pagination. Label
-tradeNetPnl as trading P&L excluding dividends. No recorded dividends shows “not
-recorded”; financial nulls show an unavailable-data explanation, not zero. Errors,
-empty states and loading must not block other Dashboard cards.
+tradeNetPnl as trading P&L excluding dividends. Show `realizedQuantity` beside
+remaining quantity as 「已實現股數」 / “Realized shares”; null means 「資料不足」.
+Do not derive sold shares from remaining quantity or P&L. No recorded dividends
+shows “not recorded”; financial nulls show an unavailable-data explanation, not
+zero. Errors, empty states and loading must not block other Dashboard cards.
 
 This API does not add annual results, card customization, frontend changes, or
 web query invalidation. After CP1's REVIEW_PASSED, the web PR can switch from

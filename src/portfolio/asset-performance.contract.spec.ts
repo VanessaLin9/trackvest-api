@@ -44,7 +44,7 @@ describe('asset history performance CP0 contract', () => {
     expect(new Set(response.items.map(row => `${row.assetId}:${row.currency}`)).size).toBe(response.items.length)
     for (const row of response.items) {
       expect(Object.keys(row).sort()).toEqual(Object.keys(openapi.components.schemas.PortfolioAssetPerformanceItemResponseDto.properties).sort())
-      const decimals: Array<keyof Row> = ['quantity', 'realizedNetPnl', 'remainingCost', 'latestPrice', 'unrealizedPnl', 'tradeNetPnl', 'recordedDividendAmount']
+      const decimals: Array<keyof Row> = ['quantity', 'realizedQuantity', 'realizedNetPnl', 'remainingCost', 'latestPrice', 'unrealizedPnl', 'tradeNetPnl', 'recordedDividendAmount']
       for (const key of decimals) {
         if (row[key] !== null) {
           expect(typeof row[key]).toBe('string')
@@ -52,6 +52,8 @@ describe('asset history performance CP0 contract', () => {
         }
       }
       expect(new Prisma.Decimal(row.quantity).gte(0)).toBe(true)
+      if (row.realizedQuantity !== null) expect(new Prisma.Decimal(row.realizedQuantity).gte(0)).toBe(true)
+      if (row.issues.includes(PortfolioAssetPerformanceIssue.MissingFifo)) expect(row.realizedQuantity).toBeNull()
       expect(Object.values(PortfolioAssetPerformanceStatus)).toContain(row.status)
       expect(Number.isInteger(row.recordedDividendCount)).toBe(true)
       expect(row.recordedDividendCount).toBeGreaterThanOrEqual(0)
@@ -84,7 +86,10 @@ describe('asset history performance CP0 contract', () => {
     expect(currencies[0].assetId).toBe(currencies[1].assetId)
     expect(currencies.map(row => row.currency)).toEqual(['TWD', 'USD'])
     expect(fixture.scenarios.currency_mismatch.items[0]).toMatchObject({ latestPrice: null, tradeNetPnl: null, issues: ['CURRENCY_MISMATCH'] })
-    expect(fixture.scenarios.missing_fifo.items[0]).toMatchObject({ realizedNetPnl: null, tradeNetPnl: null, issues: ['MISSING_FIFO'] })
-    expect(fixture.scenarios.inconsistent_lots.items[0]).toMatchObject({ remainingCost: null, unrealizedPnl: null, tradeNetPnl: null })
+    expect(fixture.scenarios.missing_fifo.items[0]).toMatchObject({ realizedQuantity: null, realizedNetPnl: null, tradeNetPnl: null, issues: ['MISSING_FIFO'] })
+    expect(fixture.scenarios.inconsistent_lots.items[0]).toMatchObject({ realizedQuantity: '2.5', remainingCost: null, unrealizedPnl: null, tradeNetPnl: null })
+    expect(fixture.scenarios.zero_pnl.items[0].realizedQuantity).toBe('0')
+    expect(fixture.scenarios.closed_without_quote.items[0].realizedQuantity).toBe('10')
+    expect(fixture.scenarios.same_asset_different_currencies.items.map(row => row.realizedQuantity)).toEqual(['1', '4'])
   })
 })

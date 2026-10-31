@@ -87,6 +87,7 @@ describe('asset performance calculator', () => {
     expect(item).toMatchObject({
       status: 'holding',
       quantity: '6',
+      realizedQuantity: '4',
       realizedNetPnl: '80',
       remainingCost: '630',
       unrealizedPnl: '90',
@@ -126,6 +127,7 @@ describe('asset performance calculator', () => {
     expect(item).toMatchObject({
       status: 'closed',
       quantity: '0',
+      realizedQuantity: '10',
       realizedNetPnl: '-100',
       remainingCost: '0',
       latestPrice: null,
@@ -141,7 +143,7 @@ describe('asset performance calculator', () => {
     const zero = row(source({
       quotes: [{ assetId, price: decimal('100'), asOf: quotedAt, source: 'finmind' }],
     }))
-    expect(zero).toMatchObject({ realizedNetPnl: '0', unrealizedPnl: '0', tradeNetPnl: '0', issues: [] })
+    expect(zero).toMatchObject({ realizedQuantity: '0', realizedNetPnl: '0', unrealizedPnl: '0', tradeNetPnl: '0', issues: [] })
 
     const missing = row(source({
       transactions: [
@@ -162,6 +164,7 @@ describe('asset performance calculator', () => {
     }))
     expect(missing).toMatchObject({
       quantity: '6',
+      realizedQuantity: null,
       realizedNetPnl: null,
       remainingCost: '600',
       unrealizedPnl: '120',
@@ -313,6 +316,7 @@ describe('asset performance calculator', () => {
 
     expect(item).toMatchObject({
       quantity: '8',
+      realizedQuantity: '0',
       remainingCost: null,
       realizedNetPnl: null,
       latestPrice: '120',
@@ -320,6 +324,157 @@ describe('asset performance calculator', () => {
       tradeNetPnl: null,
       issues: [PortfolioAssetPerformanceIssue.InconsistentLots],
     })
+  })
+
+  it('keeps sold shares when lots are inconsistent but every sell is fully matched', () => {
+    const item = row(source({
+      transactions: [
+        ...source().transactions,
+        {
+          id: sellId,
+          accountId,
+          assetId,
+          type: 'sell',
+          amount: decimal('400'),
+          quantity: decimal('4'),
+          tradeTime: sellAt,
+        },
+      ],
+      lots: [{ accountId, assetId, remainingQuantity: decimal('8'), unitCost: decimal('100') }],
+      positions: [{ accountId, assetId, quantity: decimal('10') }],
+      matches: [
+        { sellTransactionId: sellId, quantity: decimal('1.5'), unitCost: decimal('100') },
+        { sellTransactionId: sellId, quantity: decimal('2.5'), unitCost: decimal('100') },
+      ],
+    }))
+
+    expect(item).toMatchObject({
+      quantity: '8',
+      realizedQuantity: '4',
+      realizedNetPnl: null,
+      remainingCost: null,
+      issues: [PortfolioAssetPerformanceIssue.InconsistentLots],
+    })
+  })
+
+  it('returns null sold shares when any sell is only partly matched', () => {
+    const item = row(source({
+      transactions: [
+        ...source().transactions,
+        {
+          id: sellId,
+          accountId,
+          assetId,
+          type: 'sell',
+          amount: decimal('400'),
+          quantity: decimal('4'),
+          tradeTime: sellAt,
+        },
+        {
+          id: 'sell-2',
+          accountId,
+          assetId,
+          type: 'sell',
+          amount: decimal('100'),
+          quantity: decimal('1'),
+          tradeTime: new Date('2026-07-01T00:00:00.000Z'),
+        },
+      ],
+      lots: [{ accountId, assetId, remainingQuantity: decimal('5'), unitCost: decimal('100') }],
+      positions: [{ accountId, assetId, quantity: decimal('5') }],
+      matches: [{ sellTransactionId: sellId, quantity: decimal('4'), unitCost: decimal('100') }],
+    }))
+
+    expect(item.realizedQuantity).toBeNull()
+    expect(item.issues).toEqual([PortfolioAssetPerformanceIssue.MissingFifo])
+  })
+
+  it('sums matched sell quantities across same-currency accounts and rounds half up once', () => {
+    const usdAccountId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    const response = buildAssetPerformance(source({
+      accounts: [
+        { id: accountId, currency: 'TWD' },
+        { id: otherAccountId, currency: 'TWD' },
+        { id: usdAccountId, currency: 'USD' },
+      ],
+      transactions: [
+        {
+          id: buyId,
+          accountId,
+          assetId,
+          type: 'buy',
+          amount: decimal('10'),
+          quantity: decimal('4'),
+          tradeTime: buyAt,
+        },
+        {
+          id: sellId,
+          accountId,
+          assetId,
+          type: 'sell',
+          amount: decimal('4'),
+          quantity: decimal('2.000000008'),
+          tradeTime: sellAt,
+        },
+        {
+          id: 'buy-2',
+          accountId: otherAccountId,
+          assetId,
+          type: 'buy',
+          amount: decimal('3'),
+          quantity: decimal('1'),
+          tradeTime: buyAt,
+        },
+        {
+          id: 'sell-2',
+          accountId: otherAccountId,
+          assetId,
+          type: 'sell',
+          amount: decimal('1'),
+          quantity: decimal('1'),
+          tradeTime: sellAt,
+        },
+        {
+          id: 'buy-3',
+          accountId: usdAccountId,
+          assetId,
+          type: 'buy',
+          amount: decimal('5'),
+          quantity: decimal('1'),
+          tradeTime: buyAt,
+        },
+        {
+          id: 'sell-3',
+          accountId: usdAccountId,
+          assetId,
+          type: 'sell',
+          amount: decimal('2'),
+          quantity: decimal('0.5'),
+          tradeTime: sellAt,
+        },
+      ],
+      lots: [
+        { accountId, assetId, remainingQuantity: decimal('1.999999992'), unitCost: decimal('2.5') },
+        { accountId: otherAccountId, assetId, remainingQuantity: decimal('0'), unitCost: decimal('3') },
+        { accountId: usdAccountId, assetId, remainingQuantity: decimal('0.5'), unitCost: decimal('5') },
+      ],
+      positions: [
+        { accountId, assetId, quantity: decimal('1.999999992') },
+        { accountId: usdAccountId, assetId, quantity: decimal('0.5') },
+      ],
+      matches: [
+        { sellTransactionId: sellId, quantity: decimal('1.000000004'), unitCost: decimal('2.5') },
+        { sellTransactionId: sellId, quantity: decimal('1.000000004'), unitCost: decimal('2.5') },
+        { sellTransactionId: 'sell-2', quantity: decimal('1'), unitCost: decimal('3') },
+        { sellTransactionId: 'sell-3', quantity: decimal('0.5'), unitCost: decimal('5') },
+      ],
+      assets: [{ id: assetId, symbol: 'AAPL', name: 'Apple Inc.', baseCurrency: 'USD' }],
+      quotes: [{ assetId, price: decimal('5'), asOf: quotedAt, source: 'finmind' }],
+    }), generatedAt)
+
+    expect(response.items.map(item => item.currency)).toEqual(['TWD', 'USD'])
+    expect(response.items[0].realizedQuantity).toBe('3.00000001')
+    expect(response.items[1].realizedQuantity).toBe('0.5')
   })
 
   it('orders combined issues and still returns the healthy row', () => {
@@ -524,6 +679,7 @@ describe('asset performance calculator', () => {
     expect(item).toMatchObject({
       status: 'holding',
       quantity: '3',
+      realizedQuantity: '2',
       realizedNetPnl: '-20',
       remainingCost: '300',
       unrealizedPnl: '60',

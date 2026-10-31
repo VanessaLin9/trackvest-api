@@ -58,10 +58,10 @@ describe('openapi.json', () => {
     const properties = asObject(item.properties)
     const required = item.required as string[]
     expect(required.slice().sort()).toEqual(Object.keys(properties).sort())
-    for (const key of ['quantity', 'realizedNetPnl', 'remainingCost', 'latestPrice', 'unrealizedPnl', 'tradeNetPnl', 'recordedDividendAmount']) {
+    for (const key of ['quantity', 'realizedQuantity', 'realizedNetPnl', 'remainingCost', 'latestPrice', 'unrealizedPnl', 'tradeNetPnl', 'recordedDividendAmount']) {
       expect(asObject(properties[key]).type).toBe('string')
     }
-    for (const key of ['realizedNetPnl', 'remainingCost', 'latestPrice', 'priceAsOf', 'priceSource', 'unrealizedPnl', 'tradeNetPnl', 'recordedDividendAmount', 'firstBuyAt']) {
+    for (const key of ['realizedQuantity', 'realizedNetPnl', 'remainingCost', 'latestPrice', 'priceAsOf', 'priceSource', 'unrealizedPnl', 'tradeNetPnl', 'recordedDividendAmount', 'firstBuyAt']) {
       expect(asObject(properties[key]).nullable).toBe(true)
     }
     expect(asObject(properties.recordedDividendCount).type).toBe('integer')

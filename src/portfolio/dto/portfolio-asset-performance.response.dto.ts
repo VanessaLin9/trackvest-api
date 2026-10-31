@@ -33,6 +33,9 @@ export class PortfolioAssetPerformanceItemResponseDto {
   @ApiProperty({ type: String, pattern: '^\\d+(\\.\\d{1,8})?$', example: '12.5', description: 'Remaining lot quantity. Never a JavaScript number.' })
   quantity!: string
 
+  @ApiProperty({ type: String, nullable: true, pattern: '^\\d+(\\.\\d{1,8})?$', example: '4', description: 'Total shares sold through completed FIFO matches for this asset and account currency. Zero when there is no sell. Null when matches are missing or do not cover the sell quantity. Not the remaining quantity, and not the profitable subset.' })
+  realizedQuantity!: string | null
+
   @ApiProperty({ type: String, nullable: true, pattern: decimalPattern, example: '50', description: 'Recorded net sell proceeds minus FIFO disposed cost. Null when FIFO or lot data cannot support the calculation.' })
   realizedNetPnl!: string | null
 
