@@ -284,7 +284,10 @@ function hasInconsistentLots(group: Group): boolean {
     }
     const lotQuantity = sumDecimals(lots.map(lot => lot.remainingQuantity))
     const positionQuantity = sumDecimals(positions.map(position => position.quantity))
-    if (!lotQuantity.eq(positionQuantity)) return true
+    // 增量買進把股數加成 JavaScript 數字。0.1 + 0.2 會寫成 0.30000000000000004，
+    // lot 加總仍是 0.3。收到輸出的 8 位小數後相同，就不把損益整列清空。
+    // 8 位以內仍有差距才是 INCONSISTENT_LOTS（PR #48）。
+    if (!sameOutputQuantity(lotQuantity, positionQuantity)) return true
   }
 
   return false
@@ -364,6 +367,11 @@ function earliest(values: Date[]): string | null {
 
 function latest(values: Date[]): string {
   return new Date(Math.max(...values.map(value => value.getTime()))).toISOString()
+}
+
+function sameOutputQuantity(left: Prisma.Decimal, right: Prisma.Decimal): boolean {
+  const scale = (value: Prisma.Decimal) => value.toDecimalPlaces(OUTPUT_SCALE, Prisma.Decimal.ROUND_HALF_UP)
+  return scale(left).eq(scale(right))
 }
 
 function sumDecimals(values: Prisma.Decimal[]): Prisma.Decimal {

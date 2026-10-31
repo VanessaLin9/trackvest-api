@@ -326,6 +326,60 @@ describe('asset performance calculator', () => {
     })
   })
 
+  it('keeps P&L when incremental buys leave only float dust on the position', () => {
+    const item = row(source({
+      transactions: [
+        {
+          id: buyId,
+          accountId,
+          assetId,
+          type: 'buy',
+          amount: decimal('10'),
+          quantity: decimal('0.1'),
+          tradeTime: buyAt,
+        },
+        {
+          id: 'buy-2',
+          accountId,
+          assetId,
+          type: 'buy',
+          amount: decimal('20'),
+          quantity: decimal('0.2'),
+          tradeTime: new Date('2025-04-01T00:00:00.000Z'),
+        },
+      ],
+      lots: [
+        { accountId, assetId, remainingQuantity: decimal('0.1'), unitCost: decimal('100') },
+        { accountId, assetId, remainingQuantity: decimal('0.2'), unitCost: decimal('100') },
+      ],
+      positions: [{ accountId, assetId, quantity: new Prisma.Decimal(0.1 + 0.2) }],
+    }))
+
+    expect(new Prisma.Decimal(0.1 + 0.2).eq('0.3')).toBe(false)
+    expect(item).toMatchObject({
+      quantity: '0.3',
+      remainingCost: '30',
+      realizedQuantity: '0',
+      unrealizedPnl: '6',
+      tradeNetPnl: '6',
+      issues: [],
+    })
+  })
+
+  it('still nulls P&L when lot and position differ at the eighth decimal', () => {
+    const item = row(source({
+      lots: [{ accountId, assetId, remainingQuantity: decimal('0.3'), unitCost: decimal('100') }],
+      positions: [{ accountId, assetId, quantity: decimal('0.30000001') }],
+    }))
+
+    expect(item).toMatchObject({
+      quantity: '0.3',
+      remainingCost: null,
+      unrealizedPnl: null,
+      issues: [PortfolioAssetPerformanceIssue.InconsistentLots],
+    })
+  })
+
   it('keeps sold shares when lots are inconsistent but every sell is fully matched', () => {
     const item = row(source({
       transactions: [

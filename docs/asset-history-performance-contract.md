@@ -47,7 +47,11 @@ All quantities are in shares, including fractional shares.
 - `realizedNetPnl`: sum of active sell `amount` (net proceeds) minus
   `SellLotMatch.quantity * unitCost`. Buy fees are already in lot cost and sell
   fees/tax are already deducted from net proceeds; do not deduct them again.
-- `quantity` / `remainingCost`: remaining valid lots, checked against Position.
+- `quantity` / `remainingCost`: remaining valid lots, checked against Position
+  after rounding both quantities half up to 8 decimal places. Incremental buys
+  persist a JavaScript sum, so `0.1 + 0.2` can be `0.30000000000000004` on the
+  position while the lots still sum to `0.3`; that dust must not become
+  `INCONSISTENT_LOTS`. A difference that remains at 8 decimals still does.
   Reuse persisted split/FIFO semantics, without replaying or writing data in GET.
 - `realizedQuantity`: sum of `SellLotMatch.quantity` for the row's active sells.
   This is total shares sold, not the remaining `quantity` and not the profitable
