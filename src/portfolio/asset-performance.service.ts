@@ -161,27 +161,34 @@ export class AssetPerformanceService {
   }
 
   private async loadLatestQuotes(tx: Prisma.TransactionClient, assetIds: string[]) {
-    const latest = await tx.price.groupBy({
-      by: ['assetId'],
-      where: {
-        assetId: { in: assetIds },
-        source: { not: 'seed' },
-        // 先排除非正數，再取最大 asOf，避免較新的 -1 蓋掉較舊的有效報價（PR #48）。
-        price: { gt: 0 },
-      },
-      _max: { asOf: true },
-    })
-    const keys = latest.flatMap(row => (row._max.asOf ? [{ assetId: row.assetId, asOf: row._max.asOf }] : []))
-    if (keys.length === 0) return []
+    if (assetIds.length === 0) return []
 
-    return tx.price.findMany({
-      where: { OR: keys },
-      select: {
-        assetId: true,
-        asOf: true,
-        source: true,
-        price: true,
-      },
-    })
+    // PostgreSQL numeric 的 NaN 比任何數字都大，`price > 0` 仍會選到它。
+    // 取最大日期前先排除 NaN 與非正數，較舊的有效報價才不會被蓋掉（PR #48）。
+    const rows = await tx.$queryRaw<Array<{
+      assetId: string
+      asOf: Date
+      source: string
+      price: Prisma.Decimal | string
+    }>>(Prisma.sql`
+      SELECT DISTINCT ON ("assetId")
+        "assetId",
+        "asOf",
+        "source",
+        "price"
+      FROM "Price"
+      WHERE "assetId"::text IN (${Prisma.join(assetIds)})
+        AND "source" <> 'seed'
+        AND "price" > 0
+        AND "price" <> 'NaN'::numeric
+      ORDER BY "assetId", "asOf" DESC, "source" ASC
+    `)
+
+    return rows.map(row => ({
+      assetId: row.assetId,
+      asOf: row.asOf instanceof Date ? row.asOf : new Date(row.asOf),
+      source: row.source,
+      price: row.price instanceof Prisma.Decimal ? row.price : new Prisma.Decimal(row.price),
+    }))
   }
 }

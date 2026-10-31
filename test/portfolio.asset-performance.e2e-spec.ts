@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import { ValidationPipe, type INestApplication } from '@nestjs/common'
 import { Test, type TestingModule } from '@nestjs/testing'
 import { AssetType, Currency, Prisma, TxType, UserRole } from '@prisma/client'
@@ -394,6 +395,85 @@ describe('Portfolio asset performance (e2e)', () => {
       remainingCost: '1.00000002',
       unrealizedPnl: '0.99999999',
       tradeNetPnl: '0.99999999',
+      issues: [],
+    })
+  })
+
+  it('uses an older positive quote when a newer price is numeric NaN', async () => {
+    const user = await prisma.user.create({
+      data: { email: 'asset-nan@trackvest.local', passwordHash: '!' },
+    })
+    const account = await prisma.account.create({
+      data: { userId: user.id, name: 'TWD', type: 'broker', currency: Currency.TWD },
+    })
+    const asset = await prisma.asset.create({
+      data: {
+        symbol: 'E2E-NAN',
+        name: 'NaN quote',
+        type: AssetType.equity,
+        assetClass: 'equity',
+        baseCurrency: 'TWD',
+      },
+    })
+    const buy = await prisma.transaction.create({
+      data: {
+        accountId: account.id,
+        assetId: asset.id,
+        type: TxType.buy,
+        amount: new Prisma.Decimal('1000'),
+        quantity: new Prisma.Decimal('10'),
+        tradeTime: new Date('2025-01-01T00:00:00.000Z'),
+      },
+    })
+    await prisma.positionLot.create({
+      data: {
+        accountId: account.id,
+        assetId: asset.id,
+        sourceTransactionId: buy.id,
+        originalQuantity: new Prisma.Decimal('10'),
+        remainingQuantity: new Prisma.Decimal('10'),
+        unitCost: new Prisma.Decimal('100'),
+        openedAt: buy.tradeTime,
+      },
+    })
+    await prisma.position.create({
+      data: {
+        accountId: account.id,
+        assetId: asset.id,
+        quantity: new Prisma.Decimal('10'),
+        avgCost: new Prisma.Decimal('100'),
+        openedAt: buy.tradeTime,
+      },
+    })
+    await prisma.price.create({
+      data: {
+        assetId: asset.id,
+        asOf: new Date('2026-10-30T00:00:00.000Z'),
+        source: 'finmind',
+        price: new Prisma.Decimal('120'),
+      },
+    })
+    await prisma.$executeRaw`
+      INSERT INTO "Price" ("id", "assetId", "asOf", "source", "price")
+      VALUES (
+        ${randomUUID()}::uuid,
+        ${asset.id}::uuid,
+        ${new Date('2026-10-31T00:00:00.000Z')},
+        'finmind',
+        'NaN'::numeric
+      )
+    `
+
+    const response = await request(app.getHttpServer())
+      .get('/portfolio/performance/assets')
+      .set(auth(user))
+      .expect(200)
+
+    expect(response.body.items[0]).toMatchObject({
+      latestPrice: '120',
+      priceAsOf: '2026-10-30T00:00:00.000Z',
+      priceSource: 'finmind',
+      unrealizedPnl: '200',
       issues: [],
     })
   })

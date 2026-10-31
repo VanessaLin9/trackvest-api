@@ -19,6 +19,7 @@ describe('AssetPerformanceService', () => {
       sellLotMatch: { findMany: jest.fn(), create: jest.fn() },
       asset: { findMany: jest.fn() },
       price: { groupBy: jest.fn(), findMany: jest.fn(), update: jest.fn() },
+      $queryRaw: jest.fn().mockResolvedValue([]),
     }
     const prisma = {
       $transaction: jest.fn(async (fn: (client: typeof tx) => Promise<unknown>, options?: unknown) => {
@@ -107,13 +108,12 @@ describe('AssetPerformanceService', () => {
         sourceTransaction: { isDeleted: false },
       },
     }))
-    expect(tx.price.groupBy).toHaveBeenCalledWith(expect.objectContaining({
-      where: {
-        assetId: { in: ['asset-1'] },
-        source: { not: 'seed' },
-        price: { gt: 0 },
-      },
-    }))
+    const quoteQuery = tx.$queryRaw.mock.calls[0][0] as Prisma.Sql
+    expect(quoteQuery.strings.join(' ')).toContain('"price" <> \'NaN\'::numeric')
+    expect(quoteQuery.strings.join(' ')).toContain('"price" > 0')
+    expect(quoteQuery.strings.join(' ')).toContain('"source" <> \'seed\'')
+    expect(quoteQuery.values).toContain('asset-1')
+    expect(tx.price.groupBy).not.toHaveBeenCalled()
     expect(tx.sellLotMatch.findMany).not.toHaveBeenCalled()
   })
 })
