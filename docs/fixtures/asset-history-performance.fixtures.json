@@ -1,0 +1,295 @@
+{
+  "contract": {
+    "method": "GET",
+    "path": "/portfolio/performance/assets",
+    "query": {
+      "accountId": "optional UUID"
+    }
+  },
+  "scenarios": {
+    "empty": {
+      "generatedAt": "2026-10-31T00:00:00.000Z",
+      "items": []
+    },
+    "holding_partial_sale": {
+      "generatedAt": "2026-10-31T00:00:00.000Z",
+      "items": [
+        {
+          "assetId": "11111111-1111-4111-8111-111111111111",
+          "symbol": "0050",
+          "name": "元大台灣50",
+          "currency": "TWD",
+          "status": "holding",
+          "quantity": "12.5",
+          "realizedNetPnl": "50",
+          "remainingCost": "1250",
+          "latestPrice": "120",
+          "priceAsOf": "2026-10-30T00:00:00.000Z",
+          "priceSource": "finmind",
+          "unrealizedPnl": "250",
+          "tradeNetPnl": "300",
+          "recordedDividendAmount": "20",
+          "recordedDividendCount": 1,
+          "firstBuyAt": "2025-03-03T01:00:00.000Z",
+          "lastTradeAt": "2026-10-30T01:00:00.000Z",
+          "issues": []
+        }
+      ]
+    },
+    "closed_without_quote": {
+      "generatedAt": "2026-10-31T00:00:00.000Z",
+      "items": [
+        {
+          "assetId": "22222222-2222-4222-8222-222222222222",
+          "symbol": "2330",
+          "name": "台積電",
+          "currency": "TWD",
+          "status": "closed",
+          "quantity": "0",
+          "realizedNetPnl": "-100",
+          "remainingCost": "0",
+          "latestPrice": null,
+          "priceAsOf": null,
+          "priceSource": null,
+          "unrealizedPnl": "0",
+          "tradeNetPnl": "-100",
+          "recordedDividendAmount": null,
+          "recordedDividendCount": 0,
+          "firstBuyAt": "2025-03-03T01:00:00.000Z",
+          "lastTradeAt": "2026-10-30T01:00:00.000Z",
+          "issues": []
+        }
+      ]
+    },
+    "zero_pnl": {
+      "generatedAt": "2026-10-31T00:00:00.000Z",
+      "items": [
+        {
+          "assetId": "11111111-1111-4111-8111-111111111111",
+          "symbol": "0050",
+          "name": "元大台灣50",
+          "currency": "TWD",
+          "status": "holding",
+          "quantity": "5",
+          "realizedNetPnl": "0",
+          "remainingCost": "500",
+          "latestPrice": "100",
+          "priceAsOf": "2026-10-30T00:00:00.000Z",
+          "priceSource": "finmind",
+          "unrealizedPnl": "0",
+          "tradeNetPnl": "0",
+          "recordedDividendAmount": null,
+          "recordedDividendCount": 0,
+          "firstBuyAt": "2025-03-03T01:00:00.000Z",
+          "lastTradeAt": "2026-10-30T01:00:00.000Z",
+          "issues": []
+        }
+      ]
+    },
+    "missing_fifo": {
+      "generatedAt": "2026-10-31T00:00:00.000Z",
+      "items": [
+        {
+          "assetId": "11111111-1111-4111-8111-111111111111",
+          "symbol": "0050",
+          "name": "元大台灣50",
+          "currency": "TWD",
+          "status": "holding",
+          "quantity": "12.5",
+          "realizedNetPnl": null,
+          "remainingCost": "1250",
+          "latestPrice": "120",
+          "priceAsOf": "2026-10-30T00:00:00.000Z",
+          "priceSource": "finmind",
+          "unrealizedPnl": "250",
+          "tradeNetPnl": null,
+          "recordedDividendAmount": null,
+          "recordedDividendCount": 0,
+          "firstBuyAt": "2025-03-03T01:00:00.000Z",
+          "lastTradeAt": "2026-10-30T01:00:00.000Z",
+          "issues": [
+            "MISSING_FIFO"
+          ]
+        }
+      ]
+    },
+    "missing_price": {
+      "generatedAt": "2026-10-31T00:00:00.000Z",
+      "items": [
+        {
+          "assetId": "11111111-1111-4111-8111-111111111111",
+          "symbol": "0050",
+          "name": "元大台灣50",
+          "currency": "TWD",
+          "status": "holding",
+          "quantity": "12.5",
+          "realizedNetPnl": "50",
+          "remainingCost": "1250",
+          "latestPrice": null,
+          "priceAsOf": null,
+          "priceSource": null,
+          "unrealizedPnl": null,
+          "tradeNetPnl": null,
+          "recordedDividendAmount": null,
+          "recordedDividendCount": 0,
+          "firstBuyAt": "2025-03-03T01:00:00.000Z",
+          "lastTradeAt": "2026-10-30T01:00:00.000Z",
+          "issues": [
+            "MISSING_PRICE"
+          ]
+        }
+      ]
+    },
+    "currency_mismatch": {
+      "generatedAt": "2026-10-31T00:00:00.000Z",
+      "items": [
+        {
+          "assetId": "11111111-1111-4111-8111-111111111111",
+          "symbol": "0050",
+          "name": "元大台灣50",
+          "currency": "TWD",
+          "status": "holding",
+          "quantity": "12.5",
+          "realizedNetPnl": "50",
+          "remainingCost": "1250",
+          "latestPrice": null,
+          "priceAsOf": null,
+          "priceSource": null,
+          "unrealizedPnl": null,
+          "tradeNetPnl": null,
+          "recordedDividendAmount": null,
+          "recordedDividendCount": 0,
+          "firstBuyAt": "2025-03-03T01:00:00.000Z",
+          "lastTradeAt": "2026-10-30T01:00:00.000Z",
+          "issues": [
+            "CURRENCY_MISMATCH"
+          ]
+        }
+      ]
+    },
+    "inconsistent_lots": {
+      "generatedAt": "2026-10-31T00:00:00.000Z",
+      "items": [
+        {
+          "assetId": "11111111-1111-4111-8111-111111111111",
+          "symbol": "0050",
+          "name": "元大台灣50",
+          "currency": "TWD",
+          "status": "holding",
+          "quantity": "12.5",
+          "realizedNetPnl": null,
+          "remainingCost": null,
+          "latestPrice": "120",
+          "priceAsOf": "2026-10-30T00:00:00.000Z",
+          "priceSource": "finmind",
+          "unrealizedPnl": null,
+          "tradeNetPnl": null,
+          "recordedDividendAmount": null,
+          "recordedDividendCount": 0,
+          "firstBuyAt": "2025-03-03T01:00:00.000Z",
+          "lastTradeAt": "2026-10-30T01:00:00.000Z",
+          "issues": [
+            "INCONSISTENT_LOTS"
+          ]
+        }
+      ]
+    },
+    "same_asset_different_currencies": {
+      "generatedAt": "2026-10-31T00:00:00.000Z",
+      "items": [
+        {
+          "assetId": "33333333-3333-4333-8333-333333333333",
+          "symbol": "AAPL",
+          "name": "Apple Inc.",
+          "currency": "TWD",
+          "status": "holding",
+          "quantity": "12.5",
+          "realizedNetPnl": "1000",
+          "remainingCost": "32000",
+          "latestPrice": null,
+          "priceAsOf": null,
+          "priceSource": null,
+          "unrealizedPnl": null,
+          "tradeNetPnl": null,
+          "recordedDividendAmount": null,
+          "recordedDividendCount": 0,
+          "firstBuyAt": "2025-03-03T01:00:00.000Z",
+          "lastTradeAt": "2026-10-30T01:00:00.000Z",
+          "issues": [
+            "CURRENCY_MISMATCH"
+          ]
+        },
+        {
+          "assetId": "33333333-3333-4333-8333-333333333333",
+          "symbol": "AAPL",
+          "name": "Apple Inc.",
+          "currency": "USD",
+          "status": "holding",
+          "quantity": "12.5",
+          "realizedNetPnl": "50",
+          "remainingCost": "1250",
+          "latestPrice": "120",
+          "priceAsOf": "2026-10-30T00:00:00.000Z",
+          "priceSource": "finmind",
+          "unrealizedPnl": "250",
+          "tradeNetPnl": "300",
+          "recordedDividendAmount": null,
+          "recordedDividendCount": 0,
+          "firstBuyAt": "2025-03-03T01:00:00.000Z",
+          "lastTradeAt": "2026-10-30T01:00:00.000Z",
+          "issues": []
+        }
+      ]
+    },
+    "multiple_accounts_aggregated": {
+      "generatedAt": "2026-10-31T00:00:00.000Z",
+      "items": [
+        {
+          "assetId": "11111111-1111-4111-8111-111111111111",
+          "symbol": "0050",
+          "name": "元大台灣50",
+          "currency": "TWD",
+          "status": "holding",
+          "quantity": "25",
+          "realizedNetPnl": "100",
+          "remainingCost": "2500",
+          "latestPrice": "120",
+          "priceAsOf": "2026-10-30T00:00:00.000Z",
+          "priceSource": "finmind",
+          "unrealizedPnl": "500",
+          "tradeNetPnl": "600",
+          "recordedDividendAmount": null,
+          "recordedDividendCount": 0,
+          "firstBuyAt": "2025-03-03T01:00:00.000Z",
+          "lastTradeAt": "2026-10-30T01:00:00.000Z",
+          "issues": []
+        }
+      ]
+    },
+    "closed_then_reopened": {
+      "generatedAt": "2026-10-31T00:00:00.000Z",
+      "items": [
+        {
+          "assetId": "11111111-1111-4111-8111-111111111111",
+          "symbol": "0050",
+          "name": "元大台灣50",
+          "currency": "TWD",
+          "status": "holding",
+          "quantity": "3",
+          "realizedNetPnl": "-20",
+          "remainingCost": "300",
+          "latestPrice": "120",
+          "priceAsOf": "2026-10-30T00:00:00.000Z",
+          "priceSource": "finmind",
+          "unrealizedPnl": "60",
+          "tradeNetPnl": "40",
+          "recordedDividendAmount": null,
+          "recordedDividendCount": 0,
+          "firstBuyAt": "2025-03-03T01:00:00.000Z",
+          "lastTradeAt": "2026-10-30T01:00:00.000Z",
+          "issues": []
+        }
+      ]
+    }
+  }
+}

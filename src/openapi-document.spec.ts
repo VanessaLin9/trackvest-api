@@ -51,4 +51,25 @@ describe('openapi.json', () => {
     const role = asObject(asObject(asObject(schemas.AuthUserDto).properties).role)
     expect(role.enum).toEqual(['admin', 'user'])
   })
+
+  it('exports CP0 asset-performance schemas without registering a placeholder route', () => {
+    const schemas = asObject(asObject(committed.components).schemas)
+    const item = asObject(schemas.PortfolioAssetPerformanceItemResponseDto)
+    const properties = asObject(item.properties)
+    const required = item.required as string[]
+    expect(required.slice().sort()).toEqual(Object.keys(properties).sort())
+    for (const key of ['quantity', 'realizedNetPnl', 'remainingCost', 'latestPrice', 'unrealizedPnl', 'tradeNetPnl', 'recordedDividendAmount']) {
+      expect(asObject(properties[key]).type).toBe('string')
+    }
+    for (const key of ['realizedNetPnl', 'remainingCost', 'latestPrice', 'priceAsOf', 'priceSource', 'unrealizedPnl', 'tradeNetPnl', 'recordedDividendAmount', 'firstBuyAt']) {
+      expect(asObject(properties[key]).nullable).toBe(true)
+    }
+    expect(asObject(properties.recordedDividendCount).type).toBe('integer')
+    expect(asObject(schemas.PortfolioAssetPerformanceStatus).enum).toEqual(['holding', 'closed'])
+    expect(asObject(schemas.PortfolioAssetPerformanceIssue).enum).toEqual(['MISSING_FIFO', 'MISSING_PRICE', 'CURRENCY_MISMATCH', 'INCONSISTENT_LOTS'])
+    const query = asObject(schemas.GetPortfolioAssetPerformanceDto)
+    expect(query.required ?? []).toEqual([])
+    expect(asObject(asObject(query.properties).accountId).format).toBe('uuid')
+    expect(asObject(committed.paths)['/portfolio/performance/assets']).toBeUndefined()
+  })
 })

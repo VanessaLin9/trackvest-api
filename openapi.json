@@ -4344,6 +4344,186 @@
           "recentActivity"
         ]
       },
+      "GetPortfolioAssetPerformanceDto": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional account scope. The account must belong to the signed-in user, including when the caller is an admin."
+          }
+        }
+      },
+      "PortfolioAssetPerformanceStatus": {
+        "type": "string",
+        "enum": [
+          "holding",
+          "closed"
+        ]
+      },
+      "PortfolioAssetPerformanceIssue": {
+        "type": "string",
+        "enum": [
+          "MISSING_FIFO",
+          "MISSING_PRICE",
+          "CURRENCY_MISMATCH",
+          "INCONSISTENT_LOTS"
+        ],
+        "description": "Deterministic, unique issue codes. Missing data must remain distinguishable from genuine zero P&L."
+      },
+      "PortfolioAssetPerformanceItemResponseDto": {
+        "type": "object",
+        "properties": {
+          "assetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "symbol": {
+            "type": "string",
+            "example": "0050"
+          },
+          "name": {
+            "type": "string",
+            "example": "元大台灣50"
+          },
+          "currency": {
+            "type": "string",
+            "example": "TWD",
+            "description": "Account currency. One row per assetId + currency; no FX conversion or cross-currency totals."
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PortfolioAssetPerformanceStatus"
+              }
+            ]
+          },
+          "quantity": {
+            "type": "string",
+            "pattern": "^\\d+(\\.\\d{1,8})?$",
+            "example": "12.5",
+            "description": "Remaining lot quantity. Never a JavaScript number."
+          },
+          "realizedNetPnl": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "50",
+            "description": "Recorded net sell proceeds minus FIFO disposed cost. Null when FIFO or lot data cannot support the calculation."
+          },
+          "remainingCost": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "1250",
+            "description": "Remaining lot cost in account currency. Zero for a consistent closed position."
+          },
+          "latestPrice": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "120",
+            "description": "Latest usable non-seed quote in the row currency. Null if unavailable or its currency differs. Closed rows do not require a quote."
+          },
+          "priceAsOf": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "UTC ISO timestamp of the usable quote, not the response generation time. Null when latestPrice is null."
+          },
+          "priceSource": {
+            "type": "string",
+            "nullable": true,
+            "example": "finmind",
+            "description": "Source of the usable quote. Null when latestPrice is null."
+          },
+          "unrealizedPnl": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "250",
+            "description": "Quantity times usable quote minus remaining cost. Zero for a consistent closed position; null when required data is unavailable."
+          },
+          "tradeNetPnl": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "300",
+            "description": "Realized net P&L plus unrealized P&L, excluding dividends. Null if either term is unavailable."
+          },
+          "recordedDividendAmount": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "20",
+            "description": "Only the dividend amounts recorded in this scope. Null when there are no dividend records; this does not establish the actual dividend total."
+          },
+          "recordedDividendCount": {
+            "type": "integer",
+            "minimum": 0,
+            "example": 1
+          },
+          "firstBuyAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "First active buy timestamp (UTC ISO). Null if no buy history is recorded."
+          },
+          "lastTradeAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Latest active buy/sell timestamp (UTC ISO), excluding dividends."
+          },
+          "issues": {
+            "type": "array",
+            "description": "Deterministic, unique issue codes. Missing data must remain distinguishable from genuine zero P&L.",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioAssetPerformanceIssue"
+            }
+          }
+        },
+        "required": [
+          "assetId",
+          "symbol",
+          "name",
+          "currency",
+          "status",
+          "quantity",
+          "realizedNetPnl",
+          "remainingCost",
+          "latestPrice",
+          "priceAsOf",
+          "priceSource",
+          "unrealizedPnl",
+          "tradeNetPnl",
+          "recordedDividendAmount",
+          "recordedDividendCount",
+          "firstBuyAt",
+          "lastTradeAt",
+          "issues"
+        ]
+      },
+      "PortfolioAssetPerformanceResponseDto": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC ISO response generation time. Each row carries its own quote timestamp."
+          },
+          "items": {
+            "description": "All active buy/sell history, including closed holdings. Ordered by symbol, currency, assetId.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioAssetPerformanceItemResponseDto"
+            }
+          }
+        },
+        "required": [
+          "generatedAt",
+          "items"
+        ]
+      },
       "PortfolioSummaryResponseDto": {
         "type": "object",
         "properties": {
