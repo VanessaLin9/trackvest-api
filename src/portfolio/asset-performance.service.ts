@@ -166,6 +166,8 @@ export class AssetPerformanceService {
       where: {
         assetId: { in: assetIds },
         source: { not: 'seed' },
+        // 先排除非正數，再取最大 asOf，避免較新的 -1 蓋掉較舊的有效報價（PR #48）。
+        price: { gt: 0 },
       },
       _max: { asOf: true },
     })

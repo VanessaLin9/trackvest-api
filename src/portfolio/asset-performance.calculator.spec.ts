@@ -254,6 +254,45 @@ describe('asset performance calculator', () => {
     })
   })
 
+  it('keeps an older positive quote when a newer price is not positive', () => {
+    const item = row(source({
+      quotes: [
+        { assetId, price: decimal('-1'), asOf: new Date('2026-10-31T00:00:00.000Z'), source: 'finmind' },
+        { assetId, price: decimal('0'), asOf: new Date('2026-10-31T00:00:00.000Z'), source: 'manual' },
+        { assetId, price: decimal('120'), asOf: quotedAt, source: 'finmind' },
+      ],
+    }))
+
+    expect(item).toMatchObject({
+      latestPrice: '120',
+      priceAsOf: quotedAt.toISOString(),
+      priceSource: 'finmind',
+      unrealizedPnl: '200',
+      tradeNetPnl: '200',
+      issues: [],
+    })
+  })
+
+  it('reports a missing price when every non-seed quote is non-positive or non-finite', () => {
+    const item = row(source({
+      quotes: [
+        { assetId, price: decimal('-1'), asOf: new Date('2026-10-31T00:00:00.000Z'), source: 'finmind' },
+        { assetId, price: decimal('0'), asOf: quotedAt, source: 'finmind' },
+        { assetId, price: new Prisma.Decimal('Infinity'), asOf: new Date('2026-10-29T00:00:00.000Z'), source: 'finmind' },
+      ],
+    }))
+
+    expect(item).toMatchObject({
+      latestPrice: null,
+      priceAsOf: null,
+      priceSource: null,
+      unrealizedPnl: null,
+      tradeNetPnl: null,
+      realizedNetPnl: '0',
+      issues: [PortfolioAssetPerformanceIssue.MissingPrice],
+    })
+  })
+
   it('treats seed-only quotes as missing prices', () => {
     const item = row(source({
       quotes: [{ assetId, price: decimal('120'), asOf: quotedAt, source: 'seed' }],

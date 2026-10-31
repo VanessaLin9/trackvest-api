@@ -50,7 +50,8 @@ All quantities are in shares, including fractional shares.
 - `quantity` / `remainingCost`: remaining valid lots, checked against Position.
   Reuse persisted split/FIFO semantics, without replaying or writing data in GET.
 - `unrealizedPnl`: quantity times usable quote minus remaining cost. A quote must
-  be non-seed and in the row currency. A consistent closed row has zero quantity,
+  be non-seed, finite, strictly positive, and in the row currency. A newer
+  non-positive quote does not hide an older valid quote. A consistent closed row has zero quantity,
   remaining cost, and unrealized P&L without needing a quote.
 - `tradeNetPnl`: realized net P&L plus unrealized P&L, **excluding dividends**.
 - `recordedDividendAmount`: sum of recorded active dividend amounts using their

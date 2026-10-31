@@ -111,6 +111,7 @@ describe('AssetPerformanceService', () => {
       where: {
         assetId: { in: ['asset-1'] },
         source: { not: 'seed' },
+        price: { gt: 0 },
       },
     }))
     expect(tx.sellLotMatch.findMany).not.toHaveBeenCalled()

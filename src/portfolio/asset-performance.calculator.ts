@@ -273,6 +273,13 @@ function hasInconsistentLots(group: Group): boolean {
   return false
 }
 
+function isUsableMarketQuote(quote: AssetPerformanceQuote, assetId: string): boolean {
+  return quote.assetId === assetId
+    && quote.source !== 'seed'
+    && quote.price.isFinite()
+    && quote.price.gt(0)
+}
+
 function latestUsableQuote(
   quotes: AssetPerformanceQuote[],
   assetId: string,
@@ -280,7 +287,8 @@ function latestUsableQuote(
   let selected: AssetPerformanceQuote | null = null
   for (const quote of quotes) {
     // source=seed 不是市場估值；較舊的非 seed 報價仍可附上它自己的時間（PR #48）。
-    if (quote.assetId !== assetId || quote.source === 'seed') continue
+    // 非正數或非有限報價也不是有效估值。先排除再挑最新日期；全無有效價才是 MISSING_PRICE（PR #48）。
+    if (!isUsableMarketQuote(quote, assetId)) continue
     if (
       selected == null
       || quote.asOf.getTime() > selected.asOf.getTime()
