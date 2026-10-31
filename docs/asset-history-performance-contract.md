@@ -4,15 +4,15 @@ Notion spec: https://app.notion.com/p/408df30cc71c812ea5d1d85d154d3492
 
 ## Delivery status
 
-CP1 registers `GET /portfolio/performance/assets` and fills the CP0 schema from
-persisted lots, sell matches, positions, dividends, and non-seed quotes. The
-handler is read-only. Web live integration still waits for this checkpoint's
-REVIEW_PASSED; until then, frontend mocks stay on the CP0 fixtures. Do not treat
-those fixtures as the user's real data.
+CP1 is review-passed at `73537695ff99d663faec0bfa3898c8d11b0ed380`.
+`GET /portfolio/performance/assets` is the live read route. It fills the CP0
+schema from persisted lots, sell matches, positions, dividends, and usable
+quotes. The handler is read-only.
 
-The backend and frontend have separate branches/PRs. Frontend mocks can keep using
-the approved CP0 fixtures until this checkpoint is review-passed. Integrating the
-live route does not require mutating a personal database.
+CP3 confirms `openapi.json` matches the controllers and hands that contract to
+trackvest-web. Fixtures stay synthetic mocks for UI tests. Do not treat them as
+the user's real data. Web query invalidation, the homepage card, and
+`/performance` remain in the web PR.
 
 ## Request and response
 
@@ -86,11 +86,11 @@ queries, with no provider calls or N+1 queries.
 ## Frontend handoff
 
 Use [asset-history-performance.fixtures.json](fixtures/asset-history-performance.fixtures.json)
-as mock JSON. Its `scenarios` values are complete responses; metadata describes
-the future endpoint, not its current availability. Fixtures contain synthetic data.
+as synthetic mock JSON for UI tests that are not calling the API. Its `scenarios`
+values are complete responses. The live route is `GET /portfolio/performance/assets`.
 
 Generate schemas with the existing `pnpm openapi:types` command in trackvest-web
-after selecting the approved API contract. Use `ApiSchemas` aliases, not parallel
+from this API branch's `openapi.json`. Use `ApiSchemas` aliases, not parallel
 handwritten response types. Keep generatedAt distinct from priceAsOf.
 
 Homepage card and `/performance` share data and presentation, with native-currency
@@ -99,6 +99,6 @@ tradeNetPnl as trading P&L excluding dividends. No recorded dividends shows “n
 recorded”; financial nulls show an unavailable-data explanation, not zero. Errors,
 empty states and loading must not block other Dashboard cards.
 
-CP1 implements this read API only. It does not add annual results, card
-customization, frontend changes, or query invalidation. Live web integration
-waits for CP1 approval.
+This API does not add annual results, card customization, frontend changes, or
+web query invalidation. After CP1's REVIEW_PASSED, the web PR can switch from
+fixtures to the generated client.
