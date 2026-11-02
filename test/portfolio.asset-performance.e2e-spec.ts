@@ -692,4 +692,90 @@ describe('Portfolio asset performance (e2e)', () => {
       .get('/portfolio/performance/assets')
       .expect(401)
   })
+
+  it('returns annual realized P&L for the caller and hides another user', async () => {
+    const owner = await prisma.user.create({
+      data: { email: 'annual@trackvest.local', passwordHash: '!', role: UserRole.user },
+    })
+    const intruder = await prisma.user.create({
+      data: { email: 'annual-other@trackvest.local', passwordHash: '!', role: UserRole.admin },
+    })
+    const account = await prisma.account.create({
+      data: { userId: owner.id, name: 'TWD', type: 'broker', currency: Currency.TWD },
+    })
+    const asset = await prisma.asset.create({
+      data: {
+        symbol: 'E2E-ANNUAL',
+        name: 'E2E annual',
+        type: AssetType.etf,
+        assetClass: 'equity',
+        baseCurrency: 'TWD',
+      },
+    })
+    const buy = await prisma.transaction.create({
+      data: {
+        accountId: account.id,
+        assetId: asset.id,
+        type: TxType.buy,
+        amount: new Prisma.Decimal('400'),
+        quantity: new Prisma.Decimal('4'),
+        tradeTime: new Date('2024-02-01T00:00:00.000Z'),
+      },
+    })
+    const sell = await prisma.transaction.create({
+      data: {
+        accountId: account.id,
+        assetId: asset.id,
+        type: TxType.sell,
+        amount: new Prisma.Decimal('500'),
+        quantity: new Prisma.Decimal('4'),
+        tradeTime: new Date('2026-03-01T00:00:00.000Z'),
+      },
+    })
+    const lot = await prisma.positionLot.create({
+      data: {
+        accountId: account.id,
+        assetId: asset.id,
+        sourceTransactionId: buy.id,
+        originalQuantity: new Prisma.Decimal('4'),
+        remainingQuantity: new Prisma.Decimal('0'),
+        unitCost: new Prisma.Decimal('100'),
+        openedAt: buy.tradeTime,
+        closedAt: sell.tradeTime,
+      },
+    })
+    await prisma.sellLotMatch.create({
+      data: {
+        sellTransactionId: sell.id,
+        buyLotId: lot.id,
+        quantity: new Prisma.Decimal('4'),
+        unitCost: new Prisma.Decimal('100'),
+      },
+    })
+    const before = await counts()
+
+    const response = await request(app.getHttpServer())
+      .get('/portfolio/performance/annual-realized')
+      .set(auth(owner))
+      .expect(200)
+
+    const twd2026 = response.body.items.find((item: { year: number; currency: string }) => item.year === 2026 && item.currency === 'TWD')
+    const twd2024 = response.body.items.find((item: { year: number; currency: string }) => item.year === 2024 && item.currency === 'TWD')
+    expect(response.body.timeZone).toBe('Asia/Taipei')
+    expect(twd2026).toMatchObject({ sellCount: 1, netProceeds: '500', disposedCost: '400', realizedNetPnl: '100', issues: [] })
+    expect(twd2024).toMatchObject({ sellCount: 0, netProceeds: '0', disposedCost: '0', realizedNetPnl: '0', issues: [] })
+    expect(await counts()).toEqual(before)
+
+    const hidden = await request(app.getHttpServer())
+      .get('/portfolio/performance/annual-realized')
+      .set(auth(intruder))
+      .expect(200)
+    expect(hidden.body.items).toEqual([])
+
+    await request(app.getHttpServer())
+      .get('/portfolio/performance/annual-realized')
+      .query({ accountId: account.id })
+      .set(auth(intruder))
+      .expect(403)
+  })
 })

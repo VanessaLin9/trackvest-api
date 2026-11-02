@@ -1968,6 +1968,43 @@
         ]
       }
     },
+    "/portfolio/performance/annual-realized": {
+      "get": {
+        "operationId": "PortfolioController_getAnnualRealized",
+        "parameters": [
+          {
+            "name": "accountId",
+            "required": false,
+            "in": "query",
+            "description": "Optional account scope. The account must belong to the signed-in user, including when the caller is an admin.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioAnnualRealizedResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
     "/portfolio/holdings": {
       "get": {
         "operationId": "PortfolioController_getHoldings",
@@ -4566,6 +4603,102 @@
         },
         "required": [
           "generatedAt",
+          "items"
+        ]
+      },
+      "GetPortfolioAnnualRealizedDto": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional account scope. The account must belong to the signed-in user, including when the caller is an admin."
+          }
+        }
+      },
+      "PortfolioAnnualRealizedIssue": {
+        "type": "string",
+        "enum": [
+          "MISSING_FIFO"
+        ]
+      },
+      "PortfolioAnnualRealizedItemResponseDto": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "integer",
+            "example": 2026,
+            "description": "Sell year in Asia/Taipei. A sale just after UTC 12/31 16:00 belongs to the next Taipei year."
+          },
+          "currency": {
+            "type": "string",
+            "example": "TWD",
+            "description": "Account currency. Rows are not summed across currencies."
+          },
+          "sellCount": {
+            "type": "integer",
+            "minimum": 0,
+            "example": 2
+          },
+          "netProceeds": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "500",
+            "description": "Sum of active sell amounts (net proceeds). Fees and tax are already inside amount and are not deducted again."
+          },
+          "disposedCost": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "420",
+            "description": "FIFO match quantity times unit cost for this year and currency. Null when any sell match is missing or incomplete."
+          },
+          "realizedNetPnl": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "80",
+            "description": "Net proceeds minus disposed cost. Null when disposed cost is unavailable. This is not an annual return rate."
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioAnnualRealizedIssue"
+            }
+          }
+        },
+        "required": [
+          "year",
+          "currency",
+          "sellCount",
+          "netProceeds",
+          "disposedCost",
+          "realizedNetPnl",
+          "issues"
+        ]
+      },
+      "PortfolioAnnualRealizedResponseDto": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeZone": {
+            "type": "string",
+            "example": "Asia/Taipei"
+          },
+          "items": {
+            "description": "One row per year and account currency, from the first buy/sell year through the current Taipei year. Ordered by year descending, then currency ascending.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioAnnualRealizedItemResponseDto"
+            }
+          }
+        },
+        "required": [
+          "generatedAt",
+          "timeZone",
           "items"
         ]
       },
