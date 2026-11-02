@@ -35,6 +35,10 @@ export class AssetPerformanceService {
     return buildAssetPerformance(source, generatedAt)
   }
 
+  /**
+   * 年度已實現淨損益（PR #49）。所有權與 Repeatable Read 與各標的相同。
+   * 不讀 lot、部位、報價；缺資料只在計算機標 MISSING_FIFO，這裡不補 0。
+   */
   async getAnnualRealized(
     userId: string,
     query: GetPortfolioAnnualRealizedDto,

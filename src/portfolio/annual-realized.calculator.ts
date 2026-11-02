@@ -12,7 +12,7 @@ import {
   PortfolioAnnualRealizedResponseDto,
 } from './dto/portfolio-annual-realized.response.dto'
 
-/** Asia/Taipei has no DST. Year boundaries are UTC+8, not the host timezone. */
+/** Asia/Taipei 無日光節約。年份用 UTC+8，不用主機時區；UTC 12/31 16:00 算下一個台北年（PR #49）。 */
 const TAIPEI_OFFSET_MS = 8 * 60 * 60 * 1000
 
 export const ANNUAL_REALIZED_TIME_ZONE = 'Asia/Taipei'
@@ -22,8 +22,9 @@ export function taipeiYear(instant: Date): number {
 }
 
 /**
- * 年度已實現淨損益。歸屬看賣出的台北年份，成本沿用歷史 FIFO match，不限當年買進。
- * 缺 match 時保留淨收款，成本與淨損益為 null，不把不完整加總當成全年成果。
+ * 年度已實現淨損益（PR #49）。歸屬看賣出的台北年份，成本沿用歷史 FIFO match，不限當年買進。
+ * 缺 match 時保留淨收款與 sellCount，成本與淨損益為 null，不把不完整加總當成全年成果。
+ * 股息不開年份、不計入；沒有買賣則 items 為空，不補 0 年。
  */
 export function buildAnnualRealized(
   source: AssetPerformanceSource,

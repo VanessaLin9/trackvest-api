@@ -367,6 +367,7 @@ function sameOutputQuantity(left: Prisma.Decimal, right: Prisma.Decimal): boolea
 /**
  * 賣出已實現口徑與各標的歷史成果相同：淨收款用 sell.amount，成本用 match quantity × unitCost。
  * match 缺漏或數量不符時 missingFifo 為 true；proceeds 仍是賣出 amount 加總，不把缺資料當 0。
+ * 年度列共用這條路徑，避免另寫一套手續費或 FIFO（PR #49）。各標的列仍另看 INCONSISTENT_LOTS。
  */
 export function summarizeSellFifo(
   sells: AssetPerformanceTransaction[],
