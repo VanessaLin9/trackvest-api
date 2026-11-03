@@ -117,6 +117,54 @@ describe('AssetPerformanceService', () => {
     expect(tx.sellLotMatch.findMany).not.toHaveBeenCalled()
   })
 
+  it('rejects another user account for annual realized and does not read trades', async () => {
+    const { service, tx } = createHarness([])
+
+    await expect(service.getAnnualRealized('user-1', {
+      accountId: '11111111-1111-4111-8111-111111111111',
+    })).rejects.toBeInstanceOf(ForbiddenException)
+
+    expect(tx.transaction.findMany).not.toHaveBeenCalled()
+    expect(tx.$queryRaw).not.toHaveBeenCalled()
+  })
+
+  it('reads annual sells without quotes, lots, or writes', async () => {
+    const { service, tx } = createHarness([{ id: 'account-1', currency: 'TWD' }])
+    tx.transaction.findMany.mockResolvedValue([
+      {
+        id: 'sell-1',
+        accountId: 'account-1',
+        assetId: 'asset-1',
+        type: 'sell',
+        amount: new Prisma.Decimal('10'),
+        quantity: new Prisma.Decimal('1'),
+        tradeTime: new Date('2026-02-01T00:00:00.000Z'),
+      },
+    ])
+    tx.sellLotMatch.findMany.mockResolvedValue([
+      {
+        sellTransactionId: 'sell-1',
+        quantity: new Prisma.Decimal('1'),
+        unitCost: new Prisma.Decimal('4'),
+      },
+    ])
+
+    const response = await service.getAnnualRealized('user-1', {})
+
+    expect(response.timeZone).toBe('Asia/Taipei')
+    expect(response.items[0]).toMatchObject({
+      currency: 'TWD',
+      sellCount: 1,
+      netProceeds: '10',
+      realizedNetPnl: '6',
+      issues: [],
+    })
+    expect(tx.positionLot.findMany).not.toHaveBeenCalled()
+    expect(tx.$queryRaw).not.toHaveBeenCalled()
+    expect(tx.transaction.update).not.toHaveBeenCalled()
+    expect(tx.sellLotMatch.create).not.toHaveBeenCalled()
+  })
+
   it('rejects another user account for annual buys and does not read trades', async () => {
     const { service, tx } = createHarness([])
 

@@ -229,14 +229,8 @@ function resolveRealized(
   // lot 與 position 不一致，或賣出 match 對不上時，已實現無法確認，不可當 0（PR #48）。
   if (missingFifo || inconsistentLots) return null
   if (group.sells.length === 0) return new Prisma.Decimal(0)
-
-  const proceeds = sumDecimals(group.sells.map(sell => sell.amount))
-  const disposedCost = sumDecimals(
-    group.sells.flatMap(sell =>
-      (matchesBySell.get(sell.id) ?? []).map(match => match.quantity.mul(match.unitCost)),
-    ),
-  )
-  return proceeds.sub(disposedCost)
+  const summary = summarizeSellFifo(group.sells, [...matchesBySell.values()].flat())
+  return summary.proceeds.sub(summary.disposedCost)
 }
 
 function resolveUnrealized(input: {
@@ -258,11 +252,7 @@ function hasMissingFifo(
   group: Group,
   matchesBySell: Map<string, AssetPerformanceMatch[]>,
 ): boolean {
-  return group.sells.some(sell => {
-    if (sell.quantity == null) return true
-    const matched = sumDecimals((matchesBySell.get(sell.id) ?? []).map(match => match.quantity))
-    return !matched.eq(sell.quantity)
-  })
+  return summarizeSellFifo(group.sells, [...matchesBySell.values()].flat()).missingFifo
 }
 
 function hasInconsistentLots(group: Group): boolean {
@@ -374,8 +364,44 @@ function sameOutputQuantity(left: Prisma.Decimal, right: Prisma.Decimal): boolea
   return scale(left).eq(scale(right))
 }
 
+/**
+ * 賣出已實現口徑與各標的歷史成果相同：淨收款用 sell.amount，成本用 match quantity × unitCost。
+ * match 缺漏或數量不符時 missingFifo 為 true；proceeds 仍是賣出 amount 加總，不把缺資料當 0。
+ * 年度列共用這條路徑，避免另寫一套手續費或 FIFO（PR #49）。各標的列仍另看 INCONSISTENT_LOTS。
+ */
+export function summarizeSellFifo(
+  sells: AssetPerformanceTransaction[],
+  matches: AssetPerformanceMatch[],
+): { missingFifo: boolean; proceeds: Prisma.Decimal; disposedCost: Prisma.Decimal } {
+  const sellIds = new Set(sells.map(sell => sell.id))
+  const bySell = new Map<string, AssetPerformanceMatch[]>()
+  for (const match of matches) {
+    if (!sellIds.has(match.sellTransactionId)) continue
+    const existing = bySell.get(match.sellTransactionId)
+    if (existing) existing.push(match)
+    else bySell.set(match.sellTransactionId, [match])
+  }
+
+  const missingFifo = sells.some(sell => {
+    if (sell.quantity == null) return true
+    const matched = sumDecimals((bySell.get(sell.id) ?? []).map(match => match.quantity))
+    return !matched.eq(sell.quantity)
+  })
+  return {
+    missingFifo,
+    proceeds: sumDecimals(sells.map(sell => sell.amount)),
+    disposedCost: sumDecimals(
+      sells.flatMap(sell => (bySell.get(sell.id) ?? []).map(match => match.quantity.mul(match.unitCost))),
+    ),
+  }
+}
+
 function sumDecimals(values: Prisma.Decimal[]): Prisma.Decimal {
   return values.reduce((total, value) => total.add(value), new Prisma.Decimal(0))
+}
+
+export function formatPerformanceDecimal(value: Prisma.Decimal): string {
+  return formatDecimal(value)
 }
 
 function formatDecimal(value: Prisma.Decimal): string {
