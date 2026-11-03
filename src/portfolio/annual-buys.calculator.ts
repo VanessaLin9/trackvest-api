@@ -8,7 +8,7 @@ import {
   PortfolioAnnualBuysResponseDto,
 } from './dto/portfolio-annual-buys.response.dto'
 
-/** Asia/Taipei 無日光節約。年與月用 UTC+8，不用主機時區；UTC 12/31 16:00 算下一個台北年。 */
+/** Asia/Taipei 無日光節約。年與月用 UTC+8，不用主機時區；UTC 12/31 16:00 算下一個台北年的 1 月（PR #50）。 */
 const TAIPEI_OFFSET_MS = 8 * 60 * 60 * 1000
 const OUTPUT_SCALE = 8
 
@@ -37,7 +37,8 @@ export type AnnualBuySource = {
 }
 
 /**
- * 年度買進金額與類型配置。買進用 buy.amount（費用已在金額內），賣出淨收款另列。
+ * 年度買進金額與類型配置（PR #50）。買進用 buy.amount（費用已在金額內），賣出淨收款另列。
+ * 這是買進活動，不是新增本金、淨入金或持倉配置；buyMinusSellProceeds 也不是報酬分母。
  * 類型看 Asset.type，不用 assetClass，所以股票型 ETF 仍是 etf。
  * 沒有買進時不產出 0% 占比。當年只列到查詢當下的台北月，之後的月份不補 0。
  */

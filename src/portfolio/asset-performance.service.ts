@@ -36,7 +36,7 @@ export class AssetPerformanceService {
   }
 
   /**
-   * 年度買進金額與類型配置。所有權與 Repeatable Read 與各標的相同。
+   * 年度買進金額與類型配置（PR #50）。所有權與 Repeatable Read 與各標的相同。
    * 只讀買賣與 Asset.type，不讀 assetClass、lot、報價或總帳。
    */
   async getAnnualBuys(
