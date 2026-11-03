@@ -79,4 +79,28 @@ describe('openapi.json', () => {
     const schema = asObject(asObject(asObject(ok.content)['application/json']).schema)
     expect(schema.$ref).toBe('#/components/schemas/PortfolioAssetPerformanceResponseDto')
   })
+
+  it('exports the annual realized route as decimal strings grouped by year and currency', () => {
+    const schemas = asObject(asObject(committed.components).schemas)
+    const item = asObject(schemas.PortfolioAnnualRealizedItemResponseDto)
+    const properties = asObject(item.properties)
+    expect(asObject(properties.year).type).toBe('integer')
+    expect(asObject(properties.sellCount).type).toBe('integer')
+    for (const key of ['netProceeds', 'disposedCost', 'realizedNetPnl']) {
+      expect(asObject(properties[key]).type).toBe('string')
+    }
+    expect(asObject(properties.disposedCost).nullable).toBe(true)
+    expect(asObject(properties.realizedNetPnl).nullable).toBe(true)
+    expect(asObject(schemas.PortfolioAnnualRealizedIssue).enum).toEqual(['MISSING_FIFO'])
+    const response = asObject(schemas.PortfolioAnnualRealizedResponseDto)
+    expect(asObject(asObject(response.properties).timeZone).example).toBe('Asia/Taipei')
+
+    const route = asObject(asObject(committed.paths)['/portfolio/performance/annual-realized'])
+    const operation = asObject(route.get)
+    const parameters = operation.parameters as Array<{ name: string; required: boolean }>
+    expect(parameters.find(parameter => parameter.name === 'accountId')?.required).toBe(false)
+    const ok = asObject(asObject(operation.responses)['200'])
+    const schema = asObject(asObject(asObject(ok.content)['application/json']).schema)
+    expect(schema.$ref).toBe('#/components/schemas/PortfolioAnnualRealizedResponseDto')
+  })
 })

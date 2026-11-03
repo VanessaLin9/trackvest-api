@@ -11,6 +11,7 @@ describe('PortfolioController', () => {
     }
     const assetPerformanceService = {
       getAssetPerformance: jest.fn(),
+      getAnnualRealized: jest.fn(),
     }
 
     const controller = new PortfolioController(
@@ -327,6 +328,19 @@ describe('PortfolioController', () => {
     const result = await controller.getAssetPerformance('user-1', { accountId: '11111111-1111-4111-8111-111111111111' })
 
     expect(assetPerformanceService.getAssetPerformance).toHaveBeenCalledWith('user-1', {
+      accountId: '11111111-1111-4111-8111-111111111111',
+    })
+    expect(result).toBe(response)
+  })
+
+  it('delegates annual realized P&L without using the holdings snapshot', async () => {
+    const { controller, assetPerformanceService } = createHarness()
+    const response = { generatedAt: '2026-11-03T00:30:00.000Z', timeZone: 'Asia/Taipei', items: [] }
+    assetPerformanceService.getAnnualRealized.mockResolvedValue(response)
+
+    const result = await controller.getAnnualRealized('user-1', { accountId: '11111111-1111-4111-8111-111111111111' })
+
+    expect(assetPerformanceService.getAnnualRealized).toHaveBeenCalledWith('user-1', {
       accountId: '11111111-1111-4111-8111-111111111111',
     })
     expect(result).toBe(response)

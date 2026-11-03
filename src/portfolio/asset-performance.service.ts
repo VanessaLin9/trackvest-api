@@ -6,7 +6,10 @@ import {
   AssetPerformanceTransaction,
   buildAssetPerformance,
 } from './asset-performance.calculator'
+import { buildAnnualRealized } from './annual-realized.calculator'
+import { GetPortfolioAnnualRealizedDto } from './dto/get-portfolio-annual-realized.dto'
 import { GetPortfolioAssetPerformanceDto } from './dto/get-portfolio-asset-performance.dto'
+import { PortfolioAnnualRealizedResponseDto } from './dto/portfolio-annual-realized.response.dto'
 import { PortfolioAssetPerformanceResponseDto } from './dto/portfolio-asset-performance.response.dto'
 
 const TRADE_TYPES = [TxType.buy, TxType.sell, TxType.dividend] as const
@@ -30,6 +33,22 @@ export class AssetPerformanceService {
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     )
     return buildAssetPerformance(source, generatedAt)
+  }
+
+  /**
+   * 年度已實現淨損益（PR #49）。所有權與 Repeatable Read 與各標的相同。
+   * 不讀 lot、部位、報價；缺資料只在計算機標 MISSING_FIFO，這裡不補 0。
+   */
+  async getAnnualRealized(
+    userId: string,
+    query: GetPortfolioAnnualRealizedDto,
+  ): Promise<PortfolioAnnualRealizedResponseDto> {
+    const generatedAt = new Date()
+    const source = await this.prisma.$transaction(
+      tx => this.loadAnnualSource(tx, userId, query.accountId),
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    )
+    return buildAnnualRealized(source, generatedAt)
   }
 
   private async loadSource(
@@ -61,39 +80,7 @@ export class AssetPerformanceService {
     if (accounts.length === 0) return empty
 
     const accountIds = accounts.map(account => account.id)
-    const transactions = await tx.transaction.findMany({
-      where: {
-        accountId: { in: accountIds },
-        isDeleted: false,
-        assetId: { not: null },
-        type: { in: [...TRADE_TYPES] },
-      },
-      select: {
-        id: true,
-        accountId: true,
-        assetId: true,
-        type: true,
-        amount: true,
-        quantity: true,
-        tradeTime: true,
-      },
-    })
-    const activeTransactions = transactions.flatMap(transaction => {
-      if (transaction.assetId == null) return []
-      if (transaction.type !== TxType.buy && transaction.type !== TxType.sell && transaction.type !== TxType.dividend) {
-        return []
-      }
-      const mapped: AssetPerformanceTransaction = {
-        id: transaction.id,
-        accountId: transaction.accountId,
-        assetId: transaction.assetId,
-        type: transaction.type,
-        amount: transaction.amount,
-        quantity: transaction.quantity,
-        tradeTime: transaction.tradeTime,
-      }
-      return [mapped]
-    })
+    const activeTransactions = await this.loadActiveTrades(tx, accountIds)
     const assetIds = [...new Set(
       activeTransactions
         .filter(transaction => transaction.type === 'buy' || transaction.type === 'sell')
@@ -127,16 +114,7 @@ export class AssetPerformanceService {
           quantity: true,
         },
       }),
-      sellIds.length === 0
-        ? Promise.resolve([])
-        : tx.sellLotMatch.findMany({
-            where: { sellTransactionId: { in: sellIds } },
-            select: {
-              sellTransactionId: true,
-              quantity: true,
-              unitCost: true,
-            },
-          }),
+      this.loadMatches(tx, sellIds),
       tx.asset.findMany({
         where: { id: { in: assetIds } },
         select: {
@@ -158,6 +136,93 @@ export class AssetPerformanceService {
       assets,
       quotes,
     }
+  }
+
+  private async loadAnnualSource(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    accountId?: string,
+  ): Promise<AssetPerformanceSource> {
+    const accounts = await tx.account.findMany({
+      where: {
+        userId,
+        ...(accountId ? { id: accountId } : {}),
+      },
+      select: { id: true, currency: true },
+    })
+    if (accountId && accounts.length === 0) {
+      throw new ForbiddenException('You do not have access to this account')
+    }
+    const empty: AssetPerformanceSource = {
+      accounts,
+      transactions: [],
+      lots: [],
+      positions: [],
+      matches: [],
+      assets: [],
+      quotes: [],
+    }
+    if (accounts.length === 0) return empty
+
+    const transactions = await this.loadActiveTrades(tx, accounts.map(account => account.id))
+    const sellIds = transactions.filter(transaction => transaction.type === 'sell').map(transaction => transaction.id)
+    return {
+      ...empty,
+      transactions,
+      matches: await this.loadMatches(tx, sellIds),
+    }
+  }
+
+  private async loadActiveTrades(
+    tx: Prisma.TransactionClient,
+    accountIds: string[],
+  ): Promise<AssetPerformanceTransaction[]> {
+    const transactions = await tx.transaction.findMany({
+      where: {
+        accountId: { in: accountIds },
+        isDeleted: false,
+        assetId: { not: null },
+        type: { in: [...TRADE_TYPES] },
+      },
+      select: {
+        id: true,
+        accountId: true,
+        assetId: true,
+        type: true,
+        amount: true,
+        quantity: true,
+        tradeTime: true,
+      },
+    })
+    const activeTransactions = transactions.flatMap(transaction => {
+      if (transaction.assetId == null) return []
+      if (transaction.type !== TxType.buy && transaction.type !== TxType.sell && transaction.type !== TxType.dividend) {
+        return []
+      }
+      const mapped: AssetPerformanceTransaction = {
+        id: transaction.id,
+        accountId: transaction.accountId,
+        assetId: transaction.assetId,
+        type: transaction.type,
+        amount: transaction.amount,
+        quantity: transaction.quantity,
+        tradeTime: transaction.tradeTime,
+      }
+      return [mapped]
+    })
+    return activeTransactions
+  }
+
+  private async loadMatches(tx: Prisma.TransactionClient, sellIds: string[]) {
+    if (sellIds.length === 0) return []
+    return tx.sellLotMatch.findMany({
+      where: { sellTransactionId: { in: sellIds } },
+      select: {
+        sellTransactionId: true,
+        quantity: true,
+        unitCost: true,
+      },
+    })
   }
 
   private async loadLatestQuotes(tx: Prisma.TransactionClient, assetIds: string[]) {
