@@ -778,4 +778,111 @@ describe('Portfolio asset performance (e2e)', () => {
       .set(auth(intruder))
       .expect(403)
   })
+
+  it('returns annual buy allocation for the caller and hides another user', async () => {
+    const owner = await prisma.user.create({
+      data: { email: 'annual-buys@trackvest.local', passwordHash: '!', role: UserRole.user },
+    })
+    const intruder = await prisma.user.create({
+      data: { email: 'annual-buys-other@trackvest.local', passwordHash: '!', role: UserRole.admin },
+    })
+    const account = await prisma.account.create({
+      data: { userId: owner.id, name: 'TWD', type: 'broker', currency: Currency.TWD },
+    })
+    const equity = await prisma.asset.create({
+      data: {
+        symbol: 'E2E-EQUITY',
+        name: 'E2E equity',
+        type: AssetType.equity,
+        assetClass: 'equity',
+        baseCurrency: 'TWD',
+      },
+    })
+    const etf = await prisma.asset.create({
+      data: {
+        symbol: 'E2E-ETF',
+        name: 'E2E etf',
+        type: AssetType.etf,
+        assetClass: 'equity',
+        baseCurrency: 'TWD',
+      },
+    })
+    await prisma.transaction.create({
+      data: {
+        accountId: account.id,
+        assetId: equity.id,
+        type: TxType.buy,
+        amount: new Prisma.Decimal('100'),
+        quantity: new Prisma.Decimal('1'),
+        fee: new Prisma.Decimal('5'),
+        tradeTime: new Date('2024-02-01T00:00:00.000Z'),
+      },
+    })
+    await prisma.transaction.create({
+      data: {
+        accountId: account.id,
+        assetId: etf.id,
+        type: TxType.buy,
+        amount: new Prisma.Decimal('300'),
+        quantity: new Prisma.Decimal('3'),
+        tradeTime: new Date('2026-03-01T00:00:00.000Z'),
+      },
+    })
+    await prisma.transaction.create({
+      data: {
+        accountId: account.id,
+        assetId: equity.id,
+        type: TxType.buy,
+        amount: new Prisma.Decimal('999'),
+        quantity: new Prisma.Decimal('1'),
+        tradeTime: new Date('2026-03-02T00:00:00.000Z'),
+        isDeleted: true,
+      },
+    })
+    await prisma.transaction.create({
+      data: {
+        accountId: account.id,
+        assetId: equity.id,
+        type: TxType.sell,
+        amount: new Prisma.Decimal('80'),
+        quantity: new Prisma.Decimal('1'),
+        tradeTime: new Date('2026-03-03T00:00:00.000Z'),
+      },
+    })
+    const before = await counts()
+
+    const response = await request(app.getHttpServer())
+      .get('/portfolio/performance/annual-buys')
+      .set(auth(owner))
+      .expect(200)
+
+    const twd2026 = response.body.items.find((item: { year: number; currency: string }) => item.year === 2026 && item.currency === 'TWD')
+    const twd2024 = response.body.items.find((item: { year: number; currency: string }) => item.year === 2024 && item.currency === 'TWD')
+    expect(response.body.timeZone).toBe('Asia/Taipei')
+    expect(twd2026).toMatchObject({
+      buyAmount: '300',
+      sellNetProceeds: '80',
+      buyMinusSellProceeds: '220',
+      types: [{ type: 'etf', buyAmount: '300', share: '1' }],
+    })
+    expect(twd2026.months.find((month: { month: number }) => month.month === 3).buyAmount).toBe('300')
+    expect(twd2024).toMatchObject({
+      buyAmount: '100',
+      types: [{ type: 'equity', buyAmount: '100', share: '1' }],
+    })
+    expect(twd2024.months).toHaveLength(12)
+    expect(await counts()).toEqual(before)
+
+    const hidden = await request(app.getHttpServer())
+      .get('/portfolio/performance/annual-buys')
+      .set(auth(intruder))
+      .expect(200)
+    expect(hidden.body.items).toEqual([])
+
+    await request(app.getHttpServer())
+      .get('/portfolio/performance/annual-buys')
+      .query({ accountId: account.id })
+      .set(auth(intruder))
+      .expect(403)
+  })
 })

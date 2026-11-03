@@ -1968,6 +1968,43 @@
         ]
       }
     },
+    "/portfolio/performance/annual-buys": {
+      "get": {
+        "operationId": "PortfolioController_getAnnualBuys",
+        "parameters": [
+          {
+            "name": "accountId",
+            "required": false,
+            "in": "query",
+            "description": "Optional account scope. The account must belong to the signed-in user, including when the caller is an admin.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioAnnualBuysResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
     "/portfolio/performance/annual-realized": {
       "get": {
         "operationId": "PortfolioController_getAnnualRealized",
@@ -4603,6 +4640,179 @@
         },
         "required": [
           "generatedAt",
+          "items"
+        ]
+      },
+      "GetPortfolioAnnualBuysDto": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional account scope. The account must belong to the signed-in user, including when the caller is an admin."
+          }
+        }
+      },
+      "PortfolioAnnualBuyAssetType": {
+        "type": "string",
+        "enum": [
+          "equity",
+          "etf",
+          "crypto",
+          "cash",
+          "other"
+        ],
+        "description": "Asset.type. equity and etf stay separate even when assetClass is equity. Unknown types are other."
+      },
+      "PortfolioAnnualBuyTypeResponseDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "Asset.type. equity and etf stay separate even when assetClass is equity. Unknown types are other.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PortfolioAnnualBuyAssetType"
+              }
+            ]
+          },
+          "buyAmount": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "300",
+            "description": "Sum of buy.amount for this type. Fees already inside amount are not added again."
+          },
+          "share": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "0.75",
+            "description": "This type divided by the buy total of the same year, currency, and month scope. Null when that total is zero."
+          }
+        },
+        "required": [
+          "type",
+          "buyAmount",
+          "share"
+        ]
+      },
+      "PortfolioAnnualBuyMonthResponseDto": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "example": 3
+          },
+          "buyAmount": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "350",
+            "description": "Buy amount in this Taipei month. A finished month with no buys is 0. Future months of the current year are omitted."
+          },
+          "types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioAnnualBuyTypeResponseDto"
+            }
+          }
+        },
+        "required": [
+          "month",
+          "buyAmount",
+          "types"
+        ]
+      },
+      "PortfolioAnnualBuyItemResponseDto": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "integer",
+            "example": 2026,
+            "description": "Trade year in Asia/Taipei. UTC 12/31 16:00 belongs to the next Taipei year."
+          },
+          "currency": {
+            "type": "string",
+            "example": "TWD",
+            "description": "Account currency. Rows are not summed across currencies."
+          },
+          "buyCount": {
+            "type": "integer",
+            "minimum": 0,
+            "example": 2
+          },
+          "buyAmount": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "350",
+            "description": "Sum of active buy amounts. This counts money spent on buys, including buys funded by earlier sells. It is not new principal, net deposits, or market value."
+          },
+          "sellCount": {
+            "type": "integer",
+            "minimum": 0,
+            "example": 1
+          },
+          "sellNetProceeds": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "80",
+            "description": "Sum of active sell amounts (net proceeds). Fees and tax already inside amount are not deducted again."
+          },
+          "buyMinusSellProceeds": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "270",
+            "description": "buyAmount minus sellNetProceeds. Not external cash flow and not a return denominator."
+          },
+          "types": {
+            "description": "Buy amount by Asset.type. Empty when the year has no buys; shares are then absent rather than 0%.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioAnnualBuyTypeResponseDto"
+            }
+          },
+          "months": {
+            "description": "Taipei months 1–12 for a finished year. The current year stops at the as-of month.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioAnnualBuyMonthResponseDto"
+            }
+          }
+        },
+        "required": [
+          "year",
+          "currency",
+          "buyCount",
+          "buyAmount",
+          "sellCount",
+          "sellNetProceeds",
+          "buyMinusSellProceeds",
+          "types",
+          "months"
+        ]
+      },
+      "PortfolioAnnualBuysResponseDto": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeZone": {
+            "type": "string",
+            "example": "Asia/Taipei"
+          },
+          "items": {
+            "description": "One row per year and account currency, from the first buy/sell year through the current Taipei year. Ordered by year descending, then currency ascending.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioAnnualBuyItemResponseDto"
+            }
+          }
+        },
+        "required": [
+          "generatedAt",
+          "timeZone",
           "items"
         ]
       },

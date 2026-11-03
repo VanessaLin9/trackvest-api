@@ -12,8 +12,10 @@ import {
 } from './dto/portfolio-trend.response.dto'
 import { PortfolioService } from './portfolio.service'
 import { AssetPerformanceService } from './asset-performance.service'
+import { GetPortfolioAnnualBuysDto } from './dto/get-portfolio-annual-buys.dto'
 import { GetPortfolioAnnualRealizedDto } from './dto/get-portfolio-annual-realized.dto'
 import { GetPortfolioAssetPerformanceDto } from './dto/get-portfolio-asset-performance.dto'
+import { PortfolioAnnualBuysResponseDto } from './dto/portfolio-annual-buys.response.dto'
 import { PortfolioAnnualRealizedResponseDto } from './dto/portfolio-annual-realized.response.dto'
 import { PortfolioAssetPerformanceResponseDto } from './dto/portfolio-asset-performance.response.dto'
 
@@ -24,6 +26,8 @@ import { PortfolioAssetPerformanceResponseDto } from './dto/portfolio-asset-perf
 @ApiExtraModels(
   GetPortfolioAssetPerformanceDto,
   PortfolioAssetPerformanceResponseDto,
+  GetPortfolioAnnualBuysDto,
+  PortfolioAnnualBuysResponseDto,
   GetPortfolioAnnualRealizedDto,
   PortfolioAnnualRealizedResponseDto,
 )
@@ -49,6 +53,15 @@ export class PortfolioController {
     @Query() query: GetPortfolioAssetPerformanceDto,
   ): Promise<PortfolioAssetPerformanceResponseDto> {
     return this.assetPerformanceService.getAssetPerformance(userId, query)
+  }
+
+  @Get('performance/annual-buys')
+  @ApiOkResponse({ type: PortfolioAnnualBuysResponseDto })
+  async getAnnualBuys(
+    @CurrentUser() userId: string,
+    @Query() query: GetPortfolioAnnualBuysDto,
+  ): Promise<PortfolioAnnualBuysResponseDto> {
+    return this.assetPerformanceService.getAnnualBuys(userId, query)
   }
 
   @Get('performance/annual-realized')
