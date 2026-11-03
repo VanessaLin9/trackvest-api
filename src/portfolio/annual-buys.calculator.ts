@@ -41,6 +41,7 @@ export type AnnualBuySource = {
  * 這是買進活動，不是新增本金、淨入金或持倉配置；buyMinusSellProceeds 也不是報酬分母。
  * 類型看 Asset.type，不用 assetClass，所以股票型 ETF 仍是 etf。
  * 沒有買進時不產出 0% 占比。當年只列到查詢當下的台北月，之後的月份不補 0。
+ * asOf 之後的交易不進年度總額、占比或月份，避免總額含有未列出的未來月份（PR #50）。
  */
 export function buildAnnualBuys(source: AnnualBuySource, asOf: Date): PortfolioAnnualBuysResponseDto {
   const asOfParts = taipeiParts(asOf)
@@ -49,10 +50,11 @@ export function buildAnnualBuys(source: AnnualBuySource, asOf: Date): PortfolioA
   const items: PortfolioAnnualBuyItemResponseDto[] = []
 
   for (const [currency, trades] of tradesByCurrency) {
-    const firstYear = earliestYear(trades)
+    const reported = trades.filter(trade => trade.tradeTime.getTime() <= asOf.getTime())
+    const firstYear = earliestYear(reported)
     if (firstYear == null || firstYear > asOfParts.year) continue
     for (let year = firstYear; year <= asOfParts.year; year += 1) {
-      items.push(buildYear(currency, year, trades, typeByAsset, year === asOfParts.year ? asOfParts.month : 12))
+      items.push(buildYear(currency, year, reported, typeByAsset, year === asOfParts.year ? asOfParts.month : 12))
     }
   }
 

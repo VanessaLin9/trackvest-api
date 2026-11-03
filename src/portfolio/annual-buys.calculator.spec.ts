@@ -134,6 +134,35 @@ describe('buildAnnualBuys', () => {
     expect(result.items[0].buyAmount).toBe('0.00000001')
   })
 
+  it('keeps a future trade in the current year out of the annual total and the listed months', () => {
+    const result = buildAnnualBuys(source([
+      trade({ type: 'buy', amount: new Prisma.Decimal('40'), tradeTime: new Date('2026-01-15T00:00:00.000Z') }),
+      trade({ type: 'buy', amount: new Prisma.Decimal('100'), tradeTime: new Date('2026-12-01T00:00:00.000Z') }),
+      trade({ type: 'sell', amount: new Prisma.Decimal('20'), tradeTime: new Date('2026-12-15T00:00:00.000Z') }),
+    ]), AS_OF)
+
+    const year = result.items.find(item => item.year === 2026 && item.currency === 'TWD')
+    expect(year).toMatchObject({
+      buyCount: 1,
+      buyAmount: '40',
+      sellCount: 0,
+      sellNetProceeds: '0',
+      buyMinusSellProceeds: '40',
+      types: [{ type: PortfolioAnnualBuyAssetType.Equity, buyAmount: '40', share: '1' }],
+    })
+    expect(year?.months).toHaveLength(6)
+    expect(year?.months.every(month => month.month <= 6)).toBe(true)
+    expect(year?.months.reduce((total, month) => total + Number(month.buyAmount), 0)).toBe(40)
+  })
+
+  it('does not open a year when every trade is still after the reporting time', () => {
+    const result = buildAnnualBuys(source([
+      trade({ type: 'buy', amount: new Prisma.Decimal('100'), tradeTime: new Date('2026-12-01T00:00:00.000Z') }),
+    ]), AS_OF)
+
+    expect(result.items).toEqual([])
+  })
+
   it('returns no rows when there is no buy or sell', () => {
     const result = buildAnnualBuys(source([
       trade({ type: 'dividend', amount: new Prisma.Decimal('20'), tradeTime: new Date('2026-02-01T00:00:00.000Z') }),
