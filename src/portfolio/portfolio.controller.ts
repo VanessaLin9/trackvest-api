@@ -12,14 +12,21 @@ import {
 } from './dto/portfolio-trend.response.dto'
 import { PortfolioService } from './portfolio.service'
 import { AssetPerformanceService } from './asset-performance.service'
+import { GetPortfolioAnnualBuysDto } from './dto/get-portfolio-annual-buys.dto'
 import { GetPortfolioAssetPerformanceDto } from './dto/get-portfolio-asset-performance.dto'
+import { PortfolioAnnualBuysResponseDto } from './dto/portfolio-annual-buys.response.dto'
 import { PortfolioAssetPerformanceResponseDto } from './dto/portfolio-asset-performance.response.dto'
 
 @ApiTags('portfolio')
 @Controller('portfolio')
 @ApiCookieAuth('access_token')
 // Keep the query DTO in components/schemas for the CP0 contract (PR #48).
-@ApiExtraModels(GetPortfolioAssetPerformanceDto, PortfolioAssetPerformanceResponseDto)
+@ApiExtraModels(
+  GetPortfolioAssetPerformanceDto,
+  PortfolioAssetPerformanceResponseDto,
+  GetPortfolioAnnualBuysDto,
+  PortfolioAnnualBuysResponseDto,
+)
 export class PortfolioController {
   constructor(
     private readonly portfolioService: PortfolioService,
@@ -42,6 +49,15 @@ export class PortfolioController {
     @Query() query: GetPortfolioAssetPerformanceDto,
   ): Promise<PortfolioAssetPerformanceResponseDto> {
     return this.assetPerformanceService.getAssetPerformance(userId, query)
+  }
+
+  @Get('performance/annual-buys')
+  @ApiOkResponse({ type: PortfolioAnnualBuysResponseDto })
+  async getAnnualBuys(
+    @CurrentUser() userId: string,
+    @Query() query: GetPortfolioAnnualBuysDto,
+  ): Promise<PortfolioAnnualBuysResponseDto> {
+    return this.assetPerformanceService.getAnnualBuys(userId, query)
   }
 
   @Get('holdings')

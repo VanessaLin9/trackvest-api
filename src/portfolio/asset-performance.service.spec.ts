@@ -116,4 +116,46 @@ describe('AssetPerformanceService', () => {
     expect(tx.price.groupBy).not.toHaveBeenCalled()
     expect(tx.sellLotMatch.findMany).not.toHaveBeenCalled()
   })
+
+  it('rejects another user account for annual buys and does not read trades', async () => {
+    const { service, tx } = createHarness([])
+
+    await expect(service.getAnnualBuys('user-1', {
+      accountId: '11111111-1111-4111-8111-111111111111',
+    })).rejects.toBeInstanceOf(ForbiddenException)
+
+    expect(tx.transaction.findMany).not.toHaveBeenCalled()
+    expect(tx.asset.findMany).not.toHaveBeenCalled()
+    expect(tx.$queryRaw).not.toHaveBeenCalled()
+  })
+
+  it('reads annual buys by asset type without quotes, lots, or asset class', async () => {
+    const { service, tx } = createHarness([{ id: 'account-1', currency: 'TWD' }])
+    tx.transaction.findMany.mockResolvedValue([
+      {
+        accountId: 'account-1',
+        assetId: 'etf-1',
+        type: 'buy',
+        amount: new Prisma.Decimal('300'),
+        tradeTime: new Date('2026-03-01T00:00:00.000Z'),
+      },
+    ])
+    tx.asset.findMany.mockResolvedValue([{ id: 'etf-1', type: 'etf' }])
+
+    const response = await service.getAnnualBuys('user-1', {})
+
+    expect(response.timeZone).toBe('Asia/Taipei')
+    expect(response.items[0]).toMatchObject({
+      currency: 'TWD',
+      buyAmount: '300',
+      types: [{ type: 'etf', buyAmount: '300', share: '1' }],
+    })
+    expect(tx.asset.findMany).toHaveBeenCalledWith({
+      where: { id: { in: ['etf-1'] } },
+      select: { id: true, type: true },
+    })
+    expect(tx.positionLot.findMany).not.toHaveBeenCalled()
+    expect(tx.$queryRaw).not.toHaveBeenCalled()
+    expect(tx.transaction.update).not.toHaveBeenCalled()
+  })
 })

@@ -1,12 +1,15 @@
 import { ForbiddenException, Injectable } from '@nestjs/common'
 import { Prisma, TxType } from '@prisma/client'
 import { PrismaService } from '../prisma.service'
+import { AnnualBuySource, AnnualBuyTrade, buildAnnualBuys } from './annual-buys.calculator'
 import {
   AssetPerformanceSource,
   AssetPerformanceTransaction,
   buildAssetPerformance,
 } from './asset-performance.calculator'
+import { GetPortfolioAnnualBuysDto } from './dto/get-portfolio-annual-buys.dto'
 import { GetPortfolioAssetPerformanceDto } from './dto/get-portfolio-asset-performance.dto'
+import { PortfolioAnnualBuysResponseDto } from './dto/portfolio-annual-buys.response.dto'
 import { PortfolioAssetPerformanceResponseDto } from './dto/portfolio-asset-performance.response.dto'
 
 const TRADE_TYPES = [TxType.buy, TxType.sell, TxType.dividend] as const
@@ -30,6 +33,22 @@ export class AssetPerformanceService {
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     )
     return buildAssetPerformance(source, generatedAt)
+  }
+
+  /**
+   * 年度買進金額與類型配置。所有權與 Repeatable Read 與各標的相同。
+   * 只讀買賣與 Asset.type，不讀 assetClass、lot、報價或總帳。
+   */
+  async getAnnualBuys(
+    userId: string,
+    query: GetPortfolioAnnualBuysDto,
+  ): Promise<PortfolioAnnualBuysResponseDto> {
+    const generatedAt = new Date()
+    const source = await this.prisma.$transaction(
+      tx => this.loadAnnualBuySource(tx, userId, query.accountId),
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    )
+    return buildAnnualBuys(source, generatedAt)
   }
 
   private async loadSource(
@@ -158,6 +177,62 @@ export class AssetPerformanceService {
       assets,
       quotes,
     }
+  }
+
+  private async loadAnnualBuySource(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    accountId?: string,
+  ): Promise<AnnualBuySource> {
+    const accounts = await tx.account.findMany({
+      where: {
+        userId,
+        ...(accountId ? { id: accountId } : {}),
+      },
+      select: { id: true, currency: true },
+    })
+    if (accountId && accounts.length === 0) {
+      throw new ForbiddenException('You do not have access to this account')
+    }
+    if (accounts.length === 0) return { accounts, trades: [], assets: [] }
+
+    const transactions = await tx.transaction.findMany({
+      where: {
+        accountId: { in: accounts.map(account => account.id) },
+        isDeleted: false,
+        assetId: { not: null },
+        type: { in: [...TRADE_TYPES] },
+      },
+      select: {
+        accountId: true,
+        assetId: true,
+        type: true,
+        amount: true,
+        tradeTime: true,
+      },
+    })
+    const trades = transactions.flatMap(transaction => {
+      if (transaction.assetId == null) return []
+      if (transaction.type !== TxType.buy && transaction.type !== TxType.sell && transaction.type !== TxType.dividend) {
+        return []
+      }
+      const mapped: AnnualBuyTrade = {
+        accountId: transaction.accountId,
+        assetId: transaction.assetId,
+        type: transaction.type,
+        amount: transaction.amount,
+        tradeTime: transaction.tradeTime,
+      }
+      return [mapped]
+    })
+    const assetIds = [...new Set(trades.filter(trade => trade.type === 'buy').map(trade => trade.assetId))]
+    if (assetIds.length === 0) return { accounts, trades, assets: [] }
+
+    const assets = await tx.asset.findMany({
+      where: { id: { in: assetIds } },
+      select: { id: true, type: true },
+    })
+    return { accounts, trades, assets }
   }
 
   private async loadLatestQuotes(tx: Prisma.TransactionClient, assetIds: string[]) {

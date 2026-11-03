@@ -79,4 +79,26 @@ describe('openapi.json', () => {
     const schema = asObject(asObject(asObject(ok.content)['application/json']).schema)
     expect(schema.$ref).toBe('#/components/schemas/PortfolioAssetPerformanceResponseDto')
   })
+
+  it('exports annual buy amounts as decimal strings grouped by asset type', () => {
+    const schemas = asObject(asObject(committed.components).schemas)
+    const item = asObject(schemas.PortfolioAnnualBuyItemResponseDto)
+    const properties = asObject(item.properties)
+    for (const key of ['buyAmount', 'sellNetProceeds', 'buyMinusSellProceeds']) {
+      expect(asObject(properties[key]).type).toBe('string')
+    }
+    expect(asObject(schemas.PortfolioAnnualBuyAssetType).enum).toEqual(['equity', 'etf', 'crypto', 'cash', 'other'])
+    const typeRow = asObject(schemas.PortfolioAnnualBuyTypeResponseDto)
+    expect(asObject(asObject(typeRow.properties).share).nullable).toBe(true)
+    const response = asObject(schemas.PortfolioAnnualBuysResponseDto)
+    expect(asObject(asObject(response.properties).timeZone).example).toBe('Asia/Taipei')
+
+    const route = asObject(asObject(committed.paths)['/portfolio/performance/annual-buys'])
+    const operation = asObject(route.get)
+    const parameters = operation.parameters as Array<{ name: string; required: boolean }>
+    expect(parameters.find(parameter => parameter.name === 'accountId')?.required).toBe(false)
+    const ok = asObject(asObject(operation.responses)['200'])
+    const schema = asObject(asObject(asObject(ok.content)['application/json']).schema)
+    expect(schema.$ref).toBe('#/components/schemas/PortfolioAnnualBuysResponseDto')
+  })
 })
