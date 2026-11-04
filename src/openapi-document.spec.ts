@@ -126,6 +126,41 @@ describe('openapi.json', () => {
     expect(schema.$ref).toBe('#/components/schemas/PortfolioAnnualBuysResponseDto')
   })
 
+  it('exports realized period, asset, and trade reads as decimal strings', () => {
+    const schemas = asObject(asObject(committed.components).schemas)
+    const summary = asObject(schemas.PortfolioRealizedMoneySummaryDto)
+    const summaryProperties = asObject(summary.properties)
+    expect(asObject(summaryProperties.sellCount).type).toBe('integer')
+    for (const key of ['netProceeds', 'disposedCost', 'realizedNetPnl']) {
+      expect(asObject(summaryProperties[key]).type).toBe('string')
+    }
+    expect(asObject(summaryProperties.disposedCost).nullable).toBe(true)
+    expect(asObject(schemas.PortfolioRealizedPeriodIssue).enum).toEqual(['MISSING_FIFO'])
+
+    const asset = asObject(schemas.PortfolioRealizedAssetItemDto)
+    expect(asObject(asObject(asset.properties).realizedQuantity).nullable).toBe(true)
+    const trade = asObject(schemas.PortfolioRealizedTradeItemDto)
+    expect(asObject(asObject(trade.properties).quantity).nullable).toBe(true)
+    expect(asObject(asObject(trade.properties).price).nullable).toBe(true)
+    expect(asObject(asObject(trade.properties).type).enum).toEqual(['sell'])
+
+    for (const [path, schemaName, required] of [
+      ['/portfolio/performance/realized/periods', 'PortfolioRealizedPeriodsResponseDto', ['year']],
+      ['/portfolio/performance/realized/assets', 'PortfolioRealizedAssetsResponseDto', ['year', 'currency']],
+      ['/portfolio/performance/realized/trades', 'PortfolioRealizedTradesResponseDto', ['year', 'currency', 'assetId']],
+    ] as const) {
+      const operation = asObject(asObject(asObject(committed.paths)[path]).get)
+      const parameters = operation.parameters as Array<{ name: string; required: boolean }>
+      for (const name of required) {
+        expect(parameters.find(parameter => parameter.name === name)?.required).toBe(true)
+      }
+      expect(parameters.find(parameter => parameter.name === 'accountId')?.required).toBe(false)
+      const ok = asObject(asObject(operation.responses)['200'])
+      const schema = asObject(asObject(asObject(ok.content)['application/json']).schema)
+      expect(schema.$ref).toBe(`#/components/schemas/${schemaName}`)
+    }
+  })
+
   it('exports annual external funding without treating unknown cash as a complete total', () => {
     const schemas = asObject(asObject(committed.components).schemas)
     const item = asObject(schemas.PortfolioAnnualExternalFundingItemResponseDto)

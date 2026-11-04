@@ -13,6 +13,9 @@ describe('PortfolioController', () => {
       getAssetPerformance: jest.fn(),
       getAnnualBuys: jest.fn(),
       getAnnualRealized: jest.fn(),
+      getRealizedPeriods: jest.fn(),
+      getRealizedAssets: jest.fn(),
+      getRealizedTrades: jest.fn(),
     }
     const externalFundingService = {
       getAnnualExternalFunding: jest.fn(),
@@ -377,5 +380,32 @@ describe('PortfolioController', () => {
       accountId: '11111111-1111-4111-8111-111111111111',
     })
     expect(result).toBe(response)
+  })
+
+  it('delegates realized period reads without aggregating in the controller', async () => {
+    const { controller, assetPerformanceService } = createHarness()
+    const periods = { generatedAt: '2026-11-05T00:00:00.000Z', groups: [] }
+    const assets = { generatedAt: '2026-11-05T00:00:00.000Z', items: [] }
+    const trades = { generatedAt: '2026-11-05T00:00:00.000Z', items: [] }
+    assetPerformanceService.getRealizedPeriods.mockResolvedValue(periods)
+    assetPerformanceService.getRealizedAssets.mockResolvedValue(assets)
+    assetPerformanceService.getRealizedTrades.mockResolvedValue(trades)
+    const accountId = '11111111-1111-4111-8111-111111111111'
+
+    await expect(controller.getRealizedPeriods('user-1', { year: 2024, accountId })).resolves.toBe(periods)
+    await expect(controller.getRealizedAssets('user-1', { year: 2024, currency: 'TWD', accountId })).resolves.toBe(assets)
+    await expect(controller.getRealizedTrades('user-1', {
+      year: 2024,
+      currency: 'TWD',
+      assetId: accountId,
+    })).resolves.toBe(trades)
+
+    expect(assetPerformanceService.getRealizedPeriods).toHaveBeenCalledWith('user-1', { year: 2024, accountId })
+    expect(assetPerformanceService.getRealizedAssets).toHaveBeenCalledWith('user-1', { year: 2024, currency: 'TWD', accountId })
+    expect(assetPerformanceService.getRealizedTrades).toHaveBeenCalledWith('user-1', {
+      year: 2024,
+      currency: 'TWD',
+      assetId: accountId,
+    })
   })
 })

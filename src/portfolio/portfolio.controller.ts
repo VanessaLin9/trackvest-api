@@ -21,6 +21,12 @@ import { GetPortfolioAssetPerformanceDto } from './dto/get-portfolio-asset-perfo
 import { PortfolioAnnualBuysResponseDto } from './dto/portfolio-annual-buys.response.dto'
 import { PortfolioAnnualRealizedResponseDto } from './dto/portfolio-annual-realized.response.dto'
 import { PortfolioAssetPerformanceResponseDto } from './dto/portfolio-asset-performance.response.dto'
+import { GetRealizedAssetsDto, GetRealizedPeriodsDto, GetRealizedTradesDto } from './dto/get-realized-period.dto'
+import {
+  PortfolioRealizedAssetsResponseDto,
+  PortfolioRealizedPeriodsResponseDto,
+  PortfolioRealizedTradesResponseDto,
+} from './dto/realized-period.response.dto'
 
 @ApiTags('portfolio')
 @Controller('portfolio')
@@ -35,6 +41,12 @@ import { PortfolioAssetPerformanceResponseDto } from './dto/portfolio-asset-perf
   PortfolioAnnualRealizedResponseDto,
   GetPortfolioAnnualExternalFundingDto,
   PortfolioAnnualExternalFundingResponseDto,
+  GetRealizedPeriodsDto,
+  PortfolioRealizedPeriodsResponseDto,
+  GetRealizedAssetsDto,
+  PortfolioRealizedAssetsResponseDto,
+  GetRealizedTradesDto,
+  PortfolioRealizedTradesResponseDto,
 )
 export class PortfolioController {
   constructor(
@@ -86,6 +98,33 @@ export class PortfolioController {
     @Query() query: GetPortfolioAnnualExternalFundingDto,
   ): Promise<PortfolioAnnualExternalFundingResponseDto> {
     return this.externalFundingService.getAnnualExternalFunding(userId, query)
+  }
+
+  @Get('performance/realized/periods')
+  @ApiOkResponse({ type: PortfolioRealizedPeriodsResponseDto })
+  async getRealizedPeriods(
+    @CurrentUser() userId: string,
+    @Query() query: GetRealizedPeriodsDto,
+  ): Promise<PortfolioRealizedPeriodsResponseDto> {
+    return this.assetPerformanceService.getRealizedPeriods(userId, query)
+  }
+
+  @Get('performance/realized/assets')
+  @ApiOkResponse({ type: PortfolioRealizedAssetsResponseDto })
+  async getRealizedAssets(
+    @CurrentUser() userId: string,
+    @Query() query: GetRealizedAssetsDto,
+  ): Promise<PortfolioRealizedAssetsResponseDto> {
+    return this.assetPerformanceService.getRealizedAssets(userId, query)
+  }
+
+  @Get('performance/realized/trades')
+  @ApiOkResponse({ type: PortfolioRealizedTradesResponseDto })
+  async getRealizedTrades(
+    @CurrentUser() userId: string,
+    @Query() query: GetRealizedTradesDto,
+  ): Promise<PortfolioRealizedTradesResponseDto> {
+    return this.assetPerformanceService.getRealizedTrades(userId, query)
   }
 
   @Get('holdings')

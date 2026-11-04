@@ -2079,6 +2079,256 @@
         ]
       }
     },
+    "/portfolio/performance/realized/periods": {
+      "get": {
+        "operationId": "PortfolioController_getRealizedPeriods",
+        "parameters": [
+          {
+            "name": "year",
+            "required": true,
+            "in": "query",
+            "description": "Taipei calendar year. Years after the current Taipei year are rejected.",
+            "schema": {
+              "minimum": 1900,
+              "maximum": 9999,
+              "example": 2024,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "accountId",
+            "required": false,
+            "in": "query",
+            "description": "Optional account scope. The account must belong to the signed-in user, including when the caller is an admin.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioRealizedPeriodsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
+    "/portfolio/performance/realized/assets": {
+      "get": {
+        "operationId": "PortfolioController_getRealizedAssets",
+        "parameters": [
+          {
+            "name": "year",
+            "required": true,
+            "in": "query",
+            "description": "Taipei calendar year. Years after the current Taipei year are rejected.",
+            "schema": {
+              "minimum": 1900,
+              "maximum": 9999,
+              "example": 2024,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "accountId",
+            "required": false,
+            "in": "query",
+            "description": "Optional account scope. The account must belong to the signed-in user, including when the caller is an admin.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "currency",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "example": "TWD",
+              "type": "string",
+              "enum": [
+                "TWD",
+                "USD",
+                "JPY",
+                "EUR"
+              ]
+            }
+          },
+          {
+            "name": "month",
+            "required": false,
+            "in": "query",
+            "description": "Taipei month. Omit for the whole year. A month that has not started is rejected.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 12,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "skip",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "default": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "take",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioRealizedAssetsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
+    "/portfolio/performance/realized/trades": {
+      "get": {
+        "operationId": "PortfolioController_getRealizedTrades",
+        "parameters": [
+          {
+            "name": "year",
+            "required": true,
+            "in": "query",
+            "description": "Taipei calendar year. Years after the current Taipei year are rejected.",
+            "schema": {
+              "minimum": 1900,
+              "maximum": 9999,
+              "example": 2024,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "accountId",
+            "required": false,
+            "in": "query",
+            "description": "Optional account scope. The account must belong to the signed-in user, including when the caller is an admin.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "currency",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "example": "TWD",
+              "type": "string",
+              "enum": [
+                "TWD",
+                "USD",
+                "JPY",
+                "EUR"
+              ]
+            }
+          },
+          {
+            "name": "month",
+            "required": false,
+            "in": "query",
+            "description": "Taipei month. Omit for the whole year. A month that has not started is rejected.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 12,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "skip",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "default": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "take",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "assetId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioRealizedTradesResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
     "/portfolio/holdings": {
       "get": {
         "operationId": "PortfolioController_getHoldings",
@@ -5082,6 +5332,686 @@
           "generatedAt",
           "timeZone",
           "items"
+        ]
+      },
+      "GetRealizedPeriodsDto": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "integer",
+            "minimum": 1900,
+            "maximum": 9999,
+            "example": 2024,
+            "description": "Taipei calendar year. Years after the current Taipei year are rejected."
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional account scope. The account must belong to the signed-in user, including when the caller is an admin."
+          }
+        },
+        "required": [
+          "year"
+        ]
+      },
+      "PortfolioRealizedPeriodScopeDto": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Requested account. Null means every account owned by the signed-in user."
+          },
+          "year": {
+            "type": "integer",
+            "example": 2024
+          },
+          "month": {
+            "type": "integer",
+            "nullable": true,
+            "example": null,
+            "description": "Null on the year endpoint and when a month was not requested."
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true,
+            "example": null,
+            "description": "Null on the year endpoint because currencies are returned as separate groups."
+          }
+        },
+        "required": [
+          "accountId",
+          "year",
+          "month",
+          "currency"
+        ]
+      },
+      "PortfolioRealizedPeriodIssue": {
+        "type": "string",
+        "enum": [
+          "MISSING_FIFO"
+        ]
+      },
+      "PortfolioRealizedMoneySummaryDto": {
+        "type": "object",
+        "properties": {
+          "sellCount": {
+            "type": "integer",
+            "minimum": 0,
+            "example": 2
+          },
+          "netProceeds": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "540",
+            "description": "Sum of active sell amounts (net proceeds). Fees and tax are already inside amount and are not deducted again. Rounded half up to 8 decimal places only after the sum."
+          },
+          "disposedCost": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "384",
+            "description": "Sum of SellLotMatch quantity times unit cost. Null when any sell in this scope is missing a complete FIFO match. Not zero in that case."
+          },
+          "realizedNetPnl": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "156",
+            "description": "Net proceeds minus disposed cost, rounded only after subtraction. Null when disposed cost is unavailable. This is not a return rate."
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioRealizedPeriodIssue"
+            }
+          }
+        },
+        "required": [
+          "sellCount",
+          "netProceeds",
+          "disposedCost",
+          "realizedNetPnl",
+          "issues"
+        ]
+      },
+      "PortfolioRealizedMonthDto": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "example": 3
+          },
+          "isCurrentMonth": {
+            "type": "boolean",
+            "description": "True only for the current Asia/Taipei month of the current year."
+          },
+          "sellCount": {
+            "type": "integer",
+            "minimum": 0,
+            "example": 2
+          },
+          "netProceeds": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "330"
+          },
+          "disposedCost": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "300"
+          },
+          "realizedNetPnl": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "30"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioRealizedPeriodIssue"
+            }
+          }
+        },
+        "required": [
+          "month",
+          "isCurrentMonth",
+          "sellCount",
+          "netProceeds",
+          "disposedCost",
+          "realizedNetPnl",
+          "issues"
+        ]
+      },
+      "PortfolioRealizedPeriodGroupDto": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string",
+            "example": "TWD",
+            "description": "Account currency. Groups are never summed across currencies."
+          },
+          "summary": {
+            "$ref": "#/components/schemas/PortfolioRealizedMoneySummaryDto"
+          },
+          "months": {
+            "description": "Taipei months ascending. A finished year has 1–12. The current year stops at the current month. Future months are omitted, not filled with zero. A month with no sells is a real zero.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioRealizedMonthDto"
+            }
+          }
+        },
+        "required": [
+          "currency",
+          "summary",
+          "months"
+        ]
+      },
+      "PortfolioRealizedPeriodsResponseDto": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeZone": {
+            "type": "string",
+            "example": "Asia/Taipei"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PortfolioRealizedPeriodScopeDto"
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Start of the selected Taipei year, inclusive."
+          },
+          "periodEndExclusive": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Start of the next Taipei year, exclusive. This stays the calendar boundary even when the year is still open."
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Equal to generatedAt when this year is still open, so sells after this instant are excluded. Null when the calendar year has ended."
+          },
+          "isCurrentYear": {
+            "type": "boolean"
+          },
+          "groups": {
+            "description": "One group per account currency that already has an active buy or sell on or before generatedAt, and whose first such trade is in this year or earlier. Ordered by currency ascending. Dividends alone do not open a group. A selected year before that first trade is omitted.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioRealizedPeriodGroupDto"
+            }
+          }
+        },
+        "required": [
+          "generatedAt",
+          "timeZone",
+          "scope",
+          "periodStart",
+          "periodEndExclusive",
+          "asOf",
+          "isCurrentYear",
+          "groups"
+        ]
+      },
+      "GetRealizedAssetsDto": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "integer",
+            "minimum": 1900,
+            "maximum": 9999,
+            "example": 2024,
+            "description": "Taipei calendar year. Years after the current Taipei year are rejected."
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional account scope. The account must belong to the signed-in user, including when the caller is an admin."
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "TWD",
+              "USD",
+              "JPY",
+              "EUR"
+            ],
+            "example": "TWD"
+          },
+          "month": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "description": "Taipei month. Omit for the whole year. A month that has not started is rejected."
+          },
+          "skip": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
+          "take": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        "required": [
+          "year",
+          "currency"
+        ]
+      },
+      "PortfolioRealizedAssetItemDto": {
+        "type": "object",
+        "properties": {
+          "assetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "symbol": {
+            "type": "string",
+            "example": "AAA"
+          },
+          "name": {
+            "type": "string",
+            "example": "Alpha"
+          },
+          "type": {
+            "type": "string",
+            "example": "etf",
+            "description": "Asset.type. This report does not use asset class."
+          },
+          "sellCount": {
+            "type": "integer",
+            "minimum": 0,
+            "example": 22
+          },
+          "realizedQuantity": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "23",
+            "description": "Sum of matched sell quantities when every sell in this row has a complete FIFO match. Null when any sell is missing FIFO. This is shares sold in the period, not the remaining position."
+          },
+          "netProceeds": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "460"
+          },
+          "disposedCost": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "284"
+          },
+          "realizedNetPnl": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "example": "176"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioRealizedPeriodIssue"
+            }
+          }
+        },
+        "required": [
+          "assetId",
+          "symbol",
+          "name",
+          "type",
+          "sellCount",
+          "realizedQuantity",
+          "netProceeds",
+          "disposedCost",
+          "realizedNetPnl",
+          "issues"
+        ]
+      },
+      "PortfolioRealizedAssetsResponseDto": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeZone": {
+            "type": "string",
+            "example": "Asia/Taipei"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PortfolioRealizedPeriodScopeDto"
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "periodEndExclusive": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Start of the next Taipei year or month, exclusive."
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Equal to generatedAt when the selected year or month is still open. Null when that calendar period has ended."
+          },
+          "summary": {
+            "description": "Covers every matching asset, not only the current page.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PortfolioRealizedMoneySummaryDto"
+              }
+            ]
+          },
+          "items": {
+            "description": "Assets with at least one active sell in the period and currency. Ordered by symbol ascending, then assetId ascending. Buys without a sell are omitted. Holding and closed assets are both included.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioRealizedAssetItemDto"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "skip": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "take": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "generatedAt",
+          "timeZone",
+          "scope",
+          "periodStart",
+          "periodEndExclusive",
+          "asOf",
+          "summary",
+          "items",
+          "total",
+          "skip",
+          "take"
+        ]
+      },
+      "GetRealizedTradesDto": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "integer",
+            "minimum": 1900,
+            "maximum": 9999,
+            "example": 2024,
+            "description": "Taipei calendar year. Years after the current Taipei year are rejected."
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional account scope. The account must belong to the signed-in user, including when the caller is an admin."
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "TWD",
+              "USD",
+              "JPY",
+              "EUR"
+            ],
+            "example": "TWD"
+          },
+          "month": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "description": "Taipei month. Omit for the whole year. A month that has not started is rejected."
+          },
+          "skip": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
+          "take": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          },
+          "assetId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "year",
+          "currency",
+          "assetId"
+        ]
+      },
+      "PortfolioRealizedTradeScopeDto": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Requested account. Null means every account owned by the signed-in user."
+          },
+          "year": {
+            "type": "integer",
+            "example": 2024
+          },
+          "month": {
+            "type": "integer",
+            "nullable": true,
+            "example": null,
+            "description": "Null on the year endpoint and when a month was not requested."
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true,
+            "example": null,
+            "description": "Null on the year endpoint because currencies are returned as separate groups."
+          },
+          "assetId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "accountId",
+          "year",
+          "month",
+          "currency",
+          "assetId"
+        ]
+      },
+      "PortfolioRealizedTradeItemDto": {
+        "type": "object",
+        "properties": {
+          "transactionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountName": {
+            "type": "string",
+            "example": "Broker TWD"
+          },
+          "assetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "symbol": {
+            "type": "string",
+            "example": "AAA"
+          },
+          "name": {
+            "type": "string",
+            "example": "Alpha"
+          },
+          "tradeTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "sell"
+            ],
+            "example": "sell"
+          },
+          "quantity": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "description": "Quantity stored on the sell. A split is not applied again here. Null stays null."
+          },
+          "price": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "description": "Price stored on the sell. Null stays null and is not treated as zero."
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "description": "Sell amount, which is the net proceeds. Do not subtract fee or tax again."
+          },
+          "fee": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "description": "Recorded fee, returned for reconciliation only."
+          },
+          "tax": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "description": "Recorded tax, returned for reconciliation only."
+          },
+          "disposedCost": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$"
+          },
+          "realizedNetPnl": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioRealizedPeriodIssue"
+            }
+          }
+        },
+        "required": [
+          "transactionId",
+          "accountId",
+          "accountName",
+          "assetId",
+          "symbol",
+          "name",
+          "tradeTime",
+          "type",
+          "quantity",
+          "price",
+          "amount",
+          "fee",
+          "tax",
+          "disposedCost",
+          "realizedNetPnl",
+          "issues"
+        ]
+      },
+      "PortfolioRealizedTradesResponseDto": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeZone": {
+            "type": "string",
+            "example": "Asia/Taipei"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PortfolioRealizedTradeScopeDto"
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "periodEndExclusive": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "summary": {
+            "description": "Covers every matching sell, including rows on other pages. One missing FIFO match anywhere in the period nulls this summary.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PortfolioRealizedMoneySummaryDto"
+              }
+            ]
+          },
+          "items": {
+            "description": "One row per sell, including a sell matched to several lots. Ordered by tradeTime descending, then transactionId ascending.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioRealizedTradeItemDto"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "skip": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "take": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "generatedAt",
+          "timeZone",
+          "scope",
+          "periodStart",
+          "periodEndExclusive",
+          "asOf",
+          "summary",
+          "items",
+          "total",
+          "skip",
+          "take"
         ]
       },
       "PortfolioSummaryResponseDto": {

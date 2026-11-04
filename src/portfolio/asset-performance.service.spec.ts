@@ -1,9 +1,9 @@
-import { ForbiddenException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { AssetPerformanceService } from './asset-performance.service'
 
 describe('AssetPerformanceService', () => {
-  function createHarness(accounts: Array<{ id: string; currency: string }>) {
+  function createHarness(accounts: Array<{ id: string; currency: string; name?: string }>) {
     const tx = {
       account: {
         findMany: jest.fn().mockResolvedValue(accounts),
@@ -205,5 +205,88 @@ describe('AssetPerformanceService', () => {
     expect(tx.positionLot.findMany).not.toHaveBeenCalled()
     expect(tx.$queryRaw).not.toHaveBeenCalled()
     expect(tx.transaction.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects another user account for realized periods and does not read trades', async () => {
+    const { service, tx, prisma } = createHarness([])
+
+    await expect(service.getRealizedPeriods('user-1', {
+      year: 2024,
+      accountId: '11111111-1111-4111-8111-111111111111',
+    })).rejects.toBeInstanceOf(ForbiddenException)
+
+    expect(tx.transaction.findMany).not.toHaveBeenCalled()
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a future year before opening a snapshot', async () => {
+    const { service, prisma } = createHarness([{ id: 'account-1', currency: 'TWD' }])
+    const shifted = new Date(Date.now() + 8 * 60 * 60 * 1000)
+
+    await expect(service.getRealizedAssets('user-1', {
+      year: shifted.getUTCFullYear() + 1,
+      currency: 'TWD',
+    })).rejects.toBeInstanceOf(BadRequestException)
+
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('reads realized periods from one trade batch and does not touch quotes, lots, or writes', async () => {
+    const { service, tx } = createHarness([{ id: 'account-1', name: 'Broker', currency: 'TWD' }])
+    tx.transaction.findMany.mockResolvedValue([
+      {
+        id: 'sell-1',
+        accountId: 'account-1',
+        assetId: 'asset-1',
+        type: 'sell',
+        amount: new Prisma.Decimal('10'),
+        quantity: new Prisma.Decimal('1'),
+        price: new Prisma.Decimal('10'),
+        fee: new Prisma.Decimal('1'),
+        tax: new Prisma.Decimal('0'),
+        tradeTime: new Date('2024-03-01T00:00:00.000Z'),
+      },
+      {
+        id: 'sell-2',
+        accountId: 'account-1',
+        assetId: 'asset-2',
+        type: 'sell',
+        amount: new Prisma.Decimal('5'),
+        quantity: new Prisma.Decimal('1'),
+        price: null,
+        fee: new Prisma.Decimal('0'),
+        tax: new Prisma.Decimal('0'),
+        tradeTime: new Date('2024-05-01T00:00:00.000Z'),
+      },
+    ])
+    tx.sellLotMatch.findMany.mockResolvedValue([
+      { sellTransactionId: 'sell-1', quantity: new Prisma.Decimal('1'), unitCost: new Prisma.Decimal('4') },
+      { sellTransactionId: 'sell-2', quantity: new Prisma.Decimal('1'), unitCost: new Prisma.Decimal('1') },
+    ])
+    tx.asset.findMany.mockResolvedValue([
+      { id: 'asset-1', symbol: 'AAA', name: 'Alpha', type: 'etf' },
+      { id: 'asset-2', symbol: 'BBB', name: 'Beta', type: 'equity' },
+    ])
+
+    const periods = await service.getRealizedPeriods('user-1', { year: 2024 })
+    const assets = await service.getRealizedAssets('user-1', { year: 2024, currency: 'TWD', skip: 0, take: 1 })
+    const trades = await service.getRealizedTrades('user-1', { year: 2024, currency: 'TWD', assetId: 'asset-1' })
+
+    expect(periods.groups[0].summary).toMatchObject({ sellCount: 2, netProceeds: '15', realizedNetPnl: '10' })
+    expect(periods.groups[0].months).toHaveLength(12)
+    expect(assets.total).toBe(2)
+    expect(assets.items).toHaveLength(1)
+    expect(assets.summary.sellCount).toBe(2)
+    expect(trades.items[0]).toMatchObject({ amount: '10', fee: '1', realizedNetPnl: '6' })
+    expect(trades.summary.sellCount).toBe(1)
+    expect(tx.transaction.findMany).toHaveBeenCalledTimes(3)
+    expect(tx.sellLotMatch.findMany).toHaveBeenCalledTimes(3)
+    expect(tx.asset.findMany).toHaveBeenCalledTimes(3)
+    expect(tx.positionLot.findMany).not.toHaveBeenCalled()
+    expect(tx.position.findMany).not.toHaveBeenCalled()
+    expect(tx.$queryRaw).not.toHaveBeenCalled()
+    expect(tx.transaction.update).not.toHaveBeenCalled()
+    expect(tx.transaction.create).not.toHaveBeenCalled()
+    expect(tx.sellLotMatch.create).not.toHaveBeenCalled()
   })
 })
