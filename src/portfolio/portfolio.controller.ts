@@ -12,6 +12,9 @@ import {
 } from './dto/portfolio-trend.response.dto'
 import { PortfolioService } from './portfolio.service'
 import { AssetPerformanceService } from './asset-performance.service'
+import { ExternalFundingService } from './external-funding.service'
+import { GetPortfolioAnnualExternalFundingDto } from './dto/get-portfolio-annual-external-funding.dto'
+import { PortfolioAnnualExternalFundingResponseDto } from './dto/portfolio-annual-external-funding.response.dto'
 import { GetPortfolioAnnualBuysDto } from './dto/get-portfolio-annual-buys.dto'
 import { GetPortfolioAnnualRealizedDto } from './dto/get-portfolio-annual-realized.dto'
 import { GetPortfolioAssetPerformanceDto } from './dto/get-portfolio-asset-performance.dto'
@@ -30,11 +33,14 @@ import { PortfolioAssetPerformanceResponseDto } from './dto/portfolio-asset-perf
   PortfolioAnnualBuysResponseDto,
   GetPortfolioAnnualRealizedDto,
   PortfolioAnnualRealizedResponseDto,
+  GetPortfolioAnnualExternalFundingDto,
+  PortfolioAnnualExternalFundingResponseDto,
 )
 export class PortfolioController {
   constructor(
     private readonly portfolioService: PortfolioService,
     private readonly assetPerformanceService: AssetPerformanceService,
+    private readonly externalFundingService: ExternalFundingService,
   ) {}
 
   @Get('summary')
@@ -71,6 +77,15 @@ export class PortfolioController {
     @Query() query: GetPortfolioAnnualRealizedDto,
   ): Promise<PortfolioAnnualRealizedResponseDto> {
     return this.assetPerformanceService.getAnnualRealized(userId, query)
+  }
+
+  @Get('performance/annual-external-funding')
+  @ApiOkResponse({ type: PortfolioAnnualExternalFundingResponseDto })
+  async getAnnualExternalFunding(
+    @CurrentUser() userId: string,
+    @Query() query: GetPortfolioAnnualExternalFundingDto,
+  ): Promise<PortfolioAnnualExternalFundingResponseDto> {
+    return this.externalFundingService.getAnnualExternalFunding(userId, query)
   }
 
   @Get('holdings')
