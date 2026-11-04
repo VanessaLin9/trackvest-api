@@ -1,0 +1,1755 @@
+{
+  "asOf": "2026-06-15T04:00:00.000Z",
+  "description": "Synthetic realized-period responses for the performance page. These are not a user snapshot. Amounts are decimal strings. Adding the displayed month strings can differ from the year at the 8th decimal; these examples use values that reconcile exactly.",
+  "cases": [
+    {
+      "name": "chain",
+      "source": {
+        "accounts": [
+          {
+            "id": "account-twd",
+            "name": "Broker TWD",
+            "currency": "TWD"
+          },
+          {
+            "id": "account-usd",
+            "name": "Broker USD",
+            "currency": "USD"
+          }
+        ],
+        "assets": [
+          {
+            "id": "asset-aaa",
+            "symbol": "AAA",
+            "name": "Alpha",
+            "type": "etf"
+          },
+          {
+            "id": "asset-bbb",
+            "symbol": "BBB",
+            "name": "Beta",
+            "type": "equity"
+          },
+          {
+            "id": "asset-ccc",
+            "symbol": "CCC",
+            "name": "Gamma",
+            "type": "equity"
+          }
+        ],
+        "trades": [
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10000",
+            "quantity": "100",
+            "price": "100",
+            "fee": "0",
+            "tax": "0",
+            "id": "buy-2023",
+            "type": "buy",
+            "tradeTime": "2023-11-01T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "250",
+            "quantity": "2",
+            "price": "125",
+            "fee": "1",
+            "tax": "0.5",
+            "id": "sell-mar-aaa",
+            "type": "sell",
+            "tradeTime": "2024-03-15T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-bbb",
+            "amount": "80",
+            "quantity": "1",
+            "price": "80",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-mar-bbb",
+            "type": "sell",
+            "tradeTime": "2024-03-16T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-01",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-02",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-03",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-04",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-05",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-06",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-07",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-08",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-09",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-10",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-11",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-12",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-13",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-14",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-15",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-16",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-17",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-18",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-19",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-20",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "10",
+            "quantity": "1",
+            "price": "10",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-apr-21",
+            "type": "sell",
+            "tradeTime": "2024-04-10T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-usd",
+            "assetId": "asset-ccc",
+            "amount": "3",
+            "quantity": "1",
+            "price": "3",
+            "fee": "0",
+            "tax": "0",
+            "id": "buy-usd",
+            "type": "buy",
+            "tradeTime": "2024-01-05T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-usd",
+            "assetId": "asset-ccc",
+            "amount": "7",
+            "quantity": "1",
+            "price": "7",
+            "fee": "0",
+            "tax": "0",
+            "id": "sell-usd",
+            "type": "sell",
+            "tradeTime": "2024-03-20T02:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "20",
+            "quantity": null,
+            "price": null,
+            "fee": "0",
+            "tax": "0",
+            "id": "dividend",
+            "type": "dividend",
+            "tradeTime": "2024-05-01T02:00:00.000Z"
+          }
+        ],
+        "matches": [
+          {
+            "sellTransactionId": "sell-mar-aaa",
+            "quantity": "1",
+            "unitCost": "100"
+          },
+          {
+            "sellTransactionId": "sell-mar-aaa",
+            "quantity": "1",
+            "unitCost": "100"
+          },
+          {
+            "sellTransactionId": "sell-mar-bbb",
+            "quantity": "1",
+            "unitCost": "100"
+          },
+          {
+            "sellTransactionId": "sell-apr-01",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-02",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-03",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-04",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-05",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-06",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-07",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-08",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-09",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-10",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-11",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-12",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-13",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-14",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-15",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-16",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-17",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-18",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-19",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-20",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-apr-21",
+            "quantity": "1",
+            "unitCost": "4"
+          },
+          {
+            "sellTransactionId": "sell-usd",
+            "quantity": "1",
+            "unitCost": "3"
+          }
+        ]
+      },
+      "scenarios": {
+        "periods": {
+          "query": {
+            "accountId": null,
+            "year": 2024
+          },
+          "response": {
+            "generatedAt": "2026-06-15T04:00:00.000Z",
+            "timeZone": "Asia/Taipei",
+            "scope": {
+              "accountId": null,
+              "year": 2024,
+              "month": null,
+              "currency": null
+            },
+            "periodStart": "2023-12-31T16:00:00.000Z",
+            "periodEndExclusive": "2024-12-31T16:00:00.000Z",
+            "asOf": null,
+            "isCurrentYear": false,
+            "groups": [
+              {
+                "currency": "TWD",
+                "summary": {
+                  "sellCount": 23,
+                  "netProceeds": "540",
+                  "disposedCost": "384",
+                  "realizedNetPnl": "156",
+                  "issues": []
+                },
+                "months": [
+                  {
+                    "month": 1,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 2,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 3,
+                    "isCurrentMonth": false,
+                    "sellCount": 2,
+                    "netProceeds": "330",
+                    "disposedCost": "300",
+                    "realizedNetPnl": "30",
+                    "issues": []
+                  },
+                  {
+                    "month": 4,
+                    "isCurrentMonth": false,
+                    "sellCount": 21,
+                    "netProceeds": "210",
+                    "disposedCost": "84",
+                    "realizedNetPnl": "126",
+                    "issues": []
+                  },
+                  {
+                    "month": 5,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 6,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 7,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 8,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 9,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 10,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 11,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 12,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  }
+                ]
+              },
+              {
+                "currency": "USD",
+                "summary": {
+                  "sellCount": 1,
+                  "netProceeds": "7",
+                  "disposedCost": "3",
+                  "realizedNetPnl": "4",
+                  "issues": []
+                },
+                "months": [
+                  {
+                    "month": 1,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 2,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 3,
+                    "isCurrentMonth": false,
+                    "sellCount": 1,
+                    "netProceeds": "7",
+                    "disposedCost": "3",
+                    "realizedNetPnl": "4",
+                    "issues": []
+                  },
+                  {
+                    "month": 4,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 5,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 6,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 7,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 8,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 9,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 10,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 11,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 12,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "assetsYear": {
+          "query": {
+            "accountId": null,
+            "currency": "TWD",
+            "skip": 0,
+            "take": 20,
+            "year": 2024,
+            "month": null
+          },
+          "response": {
+            "generatedAt": "2026-06-15T04:00:00.000Z",
+            "timeZone": "Asia/Taipei",
+            "scope": {
+              "accountId": null,
+              "year": 2024,
+              "month": null,
+              "currency": "TWD"
+            },
+            "periodStart": "2023-12-31T16:00:00.000Z",
+            "periodEndExclusive": "2024-12-31T16:00:00.000Z",
+            "asOf": null,
+            "summary": {
+              "sellCount": 23,
+              "netProceeds": "540",
+              "disposedCost": "384",
+              "realizedNetPnl": "156",
+              "issues": []
+            },
+            "items": [
+              {
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "type": "etf",
+                "sellCount": 22,
+                "realizedQuantity": "23",
+                "netProceeds": "460",
+                "disposedCost": "284",
+                "realizedNetPnl": "176",
+                "issues": []
+              },
+              {
+                "assetId": "asset-bbb",
+                "symbol": "BBB",
+                "name": "Beta",
+                "type": "equity",
+                "sellCount": 1,
+                "realizedQuantity": "1",
+                "netProceeds": "80",
+                "disposedCost": "100",
+                "realizedNetPnl": "-20",
+                "issues": []
+              }
+            ],
+            "total": 2,
+            "skip": 0,
+            "take": 20
+          }
+        },
+        "assetsMarch": {
+          "query": {
+            "accountId": null,
+            "currency": "TWD",
+            "skip": 0,
+            "take": 20,
+            "year": 2024,
+            "month": 3
+          },
+          "response": {
+            "generatedAt": "2026-06-15T04:00:00.000Z",
+            "timeZone": "Asia/Taipei",
+            "scope": {
+              "accountId": null,
+              "year": 2024,
+              "month": 3,
+              "currency": "TWD"
+            },
+            "periodStart": "2024-02-29T16:00:00.000Z",
+            "periodEndExclusive": "2024-03-31T16:00:00.000Z",
+            "asOf": null,
+            "summary": {
+              "sellCount": 2,
+              "netProceeds": "330",
+              "disposedCost": "300",
+              "realizedNetPnl": "30",
+              "issues": []
+            },
+            "items": [
+              {
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "type": "etf",
+                "sellCount": 1,
+                "realizedQuantity": "2",
+                "netProceeds": "250",
+                "disposedCost": "200",
+                "realizedNetPnl": "50",
+                "issues": []
+              },
+              {
+                "assetId": "asset-bbb",
+                "symbol": "BBB",
+                "name": "Beta",
+                "type": "equity",
+                "sellCount": 1,
+                "realizedQuantity": "1",
+                "netProceeds": "80",
+                "disposedCost": "100",
+                "realizedNetPnl": "-20",
+                "issues": []
+              }
+            ],
+            "total": 2,
+            "skip": 0,
+            "take": 20
+          }
+        },
+        "tradesPage1": {
+          "query": {
+            "accountId": null,
+            "currency": "TWD",
+            "skip": 0,
+            "take": 20,
+            "year": 2024,
+            "month": null,
+            "assetId": "asset-aaa"
+          },
+          "response": {
+            "generatedAt": "2026-06-15T04:00:00.000Z",
+            "timeZone": "Asia/Taipei",
+            "scope": {
+              "accountId": null,
+              "year": 2024,
+              "month": null,
+              "currency": "TWD",
+              "assetId": "asset-aaa"
+            },
+            "periodStart": "2023-12-31T16:00:00.000Z",
+            "periodEndExclusive": "2024-12-31T16:00:00.000Z",
+            "asOf": null,
+            "summary": {
+              "sellCount": 22,
+              "netProceeds": "460",
+              "disposedCost": "284",
+              "realizedNetPnl": "176",
+              "issues": []
+            },
+            "items": [
+              {
+                "transactionId": "sell-apr-01",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-02",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-03",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-04",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-05",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-06",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-07",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-08",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-09",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-10",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-11",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-12",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-13",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-14",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-15",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-16",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-17",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-18",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-19",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-apr-20",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              }
+            ],
+            "total": 22,
+            "skip": 0,
+            "take": 20
+          }
+        },
+        "tradesPage2": {
+          "query": {
+            "accountId": null,
+            "currency": "TWD",
+            "skip": 20,
+            "take": 20,
+            "year": 2024,
+            "month": null,
+            "assetId": "asset-aaa"
+          },
+          "response": {
+            "generatedAt": "2026-06-15T04:00:00.000Z",
+            "timeZone": "Asia/Taipei",
+            "scope": {
+              "accountId": null,
+              "year": 2024,
+              "month": null,
+              "currency": "TWD",
+              "assetId": "asset-aaa"
+            },
+            "periodStart": "2023-12-31T16:00:00.000Z",
+            "periodEndExclusive": "2024-12-31T16:00:00.000Z",
+            "asOf": null,
+            "summary": {
+              "sellCount": 22,
+              "netProceeds": "460",
+              "disposedCost": "284",
+              "realizedNetPnl": "176",
+              "issues": []
+            },
+            "items": [
+              {
+                "transactionId": "sell-apr-21",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-04-10T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "1",
+                "price": "10",
+                "amount": "10",
+                "fee": "0",
+                "tax": "0",
+                "disposedCost": "4",
+                "realizedNetPnl": "6",
+                "issues": []
+              },
+              {
+                "transactionId": "sell-mar-aaa",
+                "accountId": "account-twd",
+                "accountName": "Broker TWD",
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "tradeTime": "2024-03-15T02:00:00.000Z",
+                "type": "sell",
+                "quantity": "2",
+                "price": "125",
+                "amount": "250",
+                "fee": "1",
+                "tax": "0.5",
+                "disposedCost": "200",
+                "realizedNetPnl": "50",
+                "issues": []
+              }
+            ],
+            "total": 22,
+            "skip": 20,
+            "take": 20
+          }
+        }
+      }
+    },
+    {
+      "name": "missing_fifo",
+      "source": {
+        "accounts": [
+          {
+            "id": "account-twd",
+            "name": "Broker TWD",
+            "currency": "TWD"
+          },
+          {
+            "id": "account-usd",
+            "name": "Broker USD",
+            "currency": "USD"
+          }
+        ],
+        "assets": [
+          {
+            "id": "asset-aaa",
+            "symbol": "AAA",
+            "name": "Alpha",
+            "type": "etf"
+          },
+          {
+            "id": "asset-bbb",
+            "symbol": "BBB",
+            "name": "Beta",
+            "type": "equity"
+          },
+          {
+            "id": "asset-ccc",
+            "symbol": "CCC",
+            "name": "Gamma",
+            "type": "equity"
+          }
+        ],
+        "trades": [
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "0",
+            "quantity": "1",
+            "price": "1",
+            "fee": "0",
+            "tax": "0",
+            "id": "buy",
+            "type": "buy",
+            "tradeTime": "2024-01-01T00:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "500",
+            "quantity": "4",
+            "price": "125",
+            "fee": "0",
+            "tax": "0",
+            "id": "bad",
+            "type": "sell",
+            "tradeTime": "2024-03-01T00:00:00.000Z"
+          },
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-bbb",
+            "amount": "100",
+            "quantity": "1",
+            "price": "100",
+            "fee": "0",
+            "tax": "0",
+            "id": "good",
+            "type": "sell",
+            "tradeTime": "2024-04-01T00:00:00.000Z"
+          }
+        ],
+        "matches": [
+          {
+            "sellTransactionId": "bad",
+            "quantity": "3",
+            "unitCost": "100"
+          },
+          {
+            "sellTransactionId": "good",
+            "quantity": "1",
+            "unitCost": "40"
+          }
+        ]
+      },
+      "scenarios": {
+        "periods": {
+          "query": {
+            "accountId": null,
+            "year": 2024
+          },
+          "response": {
+            "generatedAt": "2026-06-15T04:00:00.000Z",
+            "timeZone": "Asia/Taipei",
+            "scope": {
+              "accountId": null,
+              "year": 2024,
+              "month": null,
+              "currency": null
+            },
+            "periodStart": "2023-12-31T16:00:00.000Z",
+            "periodEndExclusive": "2024-12-31T16:00:00.000Z",
+            "asOf": null,
+            "isCurrentYear": false,
+            "groups": [
+              {
+                "currency": "TWD",
+                "summary": {
+                  "sellCount": 2,
+                  "netProceeds": "600",
+                  "disposedCost": null,
+                  "realizedNetPnl": null,
+                  "issues": [
+                    "MISSING_FIFO"
+                  ]
+                },
+                "months": [
+                  {
+                    "month": 1,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 2,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 3,
+                    "isCurrentMonth": false,
+                    "sellCount": 1,
+                    "netProceeds": "500",
+                    "disposedCost": null,
+                    "realizedNetPnl": null,
+                    "issues": [
+                      "MISSING_FIFO"
+                    ]
+                  },
+                  {
+                    "month": 4,
+                    "isCurrentMonth": false,
+                    "sellCount": 1,
+                    "netProceeds": "100",
+                    "disposedCost": "40",
+                    "realizedNetPnl": "60",
+                    "issues": []
+                  },
+                  {
+                    "month": 5,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 6,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 7,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 8,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 9,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 10,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 11,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  },
+                  {
+                    "month": 12,
+                    "isCurrentMonth": false,
+                    "sellCount": 0,
+                    "netProceeds": "0",
+                    "disposedCost": "0",
+                    "realizedNetPnl": "0",
+                    "issues": []
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "assets": {
+          "query": {
+            "accountId": null,
+            "currency": "TWD",
+            "skip": 0,
+            "take": 20,
+            "year": 2024,
+            "month": null
+          },
+          "response": {
+            "generatedAt": "2026-06-15T04:00:00.000Z",
+            "timeZone": "Asia/Taipei",
+            "scope": {
+              "accountId": null,
+              "year": 2024,
+              "month": null,
+              "currency": "TWD"
+            },
+            "periodStart": "2023-12-31T16:00:00.000Z",
+            "periodEndExclusive": "2024-12-31T16:00:00.000Z",
+            "asOf": null,
+            "summary": {
+              "sellCount": 2,
+              "netProceeds": "600",
+              "disposedCost": null,
+              "realizedNetPnl": null,
+              "issues": [
+                "MISSING_FIFO"
+              ]
+            },
+            "items": [
+              {
+                "assetId": "asset-aaa",
+                "symbol": "AAA",
+                "name": "Alpha",
+                "type": "etf",
+                "sellCount": 1,
+                "realizedQuantity": null,
+                "netProceeds": "500",
+                "disposedCost": null,
+                "realizedNetPnl": null,
+                "issues": [
+                  "MISSING_FIFO"
+                ]
+              },
+              {
+                "assetId": "asset-bbb",
+                "symbol": "BBB",
+                "name": "Beta",
+                "type": "equity",
+                "sellCount": 1,
+                "realizedQuantity": "1",
+                "netProceeds": "100",
+                "disposedCost": "40",
+                "realizedNetPnl": "60",
+                "issues": []
+              }
+            ],
+            "total": 2,
+            "skip": 0,
+            "take": 20
+          }
+        }
+      }
+    },
+    {
+      "name": "dividends_only",
+      "source": {
+        "accounts": [
+          {
+            "id": "account-twd",
+            "name": "Broker TWD",
+            "currency": "TWD"
+          },
+          {
+            "id": "account-usd",
+            "name": "Broker USD",
+            "currency": "USD"
+          }
+        ],
+        "assets": [
+          {
+            "id": "asset-aaa",
+            "symbol": "AAA",
+            "name": "Alpha",
+            "type": "etf"
+          },
+          {
+            "id": "asset-bbb",
+            "symbol": "BBB",
+            "name": "Beta",
+            "type": "equity"
+          },
+          {
+            "id": "asset-ccc",
+            "symbol": "CCC",
+            "name": "Gamma",
+            "type": "equity"
+          }
+        ],
+        "trades": [
+          {
+            "accountId": "account-twd",
+            "assetId": "asset-aaa",
+            "amount": "20",
+            "quantity": null,
+            "price": null,
+            "fee": "0",
+            "tax": "0",
+            "id": "div",
+            "type": "dividend",
+            "tradeTime": "2024-02-01T00:00:00.000Z"
+          }
+        ],
+        "matches": []
+      },
+      "scenarios": {
+        "periods": {
+          "query": {
+            "accountId": null,
+            "year": 2024
+          },
+          "response": {
+            "generatedAt": "2026-06-15T04:00:00.000Z",
+            "timeZone": "Asia/Taipei",
+            "scope": {
+              "accountId": null,
+              "year": 2024,
+              "month": null,
+              "currency": null
+            },
+            "periodStart": "2023-12-31T16:00:00.000Z",
+            "periodEndExclusive": "2024-12-31T16:00:00.000Z",
+            "asOf": null,
+            "isCurrentYear": false,
+            "groups": []
+          }
+        },
+        "assets": {
+          "query": {
+            "accountId": null,
+            "currency": "TWD",
+            "skip": 0,
+            "take": 20,
+            "year": 2024,
+            "month": null
+          },
+          "response": {
+            "generatedAt": "2026-06-15T04:00:00.000Z",
+            "timeZone": "Asia/Taipei",
+            "scope": {
+              "accountId": null,
+              "year": 2024,
+              "month": null,
+              "currency": "TWD"
+            },
+            "periodStart": "2023-12-31T16:00:00.000Z",
+            "periodEndExclusive": "2024-12-31T16:00:00.000Z",
+            "asOf": null,
+            "summary": {
+              "sellCount": 0,
+              "netProceeds": "0",
+              "disposedCost": "0",
+              "realizedNetPnl": "0",
+              "issues": []
+            },
+            "items": [],
+            "total": 0,
+            "skip": 0,
+            "take": 20
+          }
+        }
+      }
+    }
+  ]
+}

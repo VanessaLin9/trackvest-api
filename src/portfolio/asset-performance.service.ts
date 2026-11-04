@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common'
 import { Prisma, TxType } from '@prisma/client'
 import { PrismaService } from '../prisma.service'
 import { AnnualBuySource, AnnualBuyTrade, buildAnnualBuys } from './annual-buys.calculator'
@@ -14,6 +14,25 @@ import { GetPortfolioAnnualRealizedDto } from './dto/get-portfolio-annual-realiz
 import { GetPortfolioAssetPerformanceDto } from './dto/get-portfolio-asset-performance.dto'
 import { PortfolioAnnualRealizedResponseDto } from './dto/portfolio-annual-realized.response.dto'
 import { PortfolioAssetPerformanceResponseDto } from './dto/portfolio-asset-performance.response.dto'
+import {
+  GetRealizedAssetsDto,
+  GetRealizedPeriodsDto,
+  GetRealizedTradesDto,
+} from './dto/get-realized-period.dto'
+import {
+  PortfolioRealizedAssetsResponseDto,
+  PortfolioRealizedPeriodsResponseDto,
+  PortfolioRealizedTradesResponseDto,
+} from './dto/realized-period.response.dto'
+import {
+  RealizedPeriodQueryError,
+  RealizedPeriodSource,
+  RealizedPeriodTrade,
+  assertRealizedPeriodAllowed,
+  buildRealizedAssets,
+  buildRealizedPeriods,
+  buildRealizedTrades,
+} from './realized-period.calculator'
 
 const TRADE_TYPES = [TxType.buy, TxType.sell, TxType.dividend] as const
 
@@ -70,6 +89,80 @@ export class AssetPerformanceService {
     return buildAnnualBuys(source, generatedAt)
   }
 
+  /**
+   * 績效頁的年／月已實現、標的貢獻與賣出明細。
+   * 與年度已實現相同：只讀本人帳戶、Repeatable Read、不 replay、不寫 GL、不讀報價。
+   * 年月是否已經開始用這次 generatedAt 判斷，避免查詢未來月份。
+   */
+  async getRealizedPeriods(
+    userId: string,
+    query: GetRealizedPeriodsDto,
+  ): Promise<PortfolioRealizedPeriodsResponseDto> {
+    const generatedAt = new Date()
+    this.assertRealizedQuery(query.year, null, generatedAt)
+    const source = await this.prisma.$transaction(
+      tx => this.loadRealizedPeriodSource(tx, userId, query.accountId),
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    )
+    return buildRealizedPeriods(
+      source,
+      {
+        accountId: query.accountId ?? null,
+        year: query.year,
+      },
+      generatedAt,
+    )
+  }
+
+  async getRealizedAssets(
+    userId: string,
+    query: GetRealizedAssetsDto,
+  ): Promise<PortfolioRealizedAssetsResponseDto> {
+    const generatedAt = new Date()
+    this.assertRealizedQuery(query.year, query.month ?? null, generatedAt)
+    const source = await this.prisma.$transaction(
+      tx => this.loadRealizedPeriodSource(tx, userId, query.accountId),
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    )
+    return buildRealizedAssets(
+      source,
+      {
+        accountId: query.accountId ?? null,
+        year: query.year,
+        month: query.month ?? null,
+        currency: query.currency,
+        skip: query.skip ?? 0,
+        take: query.take ?? 20,
+      },
+      generatedAt,
+    )
+  }
+
+  async getRealizedTrades(
+    userId: string,
+    query: GetRealizedTradesDto,
+  ): Promise<PortfolioRealizedTradesResponseDto> {
+    const generatedAt = new Date()
+    this.assertRealizedQuery(query.year, query.month ?? null, generatedAt)
+    const source = await this.prisma.$transaction(
+      tx => this.loadRealizedPeriodSource(tx, userId, query.accountId),
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    )
+    return buildRealizedTrades(
+      source,
+      {
+        accountId: query.accountId ?? null,
+        year: query.year,
+        month: query.month ?? null,
+        currency: query.currency,
+        assetId: query.assetId,
+        skip: query.skip ?? 0,
+        take: query.take ?? 20,
+      },
+      generatedAt,
+    )
+  }
+
   private async loadSource(
     tx: Prisma.TransactionClient,
     userId: string,
@@ -100,14 +193,22 @@ export class AssetPerformanceService {
 
     const accountIds = accounts.map(account => account.id)
     const activeTransactions = await this.loadActiveTrades(tx, accountIds)
-    const assetIds = [...new Set(
-      activeTransactions
-        .filter(transaction => transaction.type === 'buy' || transaction.type === 'sell')
-        .map(transaction => transaction.assetId),
-    )]
-    if (assetIds.length === 0) return { ...empty, transactions: activeTransactions }
+    const assetIds = [
+      ...new Set(
+        activeTransactions
+          .filter(
+            transaction =>
+              transaction.type === 'buy' || transaction.type === 'sell',
+          )
+          .map(transaction => transaction.assetId),
+      ),
+    ]
+    if (assetIds.length === 0)
+      return { ...empty, transactions: activeTransactions }
 
-    const sellIds = activeTransactions.filter(transaction => transaction.type === 'sell').map(transaction => transaction.id)
+    const sellIds = activeTransactions
+      .filter(transaction => transaction.type === 'sell')
+      .map(transaction => transaction.id)
     const [lots, positions, matches, assets, quotes] = await Promise.all([
       tx.positionLot.findMany({
         where: {
@@ -183,8 +284,13 @@ export class AssetPerformanceService {
     }
     if (accounts.length === 0) return empty
 
-    const transactions = await this.loadActiveTrades(tx, accounts.map(account => account.id))
-    const sellIds = transactions.filter(transaction => transaction.type === 'sell').map(transaction => transaction.id)
+    const transactions = await this.loadActiveTrades(
+      tx,
+      accounts.map(account => account.id),
+    )
+    const sellIds = transactions
+      .filter(transaction => transaction.type === 'sell')
+      .map(transaction => transaction.id)
     return {
       ...empty,
       transactions,
@@ -215,7 +321,11 @@ export class AssetPerformanceService {
     })
     const activeTransactions = transactions.flatMap(transaction => {
       if (transaction.assetId == null) return []
-      if (transaction.type !== TxType.buy && transaction.type !== TxType.sell && transaction.type !== TxType.dividend) {
+      if (
+        transaction.type !== TxType.buy &&
+        transaction.type !== TxType.sell &&
+        transaction.type !== TxType.dividend
+      ) {
         return []
       }
       const mapped: AssetPerformanceTransaction = {
@@ -261,7 +371,10 @@ export class AssetPerformanceService {
     }
     if (accounts.length === 0) return { accounts, trades: [], assets: [] }
 
-    const transactions = await this.loadActiveTrades(tx, accounts.map(account => account.id))
+    const transactions = await this.loadActiveTrades(
+      tx,
+      accounts.map(account => account.id),
+    )
     const trades: AnnualBuyTrade[] = transactions.map(transaction => ({
       accountId: transaction.accountId,
       assetId: transaction.assetId,
@@ -269,7 +382,13 @@ export class AssetPerformanceService {
       amount: transaction.amount,
       tradeTime: transaction.tradeTime,
     }))
-    const assetIds = [...new Set(trades.filter(trade => trade.type === 'buy').map(trade => trade.assetId))]
+    const assetIds = [
+      ...new Set(
+        trades
+          .filter(trade => trade.type === 'buy')
+          .map(trade => trade.assetId),
+      ),
+    ]
     if (assetIds.length === 0) return { accounts, trades, assets: [] }
 
     const assets = await tx.asset.findMany({
@@ -279,17 +398,127 @@ export class AssetPerformanceService {
     return { accounts, trades, assets }
   }
 
-  private async loadLatestQuotes(tx: Prisma.TransactionClient, assetIds: string[]) {
+  private assertRealizedQuery(
+    year: number,
+    month: number | null,
+    asOf: Date,
+  ): void {
+    try {
+      assertRealizedPeriodAllowed({ year, month }, asOf)
+    } catch (error) {
+      if (error instanceof RealizedPeriodQueryError)
+        throw new BadRequestException(error.message)
+      throw error
+    }
+  }
+
+  private async loadRealizedPeriodSource(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    accountId?: string,
+  ): Promise<RealizedPeriodSource> {
+    const accounts = await tx.account.findMany({
+      where: {
+        userId,
+        ...(accountId ? { id: accountId } : {}),
+      },
+      select: { id: true, name: true, currency: true },
+    })
+    if (accountId && accounts.length === 0) {
+      throw new ForbiddenException('You do not have access to this account')
+    }
+    if (accounts.length === 0)
+      return { accounts, trades: [], matches: [], assets: [] }
+
+    const accountIds = accounts.map(account => account.id)
+    const trades = await this.loadRealizedTrades(tx, accountIds)
+    const sellIds = trades
+      .filter(trade => trade.type === 'sell')
+      .map(trade => trade.id)
+    const assetIds = [
+      ...new Set(
+        trades
+          .filter(trade => trade.type === 'sell')
+          .map(trade => trade.assetId),
+      ),
+    ]
+    const [matches, assets] = await Promise.all([
+      this.loadMatches(tx, sellIds),
+      assetIds.length === 0
+        ? Promise.resolve([])
+        : tx.asset.findMany({
+            where: { id: { in: assetIds } },
+            select: { id: true, symbol: true, name: true, type: true },
+          }),
+    ])
+    return { accounts, trades, matches, assets }
+  }
+
+  private async loadRealizedTrades(
+    tx: Prisma.TransactionClient,
+    accountIds: string[],
+  ): Promise<RealizedPeriodTrade[]> {
+    const transactions = await tx.transaction.findMany({
+      where: {
+        accountId: { in: accountIds },
+        isDeleted: false,
+        assetId: { not: null },
+        type: { in: [...TRADE_TYPES] },
+      },
+      select: {
+        id: true,
+        accountId: true,
+        assetId: true,
+        type: true,
+        amount: true,
+        quantity: true,
+        price: true,
+        fee: true,
+        tax: true,
+        tradeTime: true,
+      },
+    })
+    return transactions.flatMap(transaction => {
+      if (transaction.assetId == null) return []
+      if (
+        transaction.type !== TxType.buy &&
+        transaction.type !== TxType.sell &&
+        transaction.type !== TxType.dividend
+      ) {
+        return []
+      }
+      const mapped: RealizedPeriodTrade = {
+        id: transaction.id,
+        accountId: transaction.accountId,
+        assetId: transaction.assetId,
+        type: transaction.type,
+        amount: transaction.amount,
+        quantity: transaction.quantity,
+        price: transaction.price,
+        fee: transaction.fee,
+        tax: transaction.tax,
+        tradeTime: transaction.tradeTime,
+      }
+      return [mapped]
+    })
+  }
+
+  private async loadLatestQuotes(
+    tx: Prisma.TransactionClient,
+    assetIds: string[],
+  ) {
     if (assetIds.length === 0) return []
 
     // PostgreSQL numeric 的 NaN 比任何數字都大，`price > 0` 仍會選到它。
     // 取最大日期前先排除 NaN 與非正數，較舊的有效報價才不會被蓋掉（PR #48）。
-    const rows = await tx.$queryRaw<Array<{
-      assetId: string
-      asOf: Date
-      source: string
-      price: Prisma.Decimal | string
-    }>>(Prisma.sql`
+    const rows = await tx.$queryRaw<
+      Array<{
+        assetId: string
+        asOf: Date
+        source: string
+        price: Prisma.Decimal | string
+      }>
+    >(Prisma.sql`
       SELECT DISTINCT ON ("assetId")
         "assetId",
         "asOf",
@@ -307,7 +536,10 @@ export class AssetPerformanceService {
       assetId: row.assetId,
       asOf: row.asOf instanceof Date ? row.asOf : new Date(row.asOf),
       source: row.source,
-      price: row.price instanceof Prisma.Decimal ? row.price : new Prisma.Decimal(row.price),
+      price:
+        row.price instanceof Prisma.Decimal
+          ? row.price
+          : new Prisma.Decimal(row.price),
     }))
   }
 }
