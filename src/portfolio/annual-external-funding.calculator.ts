@@ -41,7 +41,7 @@ type MoneyTotals = {
  * 年度外部入金、出金與已記錄淨投入。
  * 範圍是這位使用者在 Trackvest 的帳戶。買賣、股利、費用不在這份來源裡。
  * unknown 不當成外部本金，也不當成 0。沒有確認涵蓋的年份不回完整結果。
- * asOf 之後的入出金不進總額。
+ * asOf 之後的入出金不進總額。transferGroupId 本身不改變 unknown（PR #51）。
  */
 export function buildAnnualExternalFunding(
   source: AnnualExternalFundingSource,

@@ -12,9 +12,9 @@ import { PortfolioAnnualExternalFundingResponseDto } from './dto/portfolio-annua
 const CASH_TYPES = [TxType.deposit, TxType.withdraw] as const
 
 /**
- * 年度外部入出金讀取。
+ * 年度外部入出金讀取（PR #51）。
  * 範圍是呼叫者自己的帳戶，admin 也不讀別人。不讀總帳、報價或買賣。
- * 既有入出金維持 unknown，這條 GET 不回填來源。
+ * 既有入出金維持 unknown，這條 GET 不回填來源，也不把總帳的 owner contribution 當成外部本金。
  */
 @Injectable()
 export class ExternalFundingService {
