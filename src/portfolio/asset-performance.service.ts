@@ -90,9 +90,9 @@ export class AssetPerformanceService {
   }
 
   /**
-   * 績效頁的年／月已實現、標的貢獻與賣出明細。
+   * 績效頁的年／月已實現、標的貢獻與賣出明細（PR #52）。
    * 與年度已實現相同：只讀本人帳戶、Repeatable Read、不 replay、不寫 GL、不讀報價。
-   * 年月是否已經開始用這次 generatedAt 判斷，避免查詢未來月份。
+   * accountId 即使是 admin 也只能讀自己的帳戶。年月是否已經開始用這次 generatedAt 判斷，避免查詢未來月份。
    */
   async getRealizedPeriods(
     userId: string,

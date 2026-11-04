@@ -27,7 +27,7 @@ const TAIPEI_OFFSET_MS = 8 * 60 * 60 * 1000
 export const REALIZED_PERIOD_TIME_ZONE = 'Asia/Taipei'
 
 /**
- * 績效頁的期間已實現損益。
+ * 績效頁的期間已實現損益（PR #52）。
  * 歸屬看賣出的台北年／月。成本用這筆 sell 的歷史 SellLotMatch，買進可以早於查詢期間，也不因尚未清倉而排除部分賣出。
  * 金額、股數與成本都以 Decimal 加總後才 ROUND_HALF_UP 到 8 位。各月或各列的顯示值再加總，可能與合計差在最後一位；對帳用未提前捨去的值，不另造調整交易。
  * tradeTime 晚於 generatedAt 的交易不納入，未來月份也不補 0。既有 annual-realized 仍會把當年未來交易算進該年，這支讀取不修改那個回應。
@@ -370,6 +370,7 @@ function figuresFor(
 }
 
 function aggregate(figures: SellFigure[]): PortfolioRealizedMoneySummaryDto {
+  // 沒有賣出是真正的 0。任一筆缺 FIFO 才把成本與損益留空，不能排除缺資料列後宣稱完整合計（PR #52）。
   if (figures.length === 0) {
     return {
       sellCount: 0,
@@ -445,6 +446,7 @@ function inCalendarPeriod(
 }
 
 function occurredBy(instant: Date, asOf: Date): boolean {
+  // 晚於 generatedAt 的交易不進這份報表。annual-realized 仍會計入當年未來賣出，這裡不改它（PR #52）。
   return instant.getTime() <= asOf.getTime()
 }
 
