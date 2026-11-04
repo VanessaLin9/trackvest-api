@@ -2042,6 +2042,43 @@
         ]
       }
     },
+    "/portfolio/performance/annual-external-funding": {
+      "get": {
+        "operationId": "PortfolioController_getAnnualExternalFunding",
+        "parameters": [
+          {
+            "name": "accountId",
+            "required": false,
+            "in": "query",
+            "description": "Optional account scope. The account must belong to the signed-in user, including when the caller is an admin. Internal transfers stay internal under this filter.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioAnnualExternalFundingResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
     "/portfolio/performance/realized/periods": {
       "get": {
         "operationId": "PortfolioController_getRealizedPeriods",
@@ -5153,6 +5190,141 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PortfolioAnnualRealizedItemResponseDto"
+            }
+          }
+        },
+        "required": [
+          "generatedAt",
+          "timeZone",
+          "items"
+        ]
+      },
+      "GetPortfolioAnnualExternalFundingDto": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional account scope. The account must belong to the signed-in user, including when the caller is an admin. Internal transfers stay internal under this filter."
+          }
+        }
+      },
+      "AnnualExternalFundingCoverage": {
+        "type": "string",
+        "enum": [
+          "not_recorded",
+          "partial",
+          "complete"
+        ],
+        "description": "not_recorded has no deposit/withdraw rows. partial has records but is not a confirmed full year. complete is a confirmed year with no unknown origin."
+      },
+      "AnnualExternalFundingIssue": {
+        "type": "string",
+        "enum": [
+          "UNKNOWN_CASHFLOW",
+          "COVERAGE_UNCONFIRMED"
+        ]
+      },
+      "PortfolioAnnualExternalFundingItemResponseDto": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "integer",
+            "example": 2026,
+            "description": "Cashflow year in Asia/Taipei. UTC 12/31 16:00 belongs to the next Taipei year."
+          },
+          "currency": {
+            "type": "string",
+            "example": "TWD",
+            "description": "Account currency. Rows are not summed across currencies."
+          },
+          "coverage": {
+            "description": "not_recorded has no deposit/withdraw rows. partial has records but is not a confirmed full year. complete is a confirmed year with no unknown origin.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AnnualExternalFundingCoverage"
+              }
+            ]
+          },
+          "externalDeposit": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "description": "Sum of deposit rows explicitly marked external. Null when this year is not recorded. Not buy amount and not market value."
+          },
+          "externalWithdrawal": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "description": "Sum of withdraw rows explicitly marked external. Null when this year is not recorded."
+          },
+          "recordedNetContribution": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "description": "Recorded external deposit minus recorded external withdrawal. Null when the year is not recorded or any deposit/withdraw in this currency is still unknown. This is not a return rate."
+          },
+          "unknownDeposit": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "description": "Unknown-origin deposits in the selected accounts. Null when the year is not recorded."
+          },
+          "unknownWithdrawal": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "description": "Unknown-origin withdrawals in the selected accounts. Null when the year is not recorded."
+          },
+          "internalIn": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "description": "Internal deposits into the selected accounts. Not new principal, including when the filter is a single account."
+          },
+          "internalOut": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?\\d+(\\.\\d{1,8})?$",
+            "description": "Internal withdrawals from the selected accounts. Not an external withdrawal."
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnnualExternalFundingIssue"
+            }
+          }
+        },
+        "required": [
+          "year",
+          "currency",
+          "coverage",
+          "externalDeposit",
+          "externalWithdrawal",
+          "recordedNetContribution",
+          "unknownDeposit",
+          "unknownWithdrawal",
+          "internalIn",
+          "internalOut",
+          "issues"
+        ]
+      },
+      "PortfolioAnnualExternalFundingResponseDto": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeZone": {
+            "type": "string",
+            "example": "Asia/Taipei"
+          },
+          "items": {
+            "description": "One row per year and account currency, from the first recorded or confirmed year through the current Taipei year. Ordered by year descending, then currency ascending. Trades after the reporting time are omitted.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioAnnualExternalFundingItemResponseDto"
             }
           }
         },

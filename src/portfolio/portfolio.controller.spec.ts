@@ -17,13 +17,17 @@ describe('PortfolioController', () => {
       getRealizedAssets: jest.fn(),
       getRealizedTrades: jest.fn(),
     }
+    const externalFundingService = {
+      getAnnualExternalFunding: jest.fn(),
+    }
 
     const controller = new PortfolioController(
       portfolioService as never,
       assetPerformanceService as never,
+      externalFundingService as never,
     )
 
-    return { controller, portfolioService, assetPerformanceService }
+    return { controller, portfolioService, assetPerformanceService, externalFundingService }
   }
 
   it('returns portfolio summary from the service', async () => {
@@ -358,6 +362,21 @@ describe('PortfolioController', () => {
     const result = await controller.getAnnualRealized('user-1', { accountId: '11111111-1111-4111-8111-111111111111' })
 
     expect(assetPerformanceService.getAnnualRealized).toHaveBeenCalledWith('user-1', {
+      accountId: '11111111-1111-4111-8111-111111111111',
+    })
+    expect(result).toBe(response)
+  })
+
+  it('delegates annual external funding without using holdings or the ledger', async () => {
+    const { controller, externalFundingService } = createHarness()
+    const response = { generatedAt: '2026-11-04T00:00:00.000Z', timeZone: 'Asia/Taipei', items: [] }
+    externalFundingService.getAnnualExternalFunding.mockResolvedValue(response)
+
+    const result = await controller.getAnnualExternalFunding('user-1', {
+      accountId: '11111111-1111-4111-8111-111111111111',
+    })
+
+    expect(externalFundingService.getAnnualExternalFunding).toHaveBeenCalledWith('user-1', {
       accountId: '11111111-1111-4111-8111-111111111111',
     })
     expect(result).toBe(response)

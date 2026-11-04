@@ -160,4 +160,24 @@ describe('openapi.json', () => {
       expect(schema.$ref).toBe(`#/components/schemas/${schemaName}`)
     }
   })
+
+  it('exports annual external funding without treating unknown cash as a complete total', () => {
+    const schemas = asObject(asObject(committed.components).schemas)
+    const item = asObject(schemas.PortfolioAnnualExternalFundingItemResponseDto)
+    const properties = asObject(item.properties)
+    for (const key of ['externalDeposit', 'externalWithdrawal', 'recordedNetContribution']) {
+      expect(asObject(properties[key]).type).toBe('string')
+      expect(asObject(properties[key]).nullable).toBe(true)
+    }
+    expect(asObject(schemas.AnnualExternalFundingCoverage).enum).toEqual(['not_recorded', 'partial', 'complete'])
+    expect(asObject(schemas.AnnualExternalFundingIssue).enum).toEqual(['UNKNOWN_CASHFLOW', 'COVERAGE_UNCONFIRMED'])
+
+    const route = asObject(asObject(committed.paths)['/portfolio/performance/annual-external-funding'])
+    const operation = asObject(route.get)
+    const parameters = operation.parameters as Array<{ name: string; required: boolean }>
+    expect(parameters.find(parameter => parameter.name === 'accountId')?.required).toBe(false)
+    const ok = asObject(asObject(operation.responses)['200'])
+    const schema = asObject(asObject(asObject(ok.content)['application/json']).schema)
+    expect(schema.$ref).toBe('#/components/schemas/PortfolioAnnualExternalFundingResponseDto')
+  })
 })
