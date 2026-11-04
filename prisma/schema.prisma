@@ -23,6 +23,7 @@ model User {
   glAccounts    GlAccount[]    @relation("UserToGlAccounts")
   glEntries     GlEntry[]      @relation("UserToGlEntries")
   refreshTokens RefreshToken[]
+  externalFundingCoverages ExternalFundingCoverage[]
 }
 
 /// Opaque rotating refresh token（PR #15）。Raw 永不入庫，只存 sha256；
@@ -153,6 +154,10 @@ model Transaction {
   cashInLieuActionId String?
   tradeTime     DateTime
   note          String?
+  /// 入出金來源。既有列預設 unknown，不依備註或總帳回填成外部投入。
+  cashflowOrigin   CashflowOrigin @default(unknown)
+  /// 範圍內兩筆轉帳的共用識別。沒有標成 internal 時，這個欄位不會把未知列改判成內轉。
+  transferGroupId  String?
 
   isDeleted Boolean   @default(false)
   deletedAt DateTime?
@@ -167,6 +172,7 @@ model Transaction {
   @@index([accountId, isDeleted, tradeTime])
   @@index([assetId, isDeleted, tradeTime])
   @@index([type])
+  @@index([transferGroupId])
   @@unique([accountId, brokerOrderNo])
   @@unique([accountId, cashInLieuActionId])
 }
@@ -189,6 +195,25 @@ enum TxType {
   withdraw
   dividend
   fee
+}
+
+/// 入出金是否為範圍外的外部資金。unknown 維持未知，不得當成 0 或外部本金。
+enum CashflowOrigin {
+  unknown
+  external
+  internal
+}
+
+/// 使用者確認某年、某帳戶幣別的外部入出金已經記完。沒有這列就不是完整年度。
+model ExternalFundingCoverage {
+  id        String   @id @default(uuid())
+  userId    String
+  currency  Currency
+  year      Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, currency, year])
 }
 
 /// Daily market quote per asset (one row per asset per trade date).

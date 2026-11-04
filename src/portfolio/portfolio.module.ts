@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { FxModule } from '../fx/fx.module'
 import { AssetPerformanceService } from './asset-performance.service'
+import { ExternalFundingService } from './external-funding.service'
 import { PortfolioController } from './portfolio.controller'
 import { PortfolioHoldingsSnapshotService } from './portfolio-holdings-snapshot.service'
 import { PortfolioRebalanceService } from './portfolio-rebalance.service'
@@ -12,6 +13,7 @@ import { PortfolioTrendService } from './portfolio-trend.service'
   controllers: [PortfolioController],
   providers: [
     AssetPerformanceService,
+    ExternalFundingService,
     PortfolioHoldingsSnapshotService,
     PortfolioRebalanceService,
     PortfolioTrendService,

@@ -64,6 +64,7 @@ export async function clearDatabase(prisma: PrismaClient) {
   await prisma.txTag.deleteMany()
   await prisma.tag.deleteMany()
   await prisma.transaction.deleteMany()
+  await prisma.externalFundingCoverage.deleteMany()
   await prisma.price.deleteMany()
   await prisma.fxRate.deleteMany()
   await prisma.assetAlias.deleteMany()

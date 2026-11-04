@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { ValidationPipe, type INestApplication } from '@nestjs/common'
 import { Test, type TestingModule } from '@nestjs/testing'
-import { AssetType, Currency, Prisma, TxType, UserRole } from '@prisma/client'
+import { AssetType, CashflowOrigin, Currency, Prisma, TxType, UserRole } from '@prisma/client'
 import cookieParser from 'cookie-parser'
 import request from 'supertest'
 import type { App } from 'supertest/types'
@@ -881,6 +881,108 @@ describe('Portfolio asset performance (e2e)', () => {
 
     await request(app.getHttpServer())
       .get('/portfolio/performance/annual-buys')
+      .query({ accountId: account.id })
+      .set(auth(intruder))
+      .expect(403)
+  })
+
+  it('returns recorded external funding and does not treat unknown cash or buys as principal', async () => {
+    const owner = await prisma.user.create({
+      data: { email: 'funding@trackvest.local', passwordHash: '!', role: UserRole.user },
+    })
+    const intruder = await prisma.user.create({
+      data: { email: 'funding-other@trackvest.local', passwordHash: '!', role: UserRole.admin },
+    })
+    const account = await prisma.account.create({
+      data: { userId: owner.id, name: 'TWD', type: 'broker', currency: Currency.TWD },
+    })
+    const other = await prisma.account.create({
+      data: { userId: owner.id, name: 'TWD 2', type: 'bank', currency: Currency.TWD },
+    })
+    const asset = await prisma.asset.create({
+      data: {
+        symbol: 'E2E-FUND',
+        name: 'E2E fund',
+        type: AssetType.equity,
+        assetClass: 'equity',
+        baseCurrency: 'TWD',
+      },
+    })
+    await prisma.transaction.create({
+      data: {
+        accountId: account.id,
+        type: TxType.deposit,
+        amount: new Prisma.Decimal('1000'),
+        cashflowOrigin: CashflowOrigin.external,
+        tradeTime: new Date('2026-01-15T00:00:00.000Z'),
+      },
+    })
+    await prisma.transaction.create({
+      data: {
+        accountId: account.id,
+        type: TxType.deposit,
+        amount: new Prisma.Decimal('50'),
+        cashflowOrigin: CashflowOrigin.unknown,
+        tradeTime: new Date('2026-02-01T00:00:00.000Z'),
+      },
+    })
+    await prisma.transaction.create({
+      data: {
+        accountId: other.id,
+        type: TxType.deposit,
+        amount: new Prisma.Decimal('300'),
+        cashflowOrigin: CashflowOrigin.internal,
+        transferGroupId: 'pair-1',
+        tradeTime: new Date('2026-03-01T00:00:00.000Z'),
+      },
+    })
+    await prisma.transaction.create({
+      data: {
+        accountId: account.id,
+        type: TxType.deposit,
+        amount: new Prisma.Decimal('999'),
+        cashflowOrigin: CashflowOrigin.external,
+        tradeTime: new Date('2026-03-02T00:00:00.000Z'),
+        isDeleted: true,
+      },
+    })
+    await prisma.transaction.create({
+      data: {
+        accountId: account.id,
+        assetId: asset.id,
+        type: TxType.buy,
+        amount: new Prisma.Decimal('400'),
+        quantity: new Prisma.Decimal('1'),
+        tradeTime: new Date('2026-03-03T00:00:00.000Z'),
+      },
+    })
+    const before = await counts()
+
+    const response = await request(app.getHttpServer())
+      .get('/portfolio/performance/annual-external-funding')
+      .set(auth(owner))
+      .expect(200)
+
+    const twd2026 = response.body.items.find((item: { year: number; currency: string }) => item.year === 2026 && item.currency === 'TWD')
+    expect(response.body.timeZone).toBe('Asia/Taipei')
+    expect(twd2026).toMatchObject({
+      coverage: 'partial',
+      externalDeposit: '1000',
+      recordedNetContribution: null,
+      unknownDeposit: '50',
+      internalIn: '300',
+      issues: ['UNKNOWN_CASHFLOW', 'COVERAGE_UNCONFIRMED'],
+    })
+    expect(await counts()).toEqual(before)
+
+    const hidden = await request(app.getHttpServer())
+      .get('/portfolio/performance/annual-external-funding')
+      .set(auth(intruder))
+      .expect(200)
+    expect(hidden.body.items).toEqual([])
+
+    await request(app.getHttpServer())
+      .get('/portfolio/performance/annual-external-funding')
       .query({ accountId: account.id })
       .set(auth(intruder))
       .expect(403)
